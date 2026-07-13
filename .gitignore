@@ -3,6 +3,10 @@
 
 # Python
 __pycache__/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
 *.py[cod]
 *.pyo
 *.pyd

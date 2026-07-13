@@ -69,7 +69,7 @@ This repository is designed for publication-grade reproducibility:
 
 ## Benchmark Context And Representative Results
 
-Qupertino ships **two measured performance tiers**. The pure-MLX tier dispatches structured gate classes to specialized MLX kernels (diagonal gates as broadcast phase multiplies, controlled gates as masked half-state updates, SWAP as an axis permutation, runtime fusion of equal-angle ZZ Trotter layers). The **Metal shader tier** (`MLXQ_METAL_KERNELS=1`) adds hand-written kernels in `src/mlxq/shaders/` for every structured layer family, reached through semantics-preserving fusion detectors and parity-tested against the pure path (251 tests).
+Qupertino ships **two measured performance tiers**. The pure-MLX tier dispatches structured gate classes to specialized MLX kernels (diagonal gates as broadcast phase multiplies, controlled gates as masked half-state updates, SWAP as an axis permutation, runtime fusion of equal-angle ZZ Trotter layers). The **Metal shader tier** (`MLXQ_METAL_KERNELS=1`) adds hand-written kernels in `src/mlxq/shaders/` for every structured layer family, reached through semantics-preserving fusion detectors and covered by the complete 292-test suite.
 
 <div align="center">
   <img src="assets/perf-charts/chart_4way_25q.png" alt="Wall time at 25 qubits across four backends" width="820"/>
@@ -105,7 +105,7 @@ Seven kernel families in one folder (`src/mlxq/shaders/`, design + measurements 
 | RX layer (all 25 qubits) | 194 ms | — | **20.9 ms** |
 | H layer (Walsh radix-4, 7 launches) | 698 ms | — | **12.7 ms** |
 
-The shader tier also engages on the **OpenQASM import path**: the full local QASM corpus (40 executed circuits, QASMBench-derived) matches the pure path to ≤5e-7 everywhere, with structured circuits accelerating (ghz_state_n23 9.1×, cat_state_n22 8.0×, ising_n26 2.2×) and pre-decomposed cx+rz circuits (e.g. QASMBench qft_n18) correctly falling through to the pure path at parity — recognizing decomposed 2-qubit blocks is noted future work. Artifact: `paper/tqc-acm-2026/evidence_artifacts/qasm_shader_sweep_20260704/`.
+The shader tier also engages on the **OpenQASM import path**. The current strict unitary importer accepts 33 of the 42 bundled files and rejects nine files requiring unsupported dynamic semantics or lacking a valid OpenQASM declaration. A historical 40-circuit shader sweep recorded pure/Metal numerical parity and speedups, but it used the earlier permissive parser; treat it as performance evidence for accepted unitary gate streams, not as semantic validation of all source programs. Artifact: `paper/tqc-acm-2026/evidence_artifacts/qasm_shader_sweep_20260704/`.
 
 Full-suite paired sweep (29 workloads at 25q, pure vs Metal alternating within every repeat): **26 of 29 workloads accelerate, 4.7–25×** for those with fusable layer structure (TFIM 2nd order 25×, long-range Ising 24×, Heisenberg 13.8×, variational 14.3×, QCBM 12×, Grover 11.5×). The three 1.0× rows are structural and documented (cross-family Trotter interleave, isolated CZs, strict RY/CNOT alternation).
 
@@ -115,6 +115,59 @@ Full-suite paired sweep (29 workloads at 25q, pure vs Metal alternating within e
 </div>
 
 Four Codex CLI review rounds shaped and audited the kernels (archived under `paper/tqc-acm-2026/reviews_shaders_v2/`), catching real bugs: a wrong radix-4 derivation (retracted by the reviewer itself), a float32/rtol hole that silently dropped small-angle gates, and 1.25e-5 phase drift in 300-term products (fixed with grouped double-precision LUTs).
+
+### Inspecting an execution plan
+
+Metal selection is capability-probed and explainable. The flag accepts explicit
+on/off values and `auto`; unset remains off. An explicit request still falls back
+safely when Apple Silicon, Metal, the GPU device, `complex64`, 32-bit indexing,
+the statevector backend, or the device memory limit is incompatible.
+
+```python
+from mlxq import Device
+
+ops = [
+    {"name": "H", "wires": [0]},
+    {"name": "CNOT", "wires": [0, 1]},
+    {"name": "CNOT", "wires": [1, 2]},
+]
+dev = Device(3)
+print(dev.explain(ops))       # planned patterns, kernels, fallbacks, memory
+dev.execute(ops, report=True) # tracing is explicit, so the default fast path is unchanged
+dev.synchronize()            # mx.eval(final state), completing dispatch proof
+print(dev.last_execution_plan)
+```
+
+The report includes the selected MLX device, capability checks, fusion passes,
+matched patterns, concrete custom kernels, expected low-level launch count,
+observed host dispatches, compiler-wrapper cache state, `complex64` state and
+temporary-memory estimates, allocator counters, and whether final evaluation was
+synchronized. MLX does not expose per-kernel compiler-cache hits, so the report
+labels that state as opaque and the profiler estimates first-process overhead
+from cold-versus-warm measurements.
+
+Pass `report=True` only when tracing is needed, or set
+`MLXQ_EXECUTION_REPORT=1` for a process-wide override. `Device.explain()` is
+always available. Ordinary `execute()` calls do not build the report and avoid
+its host-side inspection overhead.
+
+Run the inspection campaign without writing into the repository:
+
+```bash
+PYTHONPATH=src .venv/bin/python tools/profile_apple_gpu.py \
+  --qubits 20 --repeats 7 --output /tmp/qupertino-phase-d.json
+
+MTL_CAPTURE_ENABLED=1 PYTHONPATH=src .venv/bin/python \
+  tools/profile_apple_gpu.py --qubits 20 --repeats 3 --workloads qft \
+  --capture-workload qft --capture-output /tmp/qupertino-qft.gputrace \
+  --output /tmp/qupertino-qft-profile.json
+```
+
+The first command records synchronized first-process and warm timing, MLX
+allocator memory, estimated state traffic/bandwidth, full-state CPU readback,
+dispatch evidence, and pure-MLX amplitude parity. The second also produces an
+Xcode Instruments Metal capture. These inspection results are not publication
+claims; use the paired reproducible benchmark campaign for those.
 
 ### Full-suite refresh (all 21 benchmark families, `bench.sh --repro`)
 
@@ -361,7 +414,8 @@ The benchmark engine accepts the following circuit keys. For each benchmark belo
 ```
 
 ### QASM Suite
-- Purpose: OpenQASM corpus execution from `datasets/qasm/local/`.
+- Purpose: strict unitary OpenQASM 2.0 import and execution from `datasets/qasm/local/`.
+- Current scope: 33 of 42 bundled files; parse errors are reported for unsupported dynamic semantics.
 - Typical command:
 ```bash
 ./bench.sh --qasm-suite --qasm-max-qubits 18 --qasm-timeout-ms 30000
@@ -369,7 +423,7 @@ The benchmark engine accepts the following circuit keys. For each benchmark belo
 
 ## Example & Circuit Gallery
 
-Qupertino ships a broad gallery of runnable examples: **21 parameterized benchmark families** (any qubit count) plus a **42-circuit OpenQASM corpus** under `datasets/qasm/local/`. Run any benchmark family with `./bench.sh --circuit <key>`; run any QASM circuit through the QASM suite. The full gallery is also published on the [website](https://boltzmannentropy.github.io/QupertinoWEB/#gallery).
+Qupertino ships a broad gallery of runnable examples: **21 parameterized benchmark families** (any qubit count) plus a **42-file OpenQASM corpus** under `datasets/qasm/local/`, of which 33 currently satisfy the strict unitary-import contract. Run any benchmark family with `./bench.sh --circuit <key>`; the QASM suite executes supported files and reports precise parse errors for the rest. The full gallery is also published on the [website](https://boltzmannentropy.github.io/QupertinoWEB/#gallery).
 
 ### A. Parameterized benchmark families (`--circuit <key>`)
 
@@ -379,7 +433,7 @@ Qupertino ships a broad gallery of runnable examples: **21 parameterized benchma
 | Variational & QML | `qcbm`, `qaoa`, `vqe`, `variational_circuit` |
 | Core algorithms | `qft`, `phase_estimation`, `grover`, `ghz`, `random_circuit` |
 
-### B. OpenQASM corpus (`datasets/qasm/local/`, 42 circuits)
+### B. OpenQASM corpus (`datasets/qasm/local/`, 42 files; 33 strictly supported)
 
 | Category | Circuit (qubits) |
 | --- | --- |
@@ -389,14 +443,23 @@ Qupertino ships a broad gallery of runnable examples: **21 parameterized benchma
 | Variational & physics | `vqe_n4` (4), `vqe_n24` (24), `vqe_ising`, `variational_n4` (4), `ising_n10` (10), `ising_n26` (26) |
 | Applied, ML & QEC | `dnn_n16` — quantum DNN (16), `knn_n25` — quantum kNN (25), `sat_n11` — SAT (11), `seca_n11` (11), `qram_n20` — QRAM (20), `qec9xz_n17` — Shor [[9,1,3]] code (17), `advanced_circuit` |
 
+The strict importer supports unitary gates, validated user-gate expansion,
+register-wide single-qubit gates, barriers, and terminal measurement markers. It
+rejects reset, classical control, mid-circuit measurement, opaque gates, arbitrary
+includes, and malformed statements. Parameter expressions support finite numeric
+literals, `pi`, bound gate symbols, parentheses, unary `+`/`-`, and binary
+`+`, `-`, `*`, `/`. The currently rejected corpus files are
+`bwt_n21`, `inverseqft_n4`, `ipea_n2`, `qec9xz_n17`, `qf21_n15`, `qpe_n9`,
+`sat_n11`, `seca_n11`, and `teleport_minimal`.
+
 Run a QASM circuit:
 ```bash
 ./bench.sh --qasm-suite --qasm-max-qubits 27 --qasm-timeout-ms 30000
 ```
 
-## Full Example Catalog (250+)
+## Full Test And Example Catalog (292 Collected Tests)
 
-Beyond the circuit gallery above, Qupertino ships **250 runnable example functions** — gate-algebra
+Beyond the circuit gallery above, Qupertino ships a broad runnable test and example catalog — gate-algebra
 identities, state preparation, algorithm demonstrations (Bell, GHZ, QFT, Grover, Toffoli,
 teleportation, QPE), MPS tensor-network parity, OpenQASM execution, and the QuantumStudio
 backend/MCP API. The complete itemized list is published on the
@@ -407,14 +470,20 @@ backend/MCP API. The complete itemized list is published on the
 | Core simulator & gate algebra | 149 | `src/tests/mlxQCoreTest.py` |
 | Quantum-computing examples (identities, algorithms) | 41 | `src/tests/mlxQQCExamplesTest.py` |
 | Internal consistency & measurement parity | 21 | `src/tests/mlxQInternalConsistencyTest.py`, `mlxQMeasurementParityTest.py` |
-| MPS tensor-network backend | 12 | `src/tests/mlxQMpsBackendTest.py`, `mlxQMpsParamSuiteTest.py` |
-| QML wrapper | 5 | `src/tests/mlxQQmlWrapperTest.py` |
+| MPS tensor-network backend | 16 | `src/tests/mlxQMpsBackendTest.py`, `mlxQMpsParamSuiteTest.py`, `mlxQMpsCorrectnessTest.py` |
+| QML wrapper, QFT and subset semantics | 10 | `src/tests/mlxQQmlWrapperTest.py`, `mlxQQmlQftSubsetTest.py` |
+| Strict OpenQASM and silent-risk audits | 7 | `src/tests/mlxQQasmStrictnessTest.py` |
 | QPE energy estimation | 2 | `src/tests/mlxQQpeEnergyEstimationTest.py` |
 | Benchmark catalog, protocol & visualization | 4 | `src/tests/mlxQBenchCatalogTest.py`, `mlxQBenchmarkProtocolTest.py`, `mlxQVisualizationPlotsTest.py` |
-| QuantumStudio backend API & MCP server | 17 | `quantumstudio/tests/test_backend_api.py`, `test_mcp_server.py` |
-| **Total** | **251** | |
+| Custom Metal kernel parity and dispatch | 19 | `src/tests/mlxQMetalKernelsTest.py` |
+| Execution plans, capabilities and synchronization | 5 | `src/tests/mlxQExecutionPlanTest.py` |
+| QuantumStudio backend API & MCP server | 18 | `quantumstudio/tests/test_backend_api.py`, `test_mcp_server.py` |
+| **Total collected by `./test.sh`** | **292** | |
 
-Run them all with `./test.sh`, or one module with `python3 -m pytest <file> -q`.
+Run them all with `./test.sh`. The launcher first verifies that both the simulator
+and QuantumStudio suites collect nonzero tests, reports their counts, and then
+runs both naming conventions. Run one module with
+`python3 -m pytest <file> -q`.
 
 ## Sample Benchmark Log (12q Smoke)
 
@@ -450,29 +519,38 @@ Recommended workflow:
 3. Promote validated outputs to `assets/benchmarks-frozen/latest/`.
 4. Keep historical reference bundles immutable under `sample-runs/`.
 
-## Testing (200+ Coverage)
+## Testing
 
 The repository includes broad simulator, algorithm, and backend tests:
-- `src/tests/` + `quantumstudio/tests/` currently expose **233+ test functions**.
+- `src/tests/` + `quantumstudio/tests/` currently collect **292 tests**.
 - Raw assertion density across test code is **well above 200 checks** (500+ assert-related lines).
 - Coverage includes:
   - gate algebra and unitary identities
   - state preparation and measurement parity
-  - QFT/QAOA/VQE/QCBM/Grover behavior checks
-  - MPS backend parity and bond-growth diagnostics
-  - OpenQASM parser/execution checks
+  - ordered-wire QFT/IQFT, subset marginals, QAOA/VQE/QCBM/Grover behavior checks
+  - MPS complex-amplitude parity, ordered-wire semantics, bond growth, and local truncation diagnostics
+  - strict OpenQASM expressions, source errors, supported statements, and execution checks
   - QuantumStudio backend API tests
 
 Run tests:
 ```bash
+python3 -m pip install -e '.[plot,tests,backend]'
 ./test.sh
 ```
+
+All test-generated plots, benchmark manifests, and CSV/JSON files are written
+under pytest temporary directories. A successful full run must leave
+`git status --short` unchanged.
 
 Targeted suites:
 ```bash
 python3 -m pytest src/tests -q
 python3 -m pytest quantumstudio/tests -q
 ```
+
+CI runs portable source and QuantumStudio backend checks on hosted Linux.
+Full simulator and custom-Metal validation is a separate manually triggered job
+for a self-hosted Apple Silicon runner labeled `macOS` and `ARM64`.
 
 ## QuantumStudio UI
 

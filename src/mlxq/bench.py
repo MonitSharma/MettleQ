@@ -109,6 +109,10 @@ def _force_state(dev) -> None:
     The old path converted the full vector to a Python list inside the timing
     window (~1.5 s at 25 qubits), which is measurement artifact, not simulation.
     """
+    synchronize = getattr(dev, "synchronize", None)
+    if callable(synchronize):
+        synchronize()
+        return
     sim = dev.sim
     fn = getattr(sim, "probabilities_array", None)
     if fn is not None:

@@ -4,7 +4,7 @@ Minimal PennyLane-like wrapper for mlxQ (student-friendly API).
 Scope (v0):
  1) Wrapper skeleton: Device, qnode decorator, gates, observables, expval/probs/sample/state
  2) Parameter-shift gradients for RX/RY/RZ
- 3) A few templates and recipes (GHZ, QFT, QAOA-1, VQE toy, QPE toy)
+ 3) A few templates and recipes (GHZ, QFT, QAOA-1, VQE toy)
 
 This layer is additive and does not change the core library or tests.
 """
@@ -97,43 +97,28 @@ class Device:
         elif name == 'SWAP':
             sim.apply_two(G_SWAP(), w[0], w[1])
         elif name == 'QFT':
-            # Full-register QFT; if params contain wires subset, fallback to manual
-            if len(w) == self.wires:
-                sim.state = qft_transform(sim.state, len(w))
-            else:
-                # Simple fallback: apply H + controlled phases pattern on listed wires
-                self._apply_qft_on_subset(sim, w)
+            self._apply_qft_on_subset(sim, w)
         elif name == 'IQFT':
-            if len(w) == self.wires:
-                sim.state = iqft_transform(sim.state, len(w))
-            else:
-                self._apply_iqft_on_subset(sim, w)
+            self._apply_iqft_on_subset(sim, w)
         else:
             raise NotImplementedError(f"Unsupported op: {op}")
 
     def _apply_qft_on_subset(self, sim: StateVectorSimulator, wires: Tuple[int, ...]):
-        # Minimal QFT on given ordered wires (MSB→LSB order assumed)
-        n = len(wires)
-        for i in range(n):
-            sim.apply_single(G_H(), wires[i])
-            # Omit controlled phase ladder for brevity in this minimal wrapper
+        qft_transform(sim, list(wires))
 
     def _apply_iqft_on_subset(self, sim: StateVectorSimulator, wires: Tuple[int, ...]):
-        for i in reversed(range(len(wires))):
-            sim.apply_single(G_H(), wires[i])
+        iqft_transform(sim, list(wires))
 
     def _eval_measure(self, sim: StateVectorSimulator, m: Measurement):
         if m.kind == 'state':
             return sim.state
         if m.kind == 'probs':
-            return sim.probabilities()
+            wires = None if m.wires is None else list(m.wires)
+            return sim.probabilities(wires)
         if m.kind == 'sample':
             shots = m.shots or (self.shots or 1000)
-            # Sample in Z basis on all wires
-            probs = sim.probabilities()
-            p = [float(pi) for pi in probs]
-            outcomes = random.choices(range(len(p)), weights=p, k=shots)
-            return outcomes
+            wires = None if m.wires is None else list(m.wires)
+            return sim.sample(shots, wires)
         if m.kind == 'expval':
             # Exact expectation unless shots is set
             obs = m.obs or PauliZ(m.wires[0])
@@ -284,7 +269,8 @@ def probs(wires: Optional[Sequence[int]] = None) -> Any:
     global _ACTIVE_TAPE
     if _ACTIVE_TAPE is None:
         raise RuntimeError("probs() called outside of qnode.")
-    _ACTIVE_TAPE.measure(Measurement('probs', wires=tuple(wires or ())))
+    selected = None if wires is None else tuple(wires)
+    _ACTIVE_TAPE.measure(Measurement('probs', wires=selected))
     return 0.0
 
 
@@ -292,7 +278,8 @@ def sample(wires: Optional[Sequence[int]] = None, shots: Optional[int] = None) -
     global _ACTIVE_TAPE
     if _ACTIVE_TAPE is None:
         raise RuntimeError("sample() called outside of qnode.")
-    _ACTIVE_TAPE.measure(Measurement('sample', wires=tuple(wires or ()), shots=shots))
+    selected = None if wires is None else tuple(wires)
+    _ACTIVE_TAPE.measure(Measurement('sample', wires=selected, shots=shots))
     return 0
 
 
@@ -446,44 +433,16 @@ def recipe_vqe_energy_2q(h_coeffs: Tuple[float, float, float, float, float]) -> 
 
 
 def recipe_qpe_energy_single_qubit(a: float, bx: float, by: float, bz: float, times: Sequence[float], shots: Optional[int] = None) -> Tuple[Device, Callable[[], Any]]:
-    # Minimal recipe: compute ancilla <X>, <Y> at provided times
-    dev = Device(wires=2, shots=shots)
-    # Build single-qubit U(t) = e^{-i (a I + b·σ) t} using closed form on system wire (1)
-    def U_of_t(t: float) -> mx.array:
-        I2 = mx.eye(2, dtype=mx.complex64)
-        X2, Y2, Z2 = G_X(), G_Y(), G_Z()
-        bnorm = math.sqrt(bx*bx + by*by + bz*bz)
-        phase = math.cos(a*t) - 1j*math.sin(a*t)
-        if bnorm < 1e-12:
-            return phase * I2
-        nx, ny, nz = bx/bnorm, by/bnorm, bz/bnorm
-        ct, st = math.cos(bnorm*t), math.sin(bnorm*t)
-        n_dot = nx*X2 + ny*Y2 + nz*Z2
-        return phase * (ct*I2 - 1j*st*n_dot)
+    """Reserved name for a controlled-unitary QPE recipe that is not implemented.
 
-    def ctrl_U_embed(U: mx.array) -> mx.array:
-        P0 = mx.array([[1+0j,0+0j],[0+0j,0+0j]], dtype=mx.complex64)
-        P1 = mx.array([[0+0j,0+0j],[0+0j,1+0j]], dtype=mx.complex64)
-        return kron(P0, mx.eye(2, dtype=mx.complex64)) + kron(P1, U)
-
-    @qnode(dev)
-    def circuit_at_t() -> Tuple[List[float], List[float]]:
-        xs, ys = [], []
-        for t in times:
-            # fresh state |+>_a ⊗ |0>_s (we rely on simulator init=|0..0>)
-            H(0)
-            # Prepare ground/eigenstate of system not included here (toy: leave |0>)
-            # Apply ctrl-U(t)
-            CU = ctrl_U_embed(U_of_t(t))
-            # inject as an opaque unitary via decomposition (not exposed): fallback: skip actual CU
-            # Instead, emulate ancilla phase by rotating ancilla about Z by Et; here we approximate with bz~E
-            # For the minimal recipe we just collect <X>, <Y> after a phase e^{-iEt} on ancilla
-            # Note: this is a toy; real ctrl-U performed via core ops in examples/qpe_energy_estimation.py
-            # Measure X and Y (exact or shots)
-            xs.append(expval(PauliX(0)))
-            ys.append(expval(PauliY(0)))
-        return xs, ys
-    return dev, circuit_at_t
+    The former placeholder skipped the controlled unitary and therefore could
+    not estimate the requested Hamiltonian's energy. Failing explicitly keeps
+    the public surface trustworthy until a real implementation is available.
+    """
+    raise NotImplementedError(
+        "controlled-unitary QPE is not implemented in mlxq.qml; "
+        "use the validated exact QPE example utilities instead"
+    )
 
 
 __all__ = [
@@ -492,5 +451,5 @@ __all__ = [
     'PauliX', 'PauliY', 'PauliZ', 'Observable',
     'expval', 'probs', 'sample', 'state',
     'basic_entangler_layers', 'strongly_entangling_layers',
-    'recipe_ghz', 'recipe_qft', 'recipe_qaoa_layer', 'recipe_vqe_energy_2q', 'recipe_qpe_energy_single_qubit',
+    'recipe_ghz', 'recipe_qft', 'recipe_qaoa_layer', 'recipe_vqe_energy_2q',
 ]

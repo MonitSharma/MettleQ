@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    name: Portable source and backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install portable test dependencies
+        run: >-
+          python -m pip install
+          fastapi==0.115.6 uvicorn==0.30.6 pydantic==2.8.2
+          psutil httpx pytest
+      - name: Compile Python sources
+        run: python -m compileall -q src/mlxq quantumstudio/backend quantumstudio/bin
+      - name: Verify backend test collection
+        run: python -m pytest quantumstudio/tests --collect-only -q
+      - name: Run backend tests
+        run: python -m pytest quantumstudio/tests -q
+      - name: Require a clean checkout
+        run: test -z "$(git status --porcelain)"
+
+  apple-metal:
+    name: Apple Silicon simulator and Metal tests
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install simulator test dependencies
+        run: python -m pip install -e '.[plot,tests,backend]'
+      - name: Verify Apple GPU availability
+        run: |
+          python - <<'PY'
+          import mlx.core as mx
+
+          assert mx.metal.is_available(), "MLX Metal is unavailable"
+          assert "gpu" in str(mx.default_device()).lower(), mx.default_device()
+          print("MLX device:", mx.default_device())
+          PY
+      - name: Run all simulator and backend tests
+        run: ./test.sh
+      - name: Run coverage
+        run: python -m pytest --cov=mlxq --cov-report=term-missing
+      - name: Require a clean checkout
+        run: test -z "$(git status --porcelain)"

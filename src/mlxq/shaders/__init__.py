@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import os
 
+from ..execution import metal_runtime_status
+
 from .zz import zz_chain_layer, zz_weighted_layer
 from .qft import qft_stage_all, qft_stage_sub
 from .single_qubit import (rx_layer_all, u2_layer_all, u2_list_layer_all,
@@ -29,6 +31,7 @@ from .pauli_pair import xx_layer, yy_layer
 
 __all__ = [
     "metal_enabled",
+    "metal_runtime_status",
     "zz_chain_layer",
     "zz_weighted_layer",
     "qft_stage_all",
@@ -47,5 +50,9 @@ __all__ = [
 ]
 
 
-def metal_enabled() -> bool:
-    return os.environ.get("MLXQ_METAL_KERNELS", "0") == "1"
+def metal_enabled(n_qubits=None, *, dtype: str = "complex64") -> bool:
+    """Return true only when policy *and* runtime capabilities select Metal."""
+    raw = os.environ.get("MLXQ_METAL_KERNELS", "0").strip().lower()
+    if raw not in {"1", "true", "on", "yes", "enabled", "auto"}:
+        return False
+    return bool(metal_runtime_status(n_qubits, dtype=dtype)["enabled"])

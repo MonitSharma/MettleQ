@@ -260,7 +260,7 @@ class StateVectorSimulator:
         formulas reuse the same (theta, bonds) every step.
         """
         from . import shaders as metal_kernels
-        if metal_kernels.metal_enabled():
+        if metal_kernels.metal_enabled(self.n):
             self.state = metal_kernels.zz_chain_layer(
                 self.state, theta, self.n, list(bonds))
             return
@@ -301,12 +301,31 @@ class StateVectorSimulator:
         ph = complex(math.cos(phi), math.sin(phi))
         self.apply_diagonal(mx.array([1+0j, 1+0j, 1+0j, ph], mx.complex64), [c, t])
 
-    def probabilities_array(self) -> mx.array:
-        """Probabilities as an MLX array; stays on device until the caller evals."""
-        return mx.abs(self.state) ** 2
+    def probabilities_array(self, wires: Optional[List[int]] = None) -> mx.array:
+        """Return full or marginal probabilities in the requested wire order.
 
-    def probabilities(self) -> List[float]:
-        amp2 = self.probabilities_array()
+        The first requested wire is the most significant output bit. Passing
+        ``None`` returns the full register; an empty list returns ``[1]`` for a
+        normalized state.
+        """
+        amp2 = mx.abs(self.state) ** 2
+        if wires is None:
+            return amp2
+        selected = list(wires)
+        if len(set(selected)) != len(selected):
+            raise ValueError("Duplicate qubit indices")
+        for wire in selected:
+            canonical_axis_index(wire, self.n)
+        remaining = [wire for wire in range(self.n) if wire not in selected]
+        permutation = selected + remaining
+        tensor = mx.reshape(amp2, [2] * self.n)
+        if self.n > 1 and permutation != list(range(self.n)):
+            tensor = mx.transpose(tensor, permutation)
+        matrix = mx.reshape(tensor, (1 << len(selected), -1))
+        return mx.sum(matrix, axis=1)
+
+    def probabilities(self, wires: Optional[List[int]] = None) -> List[float]:
+        amp2 = self.probabilities_array(wires)
         mx.eval(amp2)
         return amp2.tolist()
 
@@ -349,6 +368,12 @@ class StateVectorSimulator:
         n = self.n
         if wires is None:
             wires = list(range(n))
+        else:
+            wires = list(wires)
+            if len(set(wires)) != len(wires):
+                raise ValueError("Duplicate qubit indices")
+            for wire in wires:
+                canonical_axis_index(wire, n)
         out = []
         for _ in range(int(shots)):
             # sample index by cumulative probabilities
@@ -457,10 +482,26 @@ def _fused_phase_ladder(sim: StateVectorSimulator, wires: List[int], j: int, sig
     sim.state = mx.reshape(tensor * full, (1 << n_total,))
 
 
+def _validate_qft_wires(sim: StateVectorSimulator, wires: List[int]) -> List[int]:
+    ordered = list(wires)
+    if len(set(ordered)) != len(ordered):
+        raise ValueError("Duplicate QFT wire indices")
+    for wire in ordered:
+        canonical_axis_index(wire, sim.n)
+    return ordered
+
+
 def qft(sim: StateVectorSimulator, wires: List[int]):
+    """Apply Qupertino's ordered-wire QFT without terminal bit-reversal SWAPs.
+
+    ``wires`` defines the subregister basis order, with its first element as
+    the most significant logical bit. Omitting final SWAPs is the established
+    gate-stream and custom-Metal contract; :func:`iqft` is its exact inverse.
+    """
+    wires = _validate_qft_wires(sim, wires)
     n = len(wires)
     from . import shaders as metal_kernels
-    if (metal_kernels.metal_enabled() and hasattr(sim, "state")
+    if (metal_kernels.metal_enabled(sim.n) and hasattr(sim, "state")
             and list(wires) == list(range(sim.n))):
         sim.state = metal_kernels.qft_stage_all(sim.state, sim.n)
         return
@@ -478,6 +519,8 @@ def qft(sim: StateVectorSimulator, wires: List[int]):
 
 
 def iqft(sim: StateVectorSimulator, wires: List[int]):
+    """Apply the inverse of :func:`qft` on the same ordered wire sequence."""
+    wires = _validate_qft_wires(sim, wires)
     n = len(wires)
     fused = hasattr(sim, "state") and hasattr(sim, "apply_diagonal")
     for j in reversed(range(n)):

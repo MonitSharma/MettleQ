@@ -1,5 +1,8 @@
+import atexit
 import importlib.util
 import os
+import shutil
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -9,6 +12,10 @@ from pydantic import ValidationError
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 BACKEND_MAIN = ROOT_DIR / "backend" / "main.py"
+TEST_RUNTIME = Path(tempfile.mkdtemp(prefix="quantumstudio-backend-tests-"))
+atexit.register(shutil.rmtree, TEST_RUNTIME, ignore_errors=True)
+os.environ["QUANTUMSTUDIO_RUNTIME_HOME"] = str(TEST_RUNTIME)
+os.environ["QUANTUMSTUDIO_BENCH_DIR"] = str(TEST_RUNTIME / "bench")
 
 spec = importlib.util.spec_from_file_location("quantumstudio_backend_main", BACKEND_MAIN)
 assert spec is not None and spec.loader is not None

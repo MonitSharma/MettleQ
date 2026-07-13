@@ -18,10 +18,9 @@ def _rand_state(n, seed=9):
 
 
 @pytest.fixture
-def metal_env():
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+def metal_env(monkeypatch):
+    monkeypatch.setenv("MLXQ_METAL_KERNELS", "1")
     yield
-    os.environ.pop("MLXQ_METAL_KERNELS", None)
 
 
 def test_metal_qft_matches_mlx(metal_env):

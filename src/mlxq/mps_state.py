@@ -8,6 +8,12 @@ import numpy as np
 import mlx.core as mx
 
 
+_SWAP_GATE = mx.array(
+    [[1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]],
+    mx.complex64,
+)
+
+
 @dataclass
 class MPSOptions:
     dmax: int = 64
@@ -37,10 +43,22 @@ def _svd_truncate(M: mx.array, dmax: int, eps: float):
         thresh = eps * s_list[0]
         r_eps = sum(1 for v in s_list if v >= thresh)
     r_keep = min(r, max(1, min(dmax, r_eps)))
+    total_weight = sum(value * value for value in s_list)
+    discarded_weight = sum(value * value for value in s_list[r_keep:])
+    metadata = {
+        "rank_before": r,
+        "rank_kept": r_keep,
+        "local_discarded_weight": discarded_weight,
+        "relative_discarded_weight": (
+            discarded_weight / total_weight if total_weight > 0.0 else 0.0
+        ),
+        "limited_by_dmax": dmax < r,
+        "limited_by_eps": r_eps < r,
+    }
     U_t = U[:, :r_keep]
     S_t = S[:r_keep]
     Vh_t = Vh[:r_keep, :]
-    return U_t, S_t, Vh_t
+    return U_t, S_t, Vh_t, metadata
 
 
 class MPSState:
@@ -54,6 +72,10 @@ class MPSState:
         if self.n <= 0:
             raise ValueError("n_qubits must be positive")
         self.opts = opts or MPSOptions()
+        if self.opts.dmax < 1:
+            raise ValueError("MPS dmax must be at least 1")
+        if self.opts.eps < 0.0:
+            raise ValueError("MPS eps must be non-negative")
         # Bond diagnostics
         self.bonds: List[int] = [1] * max(0, self.n - 1)
         self.max_bond_ever: int = 1
@@ -73,6 +95,9 @@ class MPSState:
         self.max_bond_ever = 1
         self.truncated_any = False
         self.trunc_events = 0
+        self.local_discarded_weight_sum = 0.0
+        self.local_discarded_weight_max = 0.0
+        self.last_truncation = None
 
     # -------------- internal helpers --------------
     def _two_site_tensor(self, i: int) -> mx.array:
@@ -86,16 +111,21 @@ class MPSState:
         T = mx.tensordot(left, right, axes=([2],[0]))  # (Dl,2,2,Dr2)
         return T
 
-    def _split_two_site(self, T: mx.array) -> tuple[mx.array, mx.array]:
+    def _split_two_site(self, T: mx.array, bond: int) -> tuple[mx.array, mx.array]:
         Dl, d1, d2, Dr2 = T.shape
         M = mx.reshape(mx.transpose(T, (0,1,2,3)), (Dl*d1, d2*Dr2))
-        U, S, Vh = _svd_truncate(M, self.opts.dmax, self.opts.eps)
+        U, S, Vh, metadata = _svd_truncate(M, self.opts.dmax, self.opts.eps)
         r = int(U.shape[1])
         # Truncation detection (due to dmax or eps)
-        r_possible = int(min(Dl*d1, d2*Dr2))
-        if r < r_possible:
+        if r < metadata["rank_before"]:
             self.truncated_any = True
             self.trunc_events += 1
+            discarded = float(metadata["local_discarded_weight"])
+            self.local_discarded_weight_sum += discarded
+            self.local_discarded_weight_max = max(
+                self.local_discarded_weight_max, discarded
+            )
+            self.last_truncation = {"bond": int(bond), **metadata}
         # reshape back
         Aleft = mx.reshape(U, (Dl, d1, r))
         SVh = mx.reshape(S, (r,1)) * Vh  # (r, d2*Dr2)
@@ -104,12 +134,15 @@ class MPSState:
 
     # -------------- gate application --------------
     def apply_single(self, U: mx.array, q: int):
+        if not (0 <= q < self.n):
+            raise ValueError("Qubit index out of range")
+        if U.shape != (2, 2):
+            raise ValueError("Gate dimension does not match target qubit")
         A = self.A[q]
-        Dl, _, Dr = A.shape
-        A2 = mx.reshape(A, (-1, 2))       # collapse batch dims
-        B = mx.matmul(A2, U)              # (-1,2) row-vector times U
-        B = mx.reshape(B, (int(Dl), int(Dr), 2))    # (Dl,Dr,2)
-        self.A[q] = mx.transpose(B, (0, 2, 1))  # (Dl,2,Dr)
+        # Contract U's input with the physical leg of A. Bond axes are batches,
+        # not part of the 2-vector acted on by the gate.
+        B = mx.tensordot(U, A, axes=([1], [1]))  # (2, Dl, Dr)
+        self.A[q] = mx.transpose(B, (1, 0, 2))   # (Dl, 2, Dr)
 
     def _apply_two_adjacent(self, U4: mx.array, i: int):
         T = self._two_site_tensor(i)  # (Dl,2,2,Dr2)
@@ -123,7 +156,7 @@ class MPSState:
         Tm2 = mx.tensordot(Um, Tm, axes=([1],[1]))  # (4, Dl, Dr2)
         Tm2 = mx.transpose(Tm2, (1, 0, 2))          # (Dl, 4, Dr2)
         T2 = mx.reshape(Tm2, (Dl, 2, 2, Dr2))
-        Aleft, Aright = self._split_two_site(T2)
+        Aleft, Aright = self._split_two_site(T2, i)
         self.A[i] = Aleft
         self.A[i+1] = Aright
         # Update bond diagnostics (bond between i and i+1 equals rank r)
@@ -155,7 +188,7 @@ class MPSState:
         Tz = T * z1 * z2
         T2 = c0 * T + c3 * Tz
         # Split back via SVD
-        Aleft, Aright = self._split_two_site(T2)
+        Aleft, Aright = self._split_two_site(T2, i)
         self.A[i] = Aleft
         self.A[i+1] = Aright
         r = int(Aleft.shape[2])
@@ -166,20 +199,28 @@ class MPSState:
 
     def _swap_adjacent(self, i: int):
         # Swap sites i and i+1 by applying SWAP gate U_swap to two-site tensor
-        U_swap = mx.array([[1,0,0,0], [0,0,1,0], [0,1,0,0], [0,0,0,1]], mx.complex64)
-        self._apply_two_adjacent(U_swap, i)
+        self._apply_two_adjacent(_SWAP_GATE, i)
 
     def apply_two(self, U4: mx.array, c: int, t: int):
         if c == t:
-            return
+            raise ValueError("Control and target must differ")
+        if not (0 <= c < self.n and 0 <= t < self.n):
+            raise ValueError("Qubit index out of range")
+        if U4.shape != (4, 4):
+            raise ValueError("Gate dimension does not match target qubits")
         i, j = sorted((c, t))
         # Swap network to bring i and j adjacent
         k = i
         while k < j - 1:
             self._swap_adjacent(k)
             k += 1
-        # Now apply two-qubit gate on (j-1,j)
-        self._apply_two_adjacent(U4, j-1)
+        # The swap network presents the local tensor in ascending site order.
+        # When the caller supplied descending operands, conjugating by SWAP
+        # preserves the gate's semantic first/second operand order.
+        ordered_gate = U4
+        if c > t:
+            ordered_gate = mx.matmul(_SWAP_GATE, mx.matmul(U4, _SWAP_GATE))
+        self._apply_two_adjacent(ordered_gate, j-1)
         # Swap back to restore ordering
         while k > i:
             k -= 1
@@ -236,6 +277,23 @@ class MPSState:
 
     def trunc_count(self) -> int:
         return int(self.trunc_events)
+
+    def truncation_diagnostics(self) -> dict:
+        """Return local SVD truncation telemetry for this state.
+
+        Discarded weights are sums of squared singular values at each local
+        split. Their accumulated sum is useful telemetry, but is not claimed
+        as a global fidelity bound when the MPS is not at that bond's
+        orthogonality center.
+        """
+        return {
+            "events": int(self.trunc_events),
+            "local_discarded_weight_sum": float(self.local_discarded_weight_sum),
+            "local_discarded_weight_max": float(self.local_discarded_weight_max),
+            "last_event": (
+                dict(self.last_truncation) if self.last_truncation is not None else None
+            ),
+        }
 
     # -------------- convenience MPO sweeps for XX/YY via basis transforms --------------
     def apply_xx_two_sweep(self, theta: float):

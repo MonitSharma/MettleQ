@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 
 from mlxq.mlxQpretty import info, warn, success, table
 from mlxq.mlxQdevice import Device
@@ -78,7 +77,7 @@ def _pl_counts(ops, shots: int):
         return None
 
 
-def test_measurement_parity_ghz_n3():
+def test_measurement_parity_ghz_n3(tmp_path):
     info("Measurement parity: GHZ(3) mlxQ vs PennyLane/QuTiP")
     n = 3
     shots = 1000
@@ -112,8 +111,7 @@ def test_measurement_parity_ghz_n3():
         axes[1].set_title('Reference counts')
         axes[1].set_xlabel('bitstring')
         plt.tight_layout()
-        out = Path('bench') / 'vis_ghz3_hist_side_by_side.png'
-        out.parent.mkdir(parents=True, exist_ok=True)
+        out = tmp_path / 'vis_ghz3_hist_side_by_side.png'
         fig.savefig(str(out), dpi=150)
         plt.close(fig)
     except Exception:

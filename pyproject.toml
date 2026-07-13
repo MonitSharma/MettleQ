@@ -29,6 +29,8 @@ backend = [
 ]
 tests = [
   "pennylane",
+  "pytest>=8.0.0,<10.0.0",
+  "pytest-cov>=5.0.0",
 ]
 baselines = [
   "pennylane",

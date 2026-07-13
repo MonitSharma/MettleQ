@@ -33,7 +33,7 @@ Options:
   -h, --help             Show this help
 
 Examples:
-  ./test.sh                          # run pytest default suite
+  ./test.sh                          # verify collection, then run all suites
   ./test.sh --runner                 # run pretty custom runner
   ./test.sh -k mlxQQCExamplesTest    # run examples test file only
   ./test.sh --max 50                 # limit core test enumeration
@@ -67,6 +67,35 @@ done
 if [[ "$MODE" == "runner" ]]; then
   exec "${PYTHON_BIN}" "${ROOT_DIR}/src/tests/run_core_tests.py"
 fi
+
+verify_collection() {
+  local suite="$1"
+  local label="$2"
+  local collect_log
+  local collected
+  collect_log="$(mktemp "${TMPDIR:-/tmp}/mlxq-collect.XXXXXX")"
+  if ! "${PYTHON_BIN}" -m pytest --collect-only -q "${suite}" >"${collect_log}" 2>&1; then
+    cat "${collect_log}" >&2
+    rm -f "${collect_log}"
+    echo "[collection] ${label}: collection failed" >&2
+    return 1
+  fi
+  collected="$(grep -c '::' "${collect_log}" || true)"
+  if [[ "${collected}" -eq 0 ]]; then
+    collected="$(awk -F': ' '/: [0-9]+$/ { total += $NF } END { print total + 0 }' "${collect_log}")"
+  fi
+  if [[ "${collected}" -eq 0 ]]; then
+    cat "${collect_log}" >&2
+    rm -f "${collect_log}"
+    echo "[collection] ${label}: zero tests collected" >&2
+    return 1
+  fi
+  rm -f "${collect_log}"
+  echo "[collection] ${label}: ${collected} tests"
+}
+
+verify_collection "${ROOT_DIR}/src/tests" "simulator"
+verify_collection "${ROOT_DIR}/quantumstudio/tests" "QuantumStudio backend"
 
 ARGS=( )
 [[ -n "$K_PATTERN" ]] && ARGS+=( -k "$K_PATTERN" )

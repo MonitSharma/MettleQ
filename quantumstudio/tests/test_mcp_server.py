@@ -1,5 +1,9 @@
+import atexit
 import importlib.util
 import json
+import os
+import shutil
+import tempfile
 import threading
 import unittest
 from pathlib import Path
@@ -8,6 +12,9 @@ from urllib import request
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 MCP_PATH = ROOT_DIR / "bin" / "quantumstudio_mcp_server.py"
+TEST_RUNTIME = Path(tempfile.mkdtemp(prefix="quantumstudio-mcp-tests-"))
+atexit.register(shutil.rmtree, TEST_RUNTIME, ignore_errors=True)
+os.environ["QUANTUMSTUDIO_MCP_LOG_DIR"] = str(TEST_RUNTIME / "logs")
 
 
 spec = importlib.util.spec_from_file_location("quantumstudio_mcp_server", MCP_PATH)

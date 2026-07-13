@@ -7,6 +7,9 @@ from .gates import H, X, Y, Z, S, SDG, T, TDG, SX, RX, RY, RZ, U1, U2, U3, SWAP,
 import math as _math
 import mlx.core as mx
 
+from .execution import (build_execution_plan, mark_graph_built,
+                        mark_synchronized, record_custom_dispatch)
+
 # Constant (parameterless) gate matrices built once at import; read-only thereafter
 _CONST_GATES = {
     "H": H(), "X": X(), "Y": Y(), "Z": Z(), "S": S(), "SDG": SDG(),
@@ -59,6 +62,7 @@ class Device:
         if backend is None:
             backend = _os.environ.get('MLXQ_BACKEND', 'sv').lower()
         if backend == 'mps':
+            self.backend = 'mps'
             # Read MPS options from env if not provided
             if mps_opts is None:
                 try:
@@ -72,12 +76,14 @@ class Device:
                 mps_opts = MPSOptions(dmax=dmax, eps=eps)
             self.sim = MPSState(self.wires, mps_opts)
         else:
+            self.backend = 'sv'
             self.sim = StateVectorSimulator(self.wires)
+        self.last_execution_plan: Optional[Dict[str, Any]] = None
 
     def reset(self):
         self.sim.reset()
 
-    def execute(self, operations: List[Dict[str, Any]]):
+    def execute(self, operations: List[Dict[str, Any]], *, report: Optional[bool] = None):
         # Optional ASCII dump for any executed circuit (controlled via env)
         try:
             import os as _os
@@ -96,17 +102,32 @@ class Device:
                     pass
         except Exception:
             pass
-        for op in self._fuse_zz_layers(operations):
+        optimized_operations = self._fuse_zz_layers(operations)
+        if report is None:
+            report = _os.environ.get("MLXQ_EXECUTION_REPORT", "0") == "1"
+        if report:
+            self.last_execution_plan = build_execution_plan(
+                n_qubits=self.wires,
+                backend=self.backend,
+                operations=list(operations),
+                optimized_operations=optimized_operations,
+            )
+        else:
+            self.last_execution_plan = None
+        for op in optimized_operations:
             if op.get("name") == "_ZZLAYER":
+                record_custom_dispatch(self.last_execution_plan, op)
                 self.sim.apply_zz_layer(op["theta"], op["bonds"])
                 continue
             if op.get("name") == "_RXLAYER":
                 from . import shaders as metal_kernels
+                record_custom_dispatch(self.last_execution_plan, op)
                 self.sim.state = metal_kernels.rx_layer_all(
                     self.sim.state, self.sim.n, op["theta"])
                 continue
             if op.get("name") == "_U2LAYER":
                 from . import shaders as metal_kernels
+                record_custom_dispatch(self.last_execution_plan, op)
                 gate = self._dense_gate_for(op["gate"], op["params"])
                 u = mx.reshape(gate.astype(mx.complex64), (4,))
                 self.sim.state = metal_kernels.u2_layer_all(
@@ -114,27 +135,32 @@ class Device:
                 continue
             if op.get("name") == "_DIAGLAYER":
                 from . import shaders as metal_kernels
+                record_custom_dispatch(self.last_execution_plan, op)
                 self.sim.state = metal_kernels.diag_pair_layer(
                     self.sim.state, op["theta"], self.sim.n, op["bonds"])
                 continue
             if op.get("name") == "_DIAGWEIGHTED":
                 from . import shaders as metal_kernels
+                record_custom_dispatch(self.last_execution_plan, op)
                 self.sim.state = metal_kernels.diag_weighted_layer(
                     self.sim.state, self.sim.n, op["bonds"], op["thetas"])
                 continue
             if op.get("name") == "_ZZWEIGHTED":
                 from . import shaders as metal_kernels
+                record_custom_dispatch(self.last_execution_plan, op)
                 self.sim.state = metal_kernels.zz_weighted_layer(
                     self.sim.state, self.sim.n, op["bonds"], op["thetas"])
                 continue
             if op.get("name") == "_QFTSTAGE":
                 from . import shaders as metal_kernels
+                record_custom_dispatch(self.last_execution_plan, op)
                 self.sim.state = metal_kernels.qft_stage_sub(
                     self.sim.state, self.sim.n, op["j"], op["m"],
                     inverse=op["inverse"])
                 continue
             if op.get("name") in ("_XXLAYER", "_YYLAYER"):
                 from . import shaders as metal_kernels
+                record_custom_dispatch(self.last_execution_plan, op)
                 fn = (metal_kernels.xx_layer if op["name"] == "_XXLAYER"
                       else metal_kernels.yy_layer)
                 self.sim.state = fn(self.sim.state, op["theta"],
@@ -142,11 +168,13 @@ class Device:
                 continue
             if op.get("name") == "_XORLAYER":
                 from . import shaders as metal_kernels
+                record_custom_dispatch(self.last_execution_plan, op)
                 self.sim.state = metal_kernels.xor_affine_gather(
                     self.sim.state, self.sim.n, op["rows"], op["c"])
                 continue
             if op.get("name") == "_U2LISTLAYER":
                 from . import shaders as metal_kernels
+                record_custom_dispatch(self.last_execution_plan, op)
                 self.sim.state = metal_kernels.u2_list_layer_all(
                     self.sim.state, self.sim.n, op["mats"],
                     active=op.get("active"))
@@ -155,8 +183,31 @@ class Device:
             wires = list(op.get("wires", []))
             params = list(op.get("parameters", []))
             self._apply(name, wires, params)
+        mark_graph_built(self.last_execution_plan)
         # Return state vector only for SV; MPS has no .state
         return getattr(self.sim, 'state', None)
+
+    def explain(self, operations: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Build an execution report without applying any gates."""
+        optimized_operations = self._fuse_zz_layers(operations)
+        return build_execution_plan(
+            n_qubits=self.wires,
+            backend=self.backend,
+            operations=list(operations),
+            optimized_operations=optimized_operations,
+        )
+
+    def synchronize(self):
+        """Evaluate pending MLX work and mark dispatch evidence complete."""
+        state = getattr(self.sim, 'state', None)
+        if state is not None:
+            mx.eval(state)
+        else:
+            tensors = getattr(self.sim, 'tensors', None)
+            if tensors:
+                mx.eval(*tensors)
+        mark_synchronized(self.last_execution_plan)
+        return state
 
     def _fuse_zz_layers(self, operations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Runtime gate fusion: collapse runs of consecutive ZZPHASE ops that
@@ -169,7 +220,7 @@ class Device:
             return list(operations)
         try:
             from . import shaders as metal_kernels
-            rx_layer_ok = (metal_kernels.metal_enabled()
+            rx_layer_ok = (metal_kernels.metal_enabled(self.wires)
                            and hasattr(self.sim, "state"))
         except Exception:
             rx_layer_ok = False

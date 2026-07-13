@@ -91,9 +91,9 @@ def _side_by_side(img_left: Path, img_right: Path, out_png: Path, title: str):
         return False
 
 
-def test_visualization_plots():
+def test_visualization_plots(tmp_path):
     info("Visualization: generate side-by-side (mlxQ vs PennyLane) circuit plots")
-    out_dir = Path('bench')
+    out_dir = tmp_path / 'visualizations'
     _ensure_dir(out_dir)
 
     # 1) Small circuit (3q)
@@ -147,4 +147,4 @@ def test_visualization_plots():
     except Exception as e:
         warn(f"GHZ plot skipped: {e}")
 
-    success("Visualization plots generated under bench/")
+    success(f"Visualization plots generated under {out_dir}")

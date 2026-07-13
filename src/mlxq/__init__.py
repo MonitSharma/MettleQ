@@ -34,6 +34,7 @@ if _HAS_MLX:
         )
         from .sim import StateVectorSimulator, qft, iqft
         from .device import Device
+        from .execution import metal_runtime_status, state_memory_estimate
         from .observables import is_hermitian, commutator
 
         __all__ += [
@@ -42,6 +43,7 @@ if _HAS_MLX:
             "SWAP", "iSWAP", "CNOT", "CZ", "CPHASE", "CRX", "CRY", "CRZ",
             "Toffoli", "Fredkin", "CH", "MultiControlledX", "MultiControlledZ",
             "StateVectorSimulator", "qft", "iqft", "Device",
+            "metal_runtime_status", "state_memory_estimate",
             "is_hermitian", "commutator",
         ]
     except Exception:

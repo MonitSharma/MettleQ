@@ -37,8 +37,6 @@ def test_mps_sv_parity_small_random():
         dev_sv.execute(ops)
         p_sv = dev_sv.sim.probabilities()
         # MPS backend (large Dmax for exactness)
-        os.environ['MLXQ_MPS_DMAX'] = '512'
-        os.environ['MLXQ_MPS_EPS'] = '1e-12'
         dev_mps = Device(n, backend='mps', mps_opts=MPSOptions(dmax=512, eps=1e-12))
         dev_mps.execute(ops)
         p_mps = dev_mps.sim.probabilities()
@@ -199,35 +197,28 @@ def test_mps_mpo_xx_single_step():
     assert isinstance(p, list) and len(p) == (1 << n)
 
 
-def test_mps_early_stop_flag():
+def test_mps_early_stop_flag(monkeypatch):
     """Bench simulate_heisenberg with small early-stop bmax triggers early_stop flag."""
     info("MPS early-stop flag (heisenberg)")
     from mlxq.bench import simulate_heisenberg
-    import os as _os
-    _os.environ['MLXQ_BACKEND'] = 'mps'
-    _os.environ['MLXQ_MPS_EARLY_STOP_BMAX'] = '1'  # very small to trigger quickly
+    monkeypatch.setenv('MLXQ_BACKEND', 'mps')
+    monkeypatch.setenv('MLXQ_MPS_EARLY_STOP_BMAX', '1')  # very small to trigger quickly
     res = simulate_heisenberg(6, trotter_steps=20)
     m = res.get('mps', {})
     assert isinstance(m, dict) and m.get('early_stop', False)
 
 
-def test_mps_bonds_csv_emitted(tmp_path=None):
+def test_mps_bonds_csv_emitted(tmp_path, monkeypatch):
     """A tiny MPS scaling run emits bonds CSV and summary CSV."""
     info("MPS bonds CSV emission (time_evolution n=2)")
-    import os as _os
     from mlxq.bench import run_scaling_benchmark
-    out_dir = 'bench_test_unit'
-    try:
-        import shutil
-        shutil.rmtree(out_dir, ignore_errors=True)
-    except Exception:
-        pass
-    _os.environ['MLXQ_BACKEND'] = 'mps'
-    _os.environ['MLXQ_SAVE_PLOTS'] = '0'
-    _os.environ['MLXQ_MPS_DMAX'] = '32'
-    _os.environ['MLXQ_MPS_EPS'] = '1e-10'
-    run_scaling_benchmark('time_evolution', [2], simulate_cap=2, out_prefix=out_dir)
-    bonds_csv = f"{out_dir}/time_evolution_mps_n2_bonds.csv"
-    summary_csv = f"{out_dir}/time_evolution_mps_summary.csv"
-    assert __import__('os').path.exists(bonds_csv)
-    assert __import__('os').path.exists(summary_csv)
+    out_dir = tmp_path / 'bench_test_unit'
+    monkeypatch.setenv('MLXQ_BACKEND', 'mps')
+    monkeypatch.setenv('MLXQ_SAVE_PLOTS', '0')
+    monkeypatch.setenv('MLXQ_MPS_DMAX', '32')
+    monkeypatch.setenv('MLXQ_MPS_EPS', '1e-10')
+    run_scaling_benchmark('time_evolution', [2], simulate_cap=2, out_prefix=str(out_dir))
+    bonds_csv = out_dir / 'time_evolution_mps_n2_bonds.csv'
+    summary_csv = out_dir / 'time_evolution_mps_summary.csv'
+    assert bonds_csv.exists()
+    assert summary_csv.exists()

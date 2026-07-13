@@ -8,13 +8,14 @@ import platform
 from datetime import datetime
 
 import mlx.core as mx
+import pytest
 
 from mlxq.mlxQsim import StateVectorSimulator, qft, iqft
 from mlxq.mlxQgates import H, X, Y, Z, I, RX, RY, RZ, SX, S, SDG, T, TDG, PhaseShift, U2, U3, SWAP, iSWAP, CNOT, CZ, CPHASE, CRX, CRY, CRZ, Toffoli, Fredkin
 from mlxq.mlxQtensor import kron
 from mlxq.mlxQobservables import expectation_value, is_unitary, pauli_decomposition_2x2, exp_i_pauli, pauli_strings_commute_words, is_hermitian, commutator
 from mlxq.mlxQdevice import Device
-from mlxq.mlxQqasm import parse_qasm_file
+from mlxq.mlxQqasm import QASMParseError, parse_qasm_file
 from mlxq.paths import qasm_local_path
 from mlxq.mlxQpretty import info, success, warn, error, table, console
 from mlxq.mlxQmetrics import cpu_seconds, peak_rss_mb, now_ms
@@ -225,7 +226,7 @@ def run_all():
         test_bell_xx_expectation_one,
         test_bell_zz_expectation_one,
         test_bell_yy_expectation_minus_one,
-        test_inverse_qft_qasm_norm,
+        test_inverse_qft_qasm_dynamic_control_rejected,
         test_wstate3_qasm_norm,
         test_vqe_n4_qasm_norm,
         # Seventh batch (+10): more core parity with C++
@@ -840,14 +841,10 @@ def test_bell_yy_expectation_minus_one():
     assert close(val, -1.0, 1e-3)
 
 
-def test_inverse_qft_qasm_norm():
-    info("QASM inverseqft_n4.qasm normalization")
-    n, ops = parse_qasm_file(qasm_local_path('inverseqft_n4.qasm'))
-    dev = Device(n)
-    dev.execute(ops)
-    s = sum(dev.sim.probabilities())
-    console.print(f"  • ΣP = [bold]{s:.6f}[/bold]")
-    assert close(s, 1.0)
+def test_inverse_qft_qasm_dynamic_control_rejected():
+    info("QASM inverseqft_n4.qasm rejects unsupported classical control")
+    with pytest.raises(QASMParseError, match=r"inverseqft_n4\.qasm:14:.*classical control"):
+        parse_qasm_file(qasm_local_path('inverseqft_n4.qasm'))
 
 
 def test_wstate3_qasm_norm():

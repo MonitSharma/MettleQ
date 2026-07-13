@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import List, Tuple
 import math
+import numpy as np
 import mlx.core as mx
 
 
@@ -22,34 +23,39 @@ def ptrace(rho: mx.array, traced_out: List[int], dims: List[int]) -> mx.array:
     dims: list of subsystem dimensions (e.g., [2,2] for two qubits), ordered from left (MSB) to right (LSB).
     Returns reduced density matrix on the complement subsystems.
     """
-    nsub = len(dims)
-    d_total = _dims_total(dims)
-    assert rho.shape == (d_total, d_total)
-    # Specialized robust bipartite path for common tests
-    if nsub == 2:
-        dA, dB = dims[0], dims[1]
-        T = mx.reshape(rho, (dA, dB, dA, dB))
-        arr = T.tolist()
-        if traced_out == [1]:  # trace over second subsystem
-            R = [[0+0j for _ in range(dA)] for __ in range(dA)]
-            for a in range(dA):
-                for ap in range(dA):
-                    s = 0+0j
-                    for b in range(dB):
-                        s += complex(arr[a][b][ap][b])
-                    R[a][ap] = s
-            return mx.array(R, mx.complex64)
-        if traced_out == [0]:  # trace over first subsystem
-            R = [[0+0j for _ in range(dB)] for __ in range(dB)]
-            for b in range(dB):
-                for bp in range(dB):
-                    s = 0+0j
-                    for a in range(dA):
-                        s += complex(arr[a][b][a][bp])
-                    R[b][bp] = s
-            return mx.array(R, mx.complex64)
-    # Fallback: trace nothing (return rho)
-    return rho
+    subsystem_dims = [int(dim) for dim in dims]
+    if not subsystem_dims or any(dim < 1 for dim in subsystem_dims):
+        raise ValueError("dims must contain positive subsystem dimensions")
+    d_total = _dims_total(subsystem_dims)
+    if rho.shape != (d_total, d_total):
+        raise ValueError(
+            f"rho shape {rho.shape} does not match subsystem dimensions {subsystem_dims}"
+        )
+    traced = [int(subsystem) for subsystem in traced_out]
+    if len(set(traced)) != len(traced):
+        raise ValueError("traced_out contains duplicate subsystem indices")
+    if any(subsystem < 0 or subsystem >= len(subsystem_dims) for subsystem in traced):
+        raise ValueError("traced_out subsystem index is out of range")
+    if not traced:
+        return rho
+
+    tensor = np.asarray(rho.tolist(), dtype=np.complex128).reshape(
+        tuple(subsystem_dims + subsystem_dims)
+    )
+    remaining_dims = list(subsystem_dims)
+    # Descending order keeps lower subsystem axis numbers stable after each trace.
+    for subsystem in sorted(traced, reverse=True):
+        tensor = np.trace(
+            tensor,
+            axis1=subsystem,
+            axis2=subsystem + len(remaining_dims),
+        )
+        remaining_dims.pop(subsystem)
+    remaining_total = _dims_total(remaining_dims) if remaining_dims else 1
+    reduced = np.asarray(tensor, dtype=np.complex64).reshape(
+        (remaining_total, remaining_total)
+    )
+    return mx.array(reduced, mx.complex64)
 
 
 def _trace_over_pair(T: mx.array, ax_row: int, ax_col: int) -> mx.array:
