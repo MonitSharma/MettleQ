@@ -8,12 +8,31 @@
 
 Qupertino is a three-part project: a self-published technical report, the Qupertino simulator stack, and the dedicated QuantumStudio desktop UI studio. There is no native MLX quantum simulator available today, so Qupertino provides a local simulator layer for QFT, QAOA, VQE, Hamiltonian workflows, and OpenQASM runs.
 
-The performance story is **two tiers on the same hardware**. The pure-MLX tier expresses every structured gate as MLX array operations; on top of it, an opt-in tier of **hand-written Metal shaders** (`src/mlxq/shaders/`, one flag: `MLXQ_METAL_KERNELS=1`) covers every structured layer family through semantics-preserving fusion detectors. Measured on an M1 Max against Qiskit Aer CPU and PennyLane `lightning.qubit`, the Metal tier is **fastest in all 18 comparison cells** — 25-qubit QFT in **59 ms** (47× Aer, 95× PennyLane, and faster than MLX's own `mx.fft`), TFIM Trotter in **0.5 s** — and it accelerates **26 of 29 benchmark workloads up to 25×** over the pure tier. See the charts and tables below.
+The simulator has **two performance tiers on the same hardware**. The pure-MLX
+tier expresses structured gates as MLX array operations; an opt-in tier of
+**hand-written Metal shaders** (`src/mlxq/shaders/`, enabled with
+`MLXQ_METAL_KERNELS=1`) adds semantics-preserving fusion and custom kernels.
+The original repository published strong M1 Max results. This fork preserves
+that historical evidence and adds a 2026-07-14 M3 Pro rerun, a complete
+29-workload comparison, and a controlled same-machine upstream-versus-fork
+check. The current Metal tier reaches a median **10.19×** speedup over pure MLX
+and a maximum **32.30×**, while the controlled revision check also identifies a
+measurable host-side regression that remains an optimization target.
 
-- Website: https://boltzmannentropy.github.io/QupertinoWEB/
-- Repository: https://github.com/BoltzmannEntropy/Qupertino
-- Author: **Shlomo Kashani**
-- Technical report: unpublished; PDF and LaTeX source are kept locally and are not distributed in this repository.
+## Project Lineage
+
+- **This private fork:** https://github.com/MonitSharma/Qupertino
+- **Original public repository (upstream):** https://github.com/BoltzmannEntropy/Qupertino
+- **Original project website:** https://boltzmannentropy.github.io/QupertinoWEB/
+- **Original author:** **Shlomo Kashani**
+- **Comparison baseline:** upstream commit `2b99d30`
+- **Measured fork revision:** `a73436e`
+- **Technical report:** unpublished; PDF and LaTeX source are not distributed in this repository
+
+This is a private development fork maintained independently for correctness,
+Apple GPU performance, observability, and future quantum-SDK integrations. It
+does not open pull requests against the original repository. Original authorship
+and citation information are retained below.
 
 ## How to Cite
 
@@ -71,6 +90,13 @@ This repository is designed for publication-grade reproducibility:
 
 Qupertino ships **two measured performance tiers**. The pure-MLX tier dispatches structured gate classes to specialized MLX kernels (diagonal gates as broadcast phase multiplies, controlled gates as masked half-state updates, SWAP as an axis permutation, runtime fusion of equal-angle ZZ Trotter layers). The **Metal shader tier** (`MLXQ_METAL_KERNELS=1`) adds hand-written kernels in `src/mlxq/shaders/` for every structured layer family, reached through semantics-preserving fusion detectors and covered by the complete 292-test suite.
 
+The results below deliberately separate the **original upstream measurements**
+from the **private-fork rerun**. Cross-machine comparisons use relative
+pure-MLX/Metal speedup only. Code-revision conclusions use the controlled M3
+Pro upstream-versus-fork check.
+
+### Original upstream results (M1 Max)
+
 <div align="center">
   <img src="assets/perf-charts/chart_4way_25q.png" alt="Wall time at 25 qubits across four backends" width="820"/>
   <br/><em>25-qubit wall time, same machine, gate-identical circuits (log scale, lower is better). The Metal shader tier — blue — is fastest in every cell.</em>
@@ -87,12 +113,121 @@ Four-way interleaved campaign on M1 Max (two warmups, ten measured repeats per c
 | Grover proxy | **0.052** | 1.11 | 1.21 | 2.73 |
 | GHZ | **0.022** | 0.27 | 0.69 | 0.42 |
 
-The Metal tier is **fastest in all 18 comparison cells** (15/20/25 qubits), with 25-qubit paired per-repeat ratios of **23–47× over Aer** and **19–95× over PennyLane** — and its gate-stream QFT (59 ms) beats MLX's own `mx.fft` primitive (77 ms). The pure-MLX tier is fastest among the CPU-comparable trio on 4 of 6 workloads at 25q (Grover is a statistical tie with Aer; small gate-sparse circuits at 15q favor the CPU baselines). A paired ablation with dispatch disabled (`MLXQ_DENSE_ONLY=1`) attributes **25–33×** to kernel specialization itself. A separate campaign against PennyLane's OpenMP-parallel `lightning.kokkos` reached the same verdict for the pure tier (fastest in 16/18 cells). Full protocol, t-based CIs, raw artifacts: `paper/tqc-acm-2026/evidence_artifacts/`.
+The original upstream report states that the Metal tier is **fastest in all 18 comparison cells** (15/20/25 qubits), with 25-qubit paired per-repeat ratios of **23–47× over Aer** and **19–95× over PennyLane** — and that its gate-stream QFT (59 ms) beats MLX's own `mx.fft` primitive (77 ms). The pure-MLX tier was fastest among the CPU-comparable trio on 4 of 6 workloads at 25q (Grover was a statistical tie with Aer; small gate-sparse circuits at 15q favored the CPU baselines). A paired ablation with dispatch disabled (`MLXQ_DENSE_ONLY=1`) attributed **25–33×** to kernel specialization itself. A separate campaign against PennyLane's OpenMP-parallel `lightning.kokkos` reached the same verdict for the pure tier (fastest in 16/18 cells). The original README cited `paper/tqc-acm-2026/evidence_artifacts/`; that unpublished tree is not distributed in this checkout, so these figures are retained as historical upstream claims rather than newly reproduced four-backend results.
 
 <p align="center">
   <img src="assets/perf-charts/chart_scaling_qft.png" alt="QFT scaling 15-25 qubits" width="410"/>
   <img src="assets/perf-charts/chart_scaling_tfim.png" alt="TFIM Trotter scaling 15-25 qubits" width="410"/>
 </p>
+
+### Private-fork rerun (M3 Pro, 2026-07-14)
+
+The private fork reran the complete 29-workload pure-MLX/Metal sweep at 25
+qubits on an Apple M3 Pro using Python 3.13.2 and MLX 0.32.0. Each workload had
+one warmup per arm followed by five paired repeats, alternating pure MLX and
+Metal inside every repeat. The measured revision was `a73436e`.
+
+The current Metal tier has a **10.19× median speedup** over pure MLX. It reaches
+at least **1.1× on 26 of 29 workloads**, at least **10× on 19 workloads**, and a
+maximum of **32.30×** on long-range Ising. Amplitude estimation, W state, and
+ladder Heisenberg remain near parity.
+
+<p align="center">
+  <img src="assets/perf-charts/chart_speedup_sweep.png" alt="Original upstream M1 Max Metal speedup over pure MLX" width="410"/>
+  <img src="assets/perf-charts/chart_fork_m3pro_speedup_20260714.png" alt="Private-fork M3 Pro Metal speedup over pure MLX" width="410"/>
+  <br/><em>Left: original upstream M1 Max sweep. Right: private-fork M3 Pro rerun. Both report paired pure-MLX divided by Metal wall time; larger is better.</em>
+</p>
+
+#### Original upstream versus private fork
+
+The requested historical-versus-current chart compares the relative Metal
+speedup reported by the original upstream M1 Max chart with the private-fork M3
+Pro rerun. Using a ±0.25× band, 17 ratios are higher, five are effectively
+unchanged, and seven are lower in the rerun.
+
+<div align="center">
+  <img src="assets/perf-charts/chart_original_vs_fork_speedup_20260714.png" alt="Change in Metal speedup from the original upstream M1 Max results to the private-fork M3 Pro rerun" width="820"/>
+  <br/><em>Original published M1 Max ratio → private-fork M3 Pro ratio. Positive bars mean a larger pure-MLX/Metal ratio, not necessarily a lower absolute runtime across machines.</em>
+</div>
+
+| Workload | Original upstream, M1 Max | Private fork, M3 Pro | Difference |
+| --- | ---: | ---: | ---: |
+| Long-range Ising | 24.3× | 32.30× | +8.00× |
+| Grover | 11.5× | 22.08× | +10.58× |
+| EfficientSU2 | 10.6× | 18.44× | +7.84× |
+| TFIM Trotter (2nd) | 25.0× | 16.29× | -8.71× |
+| Variational | 14.3× | 16.24× | +1.94× |
+| QCBM | 12.0× | 16.13× | +4.13× |
+| GHZ | 9.1× | 15.47× | +6.37× |
+| QFT (entangled) | 7.3× | 13.46× | +6.16× |
+| cuQuantum proxy | 13.2× | 13.05× | -0.15× |
+| QFT | 8.4× | 12.76× | +4.36× |
+| Quantum walk (V-chain) | 11.6× | 11.56× | -0.04× |
+| Phase estimation | 8.0× | 10.80× | +2.80× |
+| Graph state | 8.9× | 10.38× | +1.48× |
+| QAOA | 8.4× | 10.28× | +1.88× |
+| RealAmplitudes | 5.1× | 10.19× | +5.09× |
+| Heisenberg XXZ | 13.2× | 10.18× | -3.02× |
+| Heisenberg | 13.8× | 10.15× | -3.65× |
+| Quantum walk | 11.4× | 10.08× | -1.32× |
+| Phase estimation (inexact) | 8.8× | 10.01× | +1.21× |
+| QNN | 7.4× | 9.97× | +2.57× |
+| Random circuit | 4.7× | 9.16× | +4.46× |
+| Deutsch-Jozsa | 8.4× | 8.72× | +0.32× |
+| TFIM Trotter (1st) | 12.3× | 8.70× | -3.60× |
+| TFIM random field | 13.1× | 8.48× | -4.62× |
+| Heisenberg random field | 8.9× | 7.76× | -1.14× |
+| VQE plus energy evaluation | 1.3× | 3.77× | +2.47× |
+| Heisenberg ladder | 1.0× | 1.03× | +0.03× |
+| W state | 1.0× | 1.00× | +0.00× |
+| Amplitude estimation | 1.0× | 0.99× | -0.01× |
+
+This table is useful for comparing workload behavior, but it is **not a
+controlled code-revision benchmark** because the original data came from an M1
+Max and the rerun used an M3 Pro. Absolute current-fork timings are shown below.
+
+<div align="center">
+  <img src="assets/perf-charts/chart_fork_m3pro_runtime_20260714.png" alt="Current M3 Pro pure MLX and Metal runtime across 29 workloads" width="820"/>
+  <br/><em>Private-fork M3 Pro mean wall time at 25 qubits, log scale. Each row directly labels its pure-MLX/Metal speedup.</em>
+</div>
+
+#### Controlled same-machine revision check
+
+For a code-level comparison, the same Apple M3 Pro ran the original upstream
+commit `2b99d30` and the fork commit `a73436e` at 20 qubits with one warmup and
+seven paired repeats. Pure-MLX medians were broadly stable, but Metal execution
+was slower on all six representative workloads:
+
+| Workload | Upstream Metal | Fork Metal | Fork change | Upstream → fork speedup |
+| --- | ---: | ---: | ---: | ---: |
+| QFT | 4.326 ms | 4.544 ms | +5.0% slower | 5.86× → 5.62× |
+| QAOA | 8.902 ms | 9.625 ms | +8.1% slower | 8.86× → 8.21× |
+| TFIM Trotter (2nd) | 26.355 ms | 33.028 ms | +25.3% slower | 9.02× → 7.33× |
+| Phase estimation | 6.286 ms | 7.031 ms | +11.8% slower | 5.71× → 5.11× |
+| Grover | 4.815 ms | 5.367 ms | +11.5% slower | 12.69× → 11.29× |
+| GHZ | 1.628 ms | 2.293 ms | +40.8% slower | 5.96× → 4.06× |
+
+A measured contributor is the new runtime capability probe, which currently
+costs about 0.21 ms per check and can run repeatedly in layered workloads.
+Temporarily caching the static probe saved 0.47–5.00 ms (8–19%) in a focused
+test. The correctness and observability work is retained; caching the immutable
+hardware capability portion is the next performance target.
+
+All CSVs, manifests, and comparison summaries used here are frozen under
+[`assets/benchmarks-frozen/fork-m3pro-20260714/`](assets/benchmarks-frozen/fork-m3pro-20260714/).
+Regenerate the 25-qubit sweep and comparison with:
+
+```bash
+PYTHONPATH=src .venv/bin/python tools/shader_suite_sweep.py \
+  --outdir bench/runs/shader_sweep_current --qubits 25 --repeats 5
+
+PYTHONPATH=src .venv/bin/python tools/compare_shader_sweeps.py \
+  --historical assets/benchmarks-frozen/fork-m3pro-20260714/historical_chart_ratios.csv \
+  --current bench/runs/shader_sweep_current/shader_sweep_summary.csv \
+  --outdir bench/runs/shader_sweep_current \
+  --historical-label "published M1 Max chart" \
+  --current-label "M3 Pro rerun"
+```
 
 ### The Metal shader tier
 
@@ -106,13 +241,6 @@ Seven kernel families in one folder (`src/mlxq/shaders/`, design + measurements 
 | H layer (Walsh radix-4, 7 launches) | 698 ms | — | **12.7 ms** |
 
 The shader tier also engages on the **OpenQASM import path**. The current strict unitary importer accepts 33 of the 42 bundled files and rejects nine files requiring unsupported dynamic semantics or lacking a valid OpenQASM declaration. A historical 40-circuit shader sweep recorded pure/Metal numerical parity and speedups, but it used the earlier permissive parser; treat it as performance evidence for accepted unitary gate streams, not as semantic validation of all source programs. Artifact: `paper/tqc-acm-2026/evidence_artifacts/qasm_shader_sweep_20260704/`.
-
-Full-suite paired sweep (29 workloads at 25q, pure vs Metal alternating within every repeat): **26 of 29 workloads accelerate, 4.7–25×** for those with fusable layer structure (TFIM 2nd order 25×, long-range Ising 24×, Heisenberg 13.8×, variational 14.3×, QCBM 12×, Grover 11.5×). The three 1.0× rows are structural and documented (cross-family Trotter interleave, isolated CZs, strict RY/CNOT alternation).
-
-<div align="center">
-  <img src="assets/perf-charts/chart_speedup_sweep.png" alt="Metal shader speedup over pure MLX across 29 workloads" width="720"/>
-  <br/><em>Every gate-based workload, Metal shaders vs pure MLX (paired, same session). Blue ≥ 4×, green = VQE (residual is energy evaluation), grey = structurally unfusable and correctly left at parity.</em>
-</div>
 
 Four Codex CLI review rounds shaped and audited the kernels (archived under `paper/tqc-acm-2026/reviews_shaders_v2/`), catching real bugs: a wrong radix-4 derivation (retracted by the reviewer itself), a float32/rtol hole that silently dropped small-angle gates, and 1.25e-5 phase drift in 300-term products (fixed with grouped double-precision LUTs).
 

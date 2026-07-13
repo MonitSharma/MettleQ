@@ -1,0 +1,114 @@
+{
+  "historical_label": "published M1 Max chart",
+  "current_label": "M3 Pro rerun",
+  "noise_band": 0.25,
+  "counts": {
+    "improved": 17,
+    "unchanged": 5,
+    "regressed": 7
+  },
+  "largest_improvements": [
+    {
+      "benchmark": "grover",
+      "historical_ratio": 11.5,
+      "current_ratio": 22.076207529587595,
+      "speedup_delta": 10.576207529587595,
+      "relative_speedup_change_percent": 91.96702199641388,
+      "verdict": "improved",
+      "pure_mean_ms": 2611.5998754002153,
+      "metal_mean_ms": 118.32185859978199
+    },
+    {
+      "benchmark": "long_range_ising",
+      "historical_ratio": 24.3,
+      "current_ratio": 32.2963426592802,
+      "speedup_delta": 7.996342659280199,
+      "relative_speedup_change_percent": 32.90675991473333,
+      "verdict": "improved",
+      "pure_mean_ms": 16440.526982999592,
+      "metal_mean_ms": 509.11408299952745
+    },
+    {
+      "benchmark": "su2rand",
+      "historical_ratio": 10.6,
+      "current_ratio": 18.436382616020243,
+      "speedup_delta": 7.836382616020243,
+      "relative_speedup_change_percent": 73.92813788698342,
+      "verdict": "improved",
+      "pure_mean_ms": 4845.922258199006,
+      "metal_mean_ms": 263.418699798733
+    },
+    {
+      "benchmark": "ghz",
+      "historical_ratio": 9.1,
+      "current_ratio": 15.471593125954666,
+      "speedup_delta": 6.371593125954666,
+      "relative_speedup_change_percent": 70.01750687862271,
+      "verdict": "improved",
+      "pure_mean_ms": 391.32096640095114,
+      "metal_mean_ms": 25.28477479889989
+    },
+    {
+      "benchmark": "qft_entangled",
+      "historical_ratio": 7.3,
+      "current_ratio": 13.45700251698716,
+      "speedup_delta": 6.15700251698716,
+      "relative_speedup_change_percent": 84.34250023270083,
+      "verdict": "improved",
+      "pure_mean_ms": 2111.609274800122,
+      "metal_mean_ms": 156.9406664006412
+    }
+  ],
+  "largest_regressions": [
+    {
+      "benchmark": "tfim_trotter2",
+      "historical_ratio": 25.0,
+      "current_ratio": 16.288160616139113,
+      "speedup_delta": -8.711839383860887,
+      "relative_speedup_change_percent": -34.84735753544355,
+      "verdict": "regressed",
+      "pure_mean_ms": 20674.719324999303,
+      "metal_mean_ms": 1269.3548417970537
+    },
+    {
+      "benchmark": "tfim_random_field",
+      "historical_ratio": 13.1,
+      "current_ratio": 8.47633930926707,
+      "speedup_delta": -4.62366069073293,
+      "relative_speedup_change_percent": -35.29511977658725,
+      "verdict": "regressed",
+      "pure_mean_ms": 10442.298841597885,
+      "metal_mean_ms": 1232.5257082000376
+    },
+    {
+      "benchmark": "heisenberg",
+      "historical_ratio": 13.8,
+      "current_ratio": 10.145851114002436,
+      "speedup_delta": -3.6541488859975644,
+      "relative_speedup_change_percent": -26.479339753605537,
+      "verdict": "regressed",
+      "pure_mean_ms": 29614.41253340021,
+      "metal_mean_ms": 2919.2767582014203
+    },
+    {
+      "benchmark": "hamiltonian",
+      "historical_ratio": 12.3,
+      "current_ratio": 8.702155355546358,
+      "speedup_delta": -3.5978446444536427,
+      "relative_speedup_change_percent": -29.250769467102785,
+      "verdict": "regressed",
+      "pure_mean_ms": 10922.059824801236,
+      "metal_mean_ms": 1258.3294580005108
+    },
+    {
+      "benchmark": "heisenberg_xxz",
+      "historical_ratio": 13.2,
+      "current_ratio": 10.177663988852235,
+      "speedup_delta": -3.0223360111477646,
+      "relative_speedup_change_percent": -22.89648493293761,
+      "verdict": "regressed",
+      "pure_mean_ms": 30063.426916600765,
+      "metal_mean_ms": 2953.7765748009087
+    }
+  ]
+}
