@@ -63,6 +63,7 @@ against upstream.
 | **Step 4 preflight/policy revision** | Fork commit `83940c0` |
 | **Step 5 native SDK engine revision** | Fork commit `0d01052` |
 | **Step 6 adaptive statevector/MPS revision** | Fork commit `3f40a47` |
+| **Step 7 MPS limit campaign revision** | Fork commit `7b3d2ff` |
 
 Original authorship, licensing, and citation information are retained at the
 end of this README.
@@ -624,6 +625,62 @@ summary, validation thresholds, exact command, versions, and clean-engine
 manifest are frozen in
 [`fork-m3pro-20260715-step5-sdk/`](assets/benchmarks-frozen/fork-m3pro-20260715-step5-sdk/).
 
+### How far does MPS go? Entanglement limits on Apple M3 Pro
+
+There is no honest single MPS qubit limit. A 10,000-qubit GHZ chain needs bond
+dimension 2, while a much smaller nonlocal circuit can saturate `Dmax`, lose
+norm, or fail its SVD. Step 7 therefore swept seven deterministic topologies
+through the public Qiskit `QupertinoEstimatorV2` path, with every case isolated
+in a fresh process.
+
+The completion-envelope runs used CPU MPS, `Dmax=64`, `eps=1e-10`, and a
+30-second per-case ceiling. CPU is the current automatic choice because the
+measured GPU tensor path still returns to the CPU for every SVD and did not
+cross over. These are the largest completed cases in the tested schedules,
+not universal maxima:
+
+| Entanglement family | Largest observed completion | Time | Accuracy / failure boundary |
+| --- | ---: | ---: | --- |
+| GHZ chain | 10,000q d1 | **2.309 s** | Bond 2, no local truncation; this was the test ceiling, not an engine limit |
+| 1D brickwork | 1,000q d8 | **1.096 s** | Bond 60, norm 1.000062; 10,000q d8 later reached a zero numerical norm |
+| Ring brickwork | 1,000q d4 | 13.344 s | Bond cap, norm 0.0169; completion is not a usable answer, and SVD failures were non-monotonic |
+| 2D grid | 81q d2 | 1.467 s | Bond cap, norm 0.775; 100q and 144q hit MLX SVD failures |
+| Rainbow pairs | 64q d1 | 4.025 s | Bond cap, norm 0.930; 80q and 96q hit MLX SVD failures |
+| Seeded long range | 96q d1 | 5.935 s | Bond cap, norm 0.868; 128q and 160q hit MLX SVD failures |
+| All to all | 32q d1 | 20.969 s | Bond cap, norm 0.573; 36q exceeded 30 seconds |
+
+The standard 26-case sweep completed every case, but independent Qiskit
+statevector checks through 20 qubits found up to `1.278e-2` local-observable
+error after aggressive nonlocal truncation. At 16 qubits, line, ring, and grid
+cases passed the `5e-5` acceptance threshold; rainbow, random-long-range, and
+all-to-all cases did not all pass at `Dmax=64`.
+
+<div align="center">
+  <img src="assets/benchmarks-frozen/fork-m3pro-20260715-step7-mps-limits/mps_limit_landscape.png" alt="Qupertino MPS completion envelope, bond growth, truncation, errors, and timeout across seven entanglement families" width="920"/>
+  <br/><em>Filled points show no observed local truncation; hollow points show truncation. X and triangle markers retain numerical failures and the 30-second timeout.</em>
+</div>
+
+`Dmax` convergence is part of trust, not an optional performance tweak. For
+example, the 24-qubit all-to-all case rose from 2.406 s at `Dmax=32`, to 7.530 s
+at 64, to 26.126 s at 128, yet remained strongly truncated. Increasing `Dmax`
+did not make every observable or norm converge monotonically.
+
+<div align="center">
+  <img src="assets/benchmarks-frozen/fork-m3pro-20260715-step7-mps-limits/mps_dmax_convergence.png" alt="MPS runtime, state norm error, and exact small-circuit error across maximum bond dimensions 32, 64, and 128" width="920"/>
+  <br/><em>Representative convergence probes. Wide cases without an independent reference are not labeled exact.</em>
+</div>
+
+The reviewed raw rows, manifests, summaries, plotted CSVs, commands, and
+interpretation are frozen in
+[`fork-m3pro-20260715-step7-mps-limits/`](assets/benchmarks-frozen/fork-m3pro-20260715-step7-mps-limits/).
+
+The next MPS engineering priorities are: make SVD failure recoverable and
+renormalization/canonicalization explicit; add `Dmax` convergence and accuracy
+policy to SDK results; plan nonlocal gates to minimize swap-induced bond
+growth; then optimize the two-site/SVD path and remeasure an honest Apple-GPU
+crossover. A matched Qupertino-versus-Aer MPS campaign should follow only after
+those reliability failures are fixed.
+
 ## Trust, correctness, and observability
 
 Fast simulation is useful only when dispatch, semantics, and measurements are
@@ -684,6 +741,10 @@ Silicon runner labeled `macOS` and `ARM64`.
 - MPS is bounded and may be approximate. Local discarded singular-value weight
   is telemetry, not a global fidelity bound. Automatic MPS requires
   `allow_approximation=True` and conservative locality/depth checks.
+- The current MLX 0.32 CPU SVD can abort selected wide, nonlocal MPS cases with
+  `sgesvdx` convergence code 1. Deep/wide truncated cases can also lose norm;
+  process isolation contains the failure, and Step 7 retains it as evidence,
+  but a robust SVD fallback and canonical renormalization are not implemented.
 - The bundled strict importer accepts 33 of 42 OpenQASM files. It rejects reset,
   classical control, mid-circuit measurement, opaque gates, arbitrary includes,
   and malformed declarations.
@@ -762,6 +823,23 @@ The SDK matrix uses the same analytic local `Z` expectation contract in both
 frameworks. Qiskit rows compare with `StatevectorEstimator`; PennyLane rows
 compare with `default.qubit`.
 
+### Probe MPS limits by entanglement topology
+
+```bash
+PYTHONPATH=src caffeinate -i .venv/bin/python \
+  tools/benchmark_mps_limits.py \
+  --outdir bench/runs/mps-limits \
+  --profile standard --dmax 64 --eps 1e-10 --timeout-seconds 30
+
+# Repeat --case to narrow a boundary without editing the benchmark.
+PYTHONPATH=src .venv/bin/python tools/benchmark_mps_limits.py \
+  --outdir bench/runs/mps-boundary --dmax 64 --timeout-seconds 30 \
+  --case grid_2d:81:2 --case rainbow:80:1 --case all_to_all:36:1
+```
+
+The campaign separates completion, timeout, process error, small exact
+validation, local truncation, bond growth, state norm, runtime, and peak RSS.
+
 ### Statevector or MPS backend
 
 ```bash
@@ -824,6 +902,9 @@ The Step 5 native-SDK evidence is frozen under
 
 The Step 6 adaptive statevector/MPS evidence is frozen under
 [`assets/benchmarks-frozen/fork-m3pro-20260715-step6-adaptive-sdk/`](assets/benchmarks-frozen/fork-m3pro-20260715-step6-adaptive-sdk/). It contains pure-MLX and custom-Metal CPU/GPU crossover sweeps, the Qiskit/PennyLane method matrix, MPS device and truncation diagnostics, the unchanged Step 5 protocol refresh, and the 329-test result.
+
+The Step 7 MPS entanglement-limit evidence is frozen under
+[`assets/benchmarks-frozen/fork-m3pro-20260715-step7-mps-limits/`](assets/benchmarks-frozen/fork-m3pro-20260715-step7-mps-limits/). It contains 49 `Dmax=64` topology/qubit/depth probes, `Dmax=32/64/128` convergence rows, independent statevector validation through 20 qubits, retained SVD/norm failures, exact-commit manifests, and the plotted source data.
 
 Recreate the current sweep and comparison:
 

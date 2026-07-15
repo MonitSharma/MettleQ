@@ -1,5 +1,53 @@
 # Apple GPU engineering log
 
+## 2026-07-15 — Step 7: topology-aware MPS limit campaign
+
+### What was measured
+
+`tools/benchmark_mps_limits.py` now runs every topology/qubit/depth cell in a
+fresh process through Qiskit `QupertinoEstimatorV2`. It records completion,
+timeout, child-process errors, runtime, peak RSS, bond growth, truncation,
+discarded-weight telemetry, norm, and independent statevector error through 20
+qubits. The deterministic families are GHZ chain, line brickwork, ring
+brickwork, 2D grid, rainbow, seeded random long range, and all to all. Five new
+tests cover topology generation, circuit construction, and custom boundary
+case parsing; the complete suite passes 334 tests.
+
+Engine commit `7b3d2ff4a1ae8bbe63b90d86dae0a451aee19465` was clean for every
+run. The Apple M3 Pro envelope used CPU MPS, `Dmax=64`, `eps=1e-10`, and a
+30-second per-case ceiling. The 49 distinct cells produced 40 completions,
+eight errors, and one timeout. GHZ reached the 10,000-qubit test ceiling in
+2.309 seconds at bond dimension 2 with no local truncation. A 1,000-qubit,
+depth-8 line circuit completed in 1.096 seconds with bond 60 and tiny local
+discarded-weight telemetry. By contrast, 32-qubit all-to-all took 20.969
+seconds with severe norm loss, and 36 qubits timed out.
+
+The campaign deliberately retains unacceptable completions. Ring 1,000q d4
+completed with norm 0.0169, grid 81q d2 with norm 0.775, and all-to-all 32q d1
+with norm 0.573. The standard small exact comparisons reached `1.278e-2`
+observable error. Wider nonlocal probes also exposed non-monotonic MLX CPU SVD
+aborts (`sgesvdx` code 1), while line 10,000q d8 reached a zero numerical norm.
+These results establish that entanglement and numerical stability—not qubit
+count alone—define the current boundary.
+
+### Ordered next work
+
+1. Replace process-aborting SVD behavior with a tested recoverable path and add
+   explicit canonicalization/renormalization with finite-norm guards.
+2. Add SDK accuracy policy: warn/fail thresholds, `Dmax` convergence helpers,
+   and result metadata that never equates completion with exactness.
+3. Add topology-aware nonlocal routing and a bond-growth forecast before
+   execution, minimizing swap-induced entanglement where semantics allow.
+4. Optimize two-site contractions and the CPU SVD path, then investigate
+   batched/Metal MPS primitives and remeasure CPU/GPU crossover before changing
+   the CPU automatic default.
+5. After reliability is fixed, run a paired, matched-contract comparison with
+   Qiskit Aer MPS across the same topology/depth schedule and multiple Apple
+   Silicon generations.
+
+Raw evidence and reviewed plots are frozen under
+[`assets/benchmarks-frozen/fork-m3pro-20260715-step7-mps-limits/`](../../assets/benchmarks-frozen/fork-m3pro-20260715-step7-mps-limits/).
+
 ## 2026-07-15 — Step 6: Qiskit/PennyLane method and device architecture
 
 ### Product boundary and execution contract

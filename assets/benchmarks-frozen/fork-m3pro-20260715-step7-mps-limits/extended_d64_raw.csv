@@ -1,0 +1,19 @@
+family,qubits,depth,status,device,dmax,eps,circuit_build_ms,execution_ms,operation_count,two_qubit_operation_count,expectation_z0,exact_expectation_z0,exact_absolute_error,exact_reference_ms,truncated,truncation_events,local_discarded_weight_sum,local_discarded_weight_max,current_bond_dimension_max,current_bond_dimension_mean,maximum_bond_dimension_reached,state_norm,tensor_device,svd_device,peak_rss_bytes,error,trust_classification
+ghz_chain,2500,1,completed,cpu,64,1e-10,6.190666,558.439333,2500,2499,0.0,,,,False,0,0.0,0.0,2,2.0,2,0.999999982885729,cpu,cpu,124436480,,wide_no_local_truncation_observed
+ghz_chain,5000,1,completed,cpu,64,1e-10,14.215,1116.645458,5000,4999,0.0,,,,False,0,0.0,0.0,2,2.0,2,0.999999982885729,cpu,cpu,154615808,,wide_no_local_truncation_observed
+ghz_chain,10000,1,completed,cpu,64,1e-10,25.219041,2309.263542,10000,9999,0.0,,,,False,0,0.0,0.0,2,2.0,2,0.999999982885729,cpu,cpu,209289216,,wide_no_local_truncation_observed
+line_brickwork,500,4,completed,cpu,64,1e-10,12.406166,242.421834,5998,998,-0.299217493423202,,,,True,537,1.4420239104389614e-18,2.2629161307228956e-20,8,5.070140280561122,8,1.000025072496416,cpu,cpu,115523584,,wide_local_truncation_observed
+line_brickwork,1000,4,completed,cpu,64,1e-10,26.096542,496.664333,11998,1998,-0.2992174934232022,,,,True,1066,2.8924462033554396e-18,2.2629161307228956e-20,8,5.145145145145145,8,1.0000520650605051,cpu,cpu,132595712,,wide_local_truncation_observed
+line_brickwork,1000,8,completed,cpu,64,1e-10,45.465417,1096.112583,21996,3996,-0.5203959013728066,,,,True,2341,6.227956011702663e-18,2.8377417503120556e-20,60,30.096096096096097,60,1.000062423978478,cpu,cpu,231194624,,wide_local_truncation_observed
+ring_brickwork,200,4,completed,cpu,64,1e-10,4.93925,2501.659875,2402,402,-0.2756042430496236,,,,True,986,93.56329607885353,1.7397997380899977,64,61.4070351758794,64,0.7207649872747524,cpu,cpu,203735040,,wide_local_truncation_observed
+grid_2d,100,2,error,cpu,64,1e-10,,,,,,,,,,,,,,,,,,,,"libc++abi: terminating due to uncaught exception of type std::runtime_error: svd_impl: sgesvdx_ failed with code 1
+",not_completed
+grid_2d,144,2,error,cpu,64,1e-10,,,,,,,,,,,,,,,,,,,,"libc++abi: terminating due to uncaught exception of type std::runtime_error: svd_impl: sgesvdx_ failed with code 1
+",not_completed
+rainbow,64,1,completed,cpu,64,1e-10,0.77725,4024.773083,288,32,-0.083970255358904,,,,True,1634,18.40806435182082,0.4072277229467915,64,55.80952380952381,64,0.9295392448464281,cpu,cpu,127303680,,wide_local_truncation_observed
+rainbow,96,1,error,cpu,64,1e-10,,,,,,,,,,,,,,,,,,,,"libc++abi: terminating due to uncaught exception of type std::runtime_error: svd_impl: sgesvdx_ failed with code 1
+",not_completed
+random_long_range,64,1,completed,cpu,64,1e-10,0.948542,2669.968458,288,32,-0.08390183501591786,,,,True,1077,96.102410471376,5.467663118053045,64,55.80952380952381,64,0.8297916988210163,cpu,cpu,127401984,,wide_local_truncation_observed
+random_long_range,96,1,completed,cpu,64,1e-10,1.108333,5934.539375,432,48,-0.084100800601516,,,,True,2378,114.54305730124551,4.36970658433242,64,58.56842105263158,64,0.8677826509110179,cpu,cpu,144408576,,wide_local_truncation_observed
+all_to_all,28,1,completed,cpu,64,1e-10,1.289917,13220.408917,490,378,-0.06021871539275176,,,,True,4930,392.86644048680296,1.457363072004626,64,44.888888888888886,64,0.6896611304016174,cpu,cpu,109543424,,wide_local_truncation_observed
+all_to_all,32,1,completed,cpu,64,1e-10,1.610709,20968.823292,624,496,-0.057959629010003705,,,,True,8056,491.975577957449,1.565723025675116,64,47.354838709677416,64,0.5730350490488845,cpu,cpu,111378432,,wide_local_truncation_observed

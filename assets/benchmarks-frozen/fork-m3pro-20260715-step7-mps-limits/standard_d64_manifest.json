@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-07-15T13:33:17.506156+00:00",
+  "command": "tools/benchmark_mps_limits.py --outdir bench/runs/mps_limit_20260715_m3pro_7b3d2ff_d64 --profile standard --dmax 64 --eps 1e-10 --timeout-seconds 30",
+  "git_commit": "7b3d2ff4a1ae8bbe63b90d86dae0a451aee19465",
+  "git_status_porcelain": "",
+  "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "python": "3.13.2",
+  "mlx": "0.32.0",
+  "qiskit": "2.5.0",
+  "profile": "standard",
+  "custom_cases": null,
+  "device": "cpu",
+  "dmax": 64,
+  "eps": 1e-10,
+  "exact_max_qubits": 20,
+  "exact_atol": 5e-05,
+  "timeout_seconds_per_case": 30.0,
+  "process_isolation": "fresh process for every topology/qubit/depth case"
+}
