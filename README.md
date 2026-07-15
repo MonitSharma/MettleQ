@@ -41,7 +41,7 @@ acceleration.
 | Circuit inputs | Native Python operations, strict unitary OpenQASM 2.0, Qiskit circuits, and PennyLane QNodes |
 | Workloads | QFT, phase estimation, Grover, QAOA, VQE, QCBM, QNN, random circuits, and spin dynamics |
 | Trust model | Pre-allocation statevector checks, capability-gated dispatch, explicit cost/execution plans, numerical parity tests, synchronized benchmarks, and safe fallbacks |
-| Current test suite | **329 tests** across the simulator, SDK adapters, planner, algorithms, MPS, QASM, Metal dispatch, campaign analysis, and QuantumStudio backend |
+| Current test suite | **334 tests** across the simulator, SDK adapters, planner, algorithms, MPS, QASM, Metal dispatch, campaign analysis, and QuantumStudio backend |
 | Desktop product | QuantumStudio orchestration, monitoring, plotting, and export |
 | SDK adapters | Native Qiskit backend and registered PennyLane device, plus the original internal `mlxq.qml` teaching wrapper |
 
@@ -651,6 +651,7 @@ auditable. This fork adds explicit evidence at each layer:
 ### Test inventory
 
 | Category | Tests |
+| --- | ---: |
 | Core simulator and gate algebra | 149 |
 | Quantum-computing examples and algorithms | 41 |
 | Internal consistency and measurement parity | 21 |
@@ -658,12 +659,12 @@ auditable. This fork adds explicit evidence at each layer:
 | QML wrapper, QFT, and subset semantics | 10 |
 | Strict OpenQASM and silent-risk checks | 7 |
 | QPE energy estimation | 2 |
-| Benchmark protocol and plotting | 4 |
+| Benchmark protocol and plotting | 9 |
 | Custom Metal parity and dispatch | 19 |
 | Execution plans, memory policy, planner, and capability reporting | 29 |
 | Native Qiskit and PennyLane integrations | 13 |
 | QuantumStudio backend and MCP API | 18 |
-| **Total** | **329** |
+| **Total** | **334** |
 
 Run everything with:
 

@@ -165,6 +165,10 @@ def test_mps_truncation_diagnostics_make_approximation_visible():
     diagnostics = simulator.truncation_diagnostics()
 
     assert diagnostics["events"] == 1
+    assert diagnostics["truncated"] is True
+    assert diagnostics["configured_max_bond_dimension"] == 1
+    assert diagnostics["current_bond_dimension_max"] == 1
+    assert diagnostics["maximum_bond_dimension_reached"] == 1
     assert diagnostics["local_discarded_weight_sum"] > 0.0
     assert diagnostics["approximation_warning"] is not None
 

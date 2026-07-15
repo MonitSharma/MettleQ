@@ -293,8 +293,10 @@ class MPSState:
         as a global fidelity bound when the MPS is not at that bond's
         orthogonality center.
         """
+        current_bond_max = max(self.bonds, default=1)
         return {
             "events": int(self.trunc_events),
+            "truncated": bool(self.truncated_any),
             "local_discarded_weight_sum": float(self.local_discarded_weight_sum),
             "local_discarded_weight_max": float(self.local_discarded_weight_max),
             "last_event": (
@@ -302,6 +304,11 @@ class MPSState:
             ),
             "tensor_device": self.tensor_device,
             "svd_device": self.svd_device,
+            "configured_max_bond_dimension": int(self.opts.dmax),
+            "configured_truncation_threshold": float(self.opts.eps),
+            "current_bond_dimension_max": int(current_bond_max),
+            "current_bond_dimension_mean": float(self.bond_mean()),
+            "maximum_bond_dimension_reached": int(self.max_bond_ever),
             "state_norm": self.norm(),
             "approximation_warning": (
                 "local discarded weights are telemetry, not a global fidelity bound"
