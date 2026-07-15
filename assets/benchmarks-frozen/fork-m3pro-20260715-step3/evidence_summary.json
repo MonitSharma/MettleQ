@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "engine_git_commit": "a89bbd0460cf06b83bbbd7b7580a30f359220062",
+  "platform": "Apple M3 Pro, macOS 26.5.2",
+  "python": "3.13.2",
+  "mlx": "0.32.0",
+  "checkpoint_crossover_25q": {
+    "workload": "six-step TFIM",
+    "repeats": 7,
+    "lazy": {
+      "peak_mib": 3072.0084,
+      "median_ms": 475.467625
+    },
+    "recommended_measured_policy": {
+      "budget_mib": 1024,
+      "peak_mib": 1024.0021,
+      "peak_reduction_percent": 66.66665333842789,
+      "median_ms": 443.556208,
+      "runtime_change_percent": -6.711585673157028,
+      "predicted_and_observed_checkpoints": 48
+    },
+    "minimum_measured_peak_policy": {
+      "budget_mib": 512,
+      "peak_mib": 768.0021,
+      "peak_reduction_percent": 74.99997286751395,
+      "median_ms": 454.364792,
+      "runtime_change_percent": -4.4383322628959165,
+      "predicted_and_observed_checkpoints": 96
+    },
+    "maximum_amplitude_error": 1.4081562582646256e-09
+  },
+  "checkpoint_crossover_20q": {
+    "workload": "six-step TFIM",
+    "repeats": 7,
+    "lazy_peak_mib": 616.0045,
+    "budget_256_mib_peak_mib": 96.0025,
+    "budget_128_mib_peak_mib": 72.0023,
+    "maximum_amplitude_error": 5.155240678789141e-09
+  },
+  "default_path_guardrail_20q": {
+    "workloads": 29,
+    "repeats_per_campaign": 5,
+    "campaign_order": "Step 3 / Step 2 / Step 2 / Step 3",
+    "step2_commit": "e5d9577301fa506a6f130e81ccd9968cf1a97500",
+    "step3_commit": "a89bbd0460cf06b83bbbd7b7580a30f359220062",
+    "metal_change_percent_median": -0.4297982110044174,
+    "metal_change_percent_geometric_mean": 0.4469499955541911,
+    "within_3_percent": 24,
+    "faster_beyond_3_percent": 2,
+    "slower_beyond_3_percent": 3,
+    "interpretation": "No broad fully-lazy regression; two of the three slower rows are noisy 1-4 ms workloads."
+  },
+  "tests": {
+    "passed": 302,
+    "warnings": 3
+  }
+}

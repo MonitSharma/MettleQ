@@ -1,5 +1,82 @@
 # Apple GPU engineering log
 
+## 2026-07-15 — Step 3: intra-layer Metal streaming
+
+### Measured cause and implementation
+
+The Step 2 25-qubit crossover showed that evaluation only between logical
+fused operations could not reduce the approximately 3 GiB TFIM peak. Isolated
+measurements identified the cause: a uniform 25-qubit H or RX layer is one
+logical operation but 13 out-of-place custom Metal launches. Each lazy layer
+peaked at exactly 3,072 MiB, while a one-launch ZZ layer peaked at 512 MiB.
+
+Step 3 retains the same operation order and Metal kernels. When the existing
+opt-in checkpoint budget is configured, uniform U2, RX, per-qubit U2, XX, and
+YY wrappers expose a safe boundary after each custom launch. The device
+evaluates only when the next launch would exceed the scheduled pass count. One
+custom launch is never split, and an unset budget preserves fully lazy
+execution.
+
+Execution-plan schema version 3 reports whether a family supports intra-layer
+streaming, the maximum pending passes per streamed chunk, predicted and actual
+within-layer launch indices, evaluated traffic, timing, and allocator
+snapshots. Runtime launch accounting must equal the planner's expected count
+or execution raises an explicit error. Four new parameterized cases cover
+uniform U2, per-qubit U2, XX, and YY streaming against pure MLX. The complete
+suite passed: 302 tests with three existing third-party warnings.
+
+### Exact-commit 25-qubit crossover
+
+Commit `a89bbd0460cf06b83bbbd7b7580a30f359220062` ran the 319-operation,
+six-step TFIM workload with one warmup and seven rotating repeats per arm:
+
+```bash
+PYTHONPATH=src .venv/bin/python tools/checkpoint_sweep.py \
+  --outdir bench/runs/checkpoint_sweep_20260715_m3pro_a89bbd0_n25_r7 \
+  --qubits 25 --steps 6 --repeats 7 --warmups 1 \
+  --budgets-mib 4096 2048 1024 512 256
+```
+
+| Policy | Intra/inter checkpoints | Median peak | Peak reduction | Median time | Runtime change |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Fully lazy | 0 / 0 | 3,072 MiB | — | 475.468 ms | — |
+| 4 GiB | 7 / 6 | 2,304 MiB | 25.0% | 452.044 ms | 4.9% faster |
+| 2 GiB | 21 / 6 | 1,536 MiB | 50.0% | 439.981 ms | 7.5% faster |
+| **1 GiB** | **42 / 6** | **1,024 MiB** | **66.7%** | **443.556 ms** | **6.7% faster** |
+| 512 MiB | 84 / 12 | 768 MiB | 75.0% | 454.365 ms | 4.4% faster |
+| 256 MiB | 84 / 13 | 768 MiB | 75.0% | 453.889 ms | 4.5% faster |
+
+All 42 measured budget/repeat cells had identical predicted and observed
+checkpoint counts. Every arm matched the pure-MLX statevector within
+`1.4081562582646256e-09` maximum amplitude error. The 1 GiB arm is the
+balanced measured point; 512 MiB is the lowest measured peak. The 256 MiB arm
+cannot reduce peak further because one out-of-place launch is the remaining
+floor.
+
+The seven-repeat 20-qubit continuity run preserved the Step 2 behavior. The
+256 MiB arm peaked at 96 MiB and ran 16.9% faster than lazy. Streaming at 128
+MiB reduced peak to 72 MiB, versus 88 MiB in the boundary-only Step 2 run. All
+20-qubit arms stayed within `5.155240678789141e-09` of pure MLX.
+
+### Fully-lazy regression guardrail
+
+The default path was compared with Step 2 commit `e5d9577` at 20 qubits in
+four independent five-repeat, 29-workload campaigns ordered Step 3 / Step 2 /
+Step 2 / Step 3. Each revision's per-workload value is the geometric mean of
+its two campaign means.
+
+Step 3 Metal time was 0.43% faster at the median and 0.45% slower by geometric
+mean; 24 of 29 rows were within ±3%. Pure MLX was 0.06% faster at the median.
+The largest relative slower rows were phase-estimation-inexact (+19.4%, about
+3.1 to 3.7 ms) and GHZ (+13.2%, about 1.6 to 1.8 ms), where sub-millisecond
+movement creates large percentages. Quantum walk was +3.04%; every other row
+was within the band. This supports no broad fully-lazy regression, while
+retaining the two short rows as future noise/performance guardrails.
+
+The complete raw campaigns, manifests, comparison, chart, and compact summary
+are frozen under
+[`assets/benchmarks-frozen/fork-m3pro-20260715-step3/`](../../assets/benchmarks-frozen/fork-m3pro-20260715-step3/).
+
 ## 2026-07-15 — refreshed 25-qubit evidence at Step 2 commit
 
 ### Exact-commit publication sweep
@@ -12,7 +89,7 @@ inside every repeat. Checkpointing and dense ablation were disabled. The result
 contains 290 raw rows.
 
 ```bash
-env -u MLXQ_METAL_CHECKPOINT_BUDGET_MB -u MLXQ_DENSE_ONLY \
+unset MLXQ_METAL_CHECKPOINT_BUDGET_MB MLXQ_DENSE_ONLY
 PYTHONPATH=src caffeinate -i .venv/bin/python tools/shader_suite_sweep.py \
   --outdir bench/runs/shader_sweep_20260715_m3pro_e5d9577_n25_r10 \
   --qubits 25 --repeats 10
@@ -53,13 +130,11 @@ PYTHONPATH=src .venv/bin/python tools/checkpoint_sweep.py \
 | 4 GiB budget | 13 | 3.00 GiB | 473.623 ms | +1.16% |
 
 Every arm matched pure MLX within `1.4081562582646256e-09` maximum amplitude
-error, and predicted/observed checkpoint counts agreed. Unlike the 20-qubit
-crossover below, safe fused-layer boundary checkpoints did not materially
-lower the 25-qubit peak. One fused all-qubit layer dominates the allocation;
-the controller deliberately cannot split inside it. This workload should keep
-checkpointing disabled. The next memory phase must target intra-layer buffer
-reuse, streaming, or lower-memory kernels before an automatic 25-qubit policy
-is justified.
+error, and predicted/observed checkpoint counts agreed. At this Step 2
+revision, safe fused-layer boundary checkpoints did not materially lower the
+25-qubit peak because one logical all-qubit layer retained 13 launches. This
+negative result motivated the intra-layer streaming implemented and measured
+in Step 3 above.
 
 The reviewed data, manifests, comparisons, and plots are frozen under
 [`assets/benchmarks-frozen/fork-m3pro-20260715/`](../../assets/benchmarks-frozen/fork-m3pro-20260715/).

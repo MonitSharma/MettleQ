@@ -55,7 +55,8 @@ against upstream.
 | **Original website** | [QupertinoWEB](https://boltzmannentropy.github.io/QupertinoWEB/) |
 | **Original author** | Shlomo Kashani |
 | **Benchmark baseline** | Upstream commit `2b99d30` |
-| **Measured fork revision** | Fork commit `e5d9577` |
+| **25-qubit speed sweep revision** | Fork commit `e5d9577` |
+| **Step 3 memory-crossover revision** | Fork commit `a89bbd0` |
 
 Original authorship, licensing, and citation information are retained at the
 end of this README.
@@ -323,14 +324,34 @@ error. QFT and affine validation errors were exactly zero. The sweep is
 reproducible with `tools/checkpoint_sweep.py`; full protocol and guardrail
 results are in the [Apple GPU engineering log](docs/development/apple-gpu-plan.md).
 
-The refreshed 25-qubit crossover is an equally important negative result. On
-the six-step TFIM workload, fully lazy execution and all five budget policies
-peaked at approximately 3.00 GiB. Checkpointing added 0.4%–1.6% runtime without
-material peak reduction; every arm stayed within `1.41e-9` of pure MLX. A
-single fused all-qubit layer dominates this workload's allocation, and the safe
-boundary-only controller cannot split it. The next memory phase therefore
-needs intra-layer buffer reuse or lower-memory kernels. Keep checkpointing off
-for this particular 25-qubit workload.
+The first Step 2 test at 25 qubits exposed a deeper floor: boundary-only
+checkpointing left every arm near 3.00 GiB because one logical H/RX layer held
+13 custom launches in a single lazy graph. Step 3 keeps the same kernels but
+streams that layer at safe boundaries between launches when a budget is
+configured. It never splits an individual Metal launch.
+
+The exact-commit Step 3 crossover at `a89bbd0` used the same six-step TFIM
+workload, one warmup, and seven rotating repeats per arm:
+
+| Policy | Median peak | Peak reduction | Median runtime | Runtime change |
+| --- | ---: | ---: | ---: | ---: |
+| Fully lazy | 3,072 MiB | — | 475.468 ms | — |
+| 4 GiB budget | 2,304 MiB | 25.0% | 452.044 ms | 4.9% faster |
+| 2 GiB budget | 1,536 MiB | 50.0% | 439.981 ms | 7.5% faster |
+| **1 GiB budget** | **1,024 MiB** | **66.7%** | **443.556 ms** | **6.7% faster** |
+| 512 MiB budget | 768 MiB | 75.0% | 454.365 ms | 4.4% faster |
+| 256 MiB budget | 768 MiB | 75.0% | 453.889 ms | 4.5% faster |
+
+All 42 measured arms matched their predicted checkpoint counts and agreed with
+pure MLX within `1.41e-9` maximum amplitude error. The 1 GiB policy is the
+balanced measured point; 512 MiB minimizes measured peak. Fully lazy execution
+remains the default, and the budget remains a scheduling estimate rather than
+a hard allocator cap.
+
+<div align="center">
+  <img src="assets/perf-charts/chart_checkpoint_n25_step3_20260715.png" alt="Step 3 checkpoint budget versus peak memory and runtime at 25 qubits" width="820"/>
+  <br/><em>Median allocator peak and synchronized wall time for the rotating 25-qubit TFIM crossover.</em>
+</div>
 
 <details>
 <summary><strong>Show the original upstream four-backend M1 Max result</strong></summary>
@@ -488,7 +509,7 @@ qubit schedules, caps, MPS controls, QASM options, and reproducibility settings.
 
 ## Reproducing the results
 
-The complete 2026-07-15 evidence bundle is tracked under
+The complete 2026-07-15 speed-sweep evidence bundle is tracked under
 [`assets/benchmarks-frozen/fork-m3pro-20260715/`](assets/benchmarks-frozen/fork-m3pro-20260715/):
 
 - 290 paired raw timing rows
@@ -499,10 +520,15 @@ The complete 2026-07-15 evidence bundle is tracked under
 - prior-fork/current comparison CSV and JSON summary
 - 25-qubit checkpoint crossover raw data, validation, summary, and manifest
 
+The Step 3 memory and default-path evidence is tracked separately under
+[`assets/benchmarks-frozen/fork-m3pro-20260715-step3/`](assets/benchmarks-frozen/fork-m3pro-20260715-step3/). It contains the exact-commit 20- and
+25-qubit crossovers, four raw A–B–B–A guardrail campaigns, numerical
+validation, drift-balanced comparison output, and the plotted source data.
+
 Recreate the current sweep and comparison:
 
 ```bash
-env -u MLXQ_METAL_CHECKPOINT_BUDGET_MB -u MLXQ_DENSE_ONLY \
+unset MLXQ_METAL_CHECKPOINT_BUDGET_MB MLXQ_DENSE_ONLY
 PYTHONPATH=src caffeinate -i .venv/bin/python tools/shader_suite_sweep.py \
   --outdir bench/runs/shader_sweep_current --qubits 25 --repeats 10
 
@@ -515,7 +541,12 @@ PYTHONPATH=src .venv/bin/python tools/compare_shader_sweeps.py \
 
 PYTHONPATH=src .venv/bin/python tools/checkpoint_sweep.py \
   --outdir bench/runs/checkpoint_sweep_n25 --qubits 25 --steps 6 \
-  --repeats 7 --warmups 1 --budgets-mib 16384 12288 8192 6144 4096
+  --repeats 7 --warmups 1 --budgets-mib 4096 2048 1024 512 256
+
+PYTHONPATH=src .venv/bin/python tools/plot_checkpoint_sweep.py \
+  --summary bench/runs/checkpoint_sweep_n25/checkpoint_sweep_summary.csv \
+  --output bench/runs/checkpoint_sweep_n25/checkpoint_tradeoff.png \
+  --title "25-qubit TFIM: intra-layer Metal streaming"
 ```
 
 Transient runs belong under `bench/runs/`. Promote only reviewed evidence to
