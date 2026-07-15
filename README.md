@@ -38,7 +38,7 @@ listed honestly as planned rather than presented as finished adapters.
 | Circuit inputs | Native Python operation dictionaries and strict unitary OpenQASM 2.0 |
 | Workloads | QFT, phase estimation, Grover, QAOA, VQE, QCBM, QNN, random circuits, and spin dynamics |
 | Trust model | Capability-gated dispatch, explicit execution plans, numerical parity tests, synchronized benchmarks, and safe fallbacks |
-| Current test suite | **294 tests** across the simulator, algorithms, MPS, QASM, Metal dispatch, and QuantumStudio backend |
+| Current test suite | **298 tests** across the simulator, algorithms, MPS, QASM, Metal dispatch, and QuantumStudio backend |
 | Desktop product | QuantumStudio orchestration, monitoring, plotting, and export |
 | SDK adapters | Native Qiskit backend and PennyLane device plugin are planned; `mlxq.qml` is currently an internal PennyLane-like wrapper |
 
@@ -107,6 +107,20 @@ PY
 that the platform, GPU device, dtype, backend, indexing, and memory constraints
 are compatible. The unset default remains off; unsupported configurations fall
 back safely.
+
+Long lazy Metal graphs can optionally be evaluated at safe fused-layer
+boundaries. The budget is an input/output traffic estimate used to choose
+checkpoint locations, not a promise that allocator peak will equal the value:
+
+```bash
+MLXQ_METAL_KERNELS=auto \
+MLXQ_METAL_CHECKPOINT_BUDGET_MB=256 \
+PYTHONPATH=src .venv/bin/python your_simulation.py
+```
+
+SDK callers can configure the same policy explicitly with
+`Device(..., metal_checkpoint_budget_bytes=256 * 1024 * 1024)`. Checkpointing
+is opt-in; unset preserves fully lazy execution.
 
 ### Verify the checkout
 
@@ -265,6 +279,26 @@ validates the overall working tree but does not attribute every revision
 difference to the cache. The complete protocols and per-workload medians are
 in the [Apple GPU engineering log](docs/development/apple-gpu-plan.md).
 
+### Memory-budgeted Metal graphs
+
+Step 2 adds opt-in evaluation checkpoints between fused operations. A
+20-qubit, six-step TFIM crossover sweep used nine rotating repeats per arm on
+the same M3 Pro. A 256 MiB estimated-I/O budget was the conservative measured
+operating point: predicted and observed checkpoint counts matched exactly.
+
+| Policy | Checkpoints | Median peak | Peak reduction | Median runtime | Runtime change |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Fully lazy | 0 | 616 MiB | — | 29.03 ms | — |
+| 512 MiB budget | 2 | 264 MiB | 57.1% | 26.67 ms | 8.1% faster |
+| 384 MiB budget | 3 | 184 MiB | 70.1% | 24.79 ms | 14.6% faster |
+| **256 MiB budget** | **6** | **96 MiB** | **84.4%** | **22.71 ms** | **21.8% faster** |
+| 128 MiB budget | 13 | 88 MiB | 85.7% | 26.52 ms | 8.7% faster |
+
+All arms matched the pure-MLX statevector within `5.16e-9` maximum amplitude
+error. QFT and affine validation errors were exactly zero. The sweep is
+reproducible with `tools/checkpoint_sweep.py`; full protocol and guardrail
+results are in the [Apple GPU engineering log](docs/development/apple-gpu-plan.md).
+
 <details>
 <summary><strong>Show the original upstream four-backend M1 Max result</strong></summary>
 
@@ -300,6 +334,9 @@ auditable. This fork adds explicit evidence at each layer:
   executing the circuit.
 - **Synchronized proof:** `execute(..., report=True)` plus `synchronize()`
   records concrete host dispatches and completes pending MLX work.
+- **Auditable memory control:** checkpoint plans predict safe fused-layer
+  boundaries, and execution reports record every actual evaluation, duration,
+  estimated traffic, and allocator snapshot.
 - **Numerical parity:** custom kernels are tested against pure MLX, including
   all-distinct-angle and long-product stress cases.
 - **Strict QASM:** unsupported dynamic semantics are rejected with source-aware
@@ -320,9 +357,9 @@ auditable. This fork adds explicit evidence at each layer:
 | QPE energy estimation | 2 |
 | Benchmark protocol and plotting | 4 |
 | Custom Metal parity and dispatch | 19 |
-| Execution plans and capability reporting | 7 |
+| Execution plans and capability reporting | 11 |
 | QuantumStudio backend and MCP API | 18 |
-| **Total** | **294** |
+| **Total** | **298** |
 
 Run everything with:
 
@@ -342,6 +379,9 @@ Silicon runner labeled `macOS` and `ARM64`.
   classical control, mid-circuit measurement, opaque gates, arbitrary includes,
   and malformed declarations.
 - Native Qiskit and PennyLane plugin interfaces are not complete yet.
+- Checkpoint budgets use conservative statevector input/output traffic as a
+  scheduling signal; they are not hard allocator ceilings, and a single fused
+  layer is never split internally.
 - Cross-machine charts compare relative speedup only; absolute performance
   claims require the same machine and benchmark protocol.
 

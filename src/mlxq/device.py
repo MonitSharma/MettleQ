@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Optional
 
 import os as _os
+import time as _time
 from .sim import StateVectorSimulator
 from .mps_state import MPSState, MPSOptions
 from .gates import H, X, Y, Z, S, SDG, T, TDG, SX, RX, RY, RZ, U1, U2, U3, SWAP, iSWAP, CNOT, CZ, CPHASE, CRX, CRY, CRZ, Toffoli, Fredkin, CH
@@ -8,7 +9,11 @@ import math as _math
 import mlx.core as mx
 
 from .execution import (build_execution_plan, mark_graph_built,
-                        mark_synchronized, record_custom_dispatch)
+                        mark_synchronized, metal_checkpoint_policy,
+                        metal_memory_snapshot, metal_runtime_enabled,
+                        record_custom_dispatch,
+                        record_evaluation_checkpoint,
+                        state_memory_estimate)
 
 # Constant (parameterless) gate matrices built once at import; read-only thereafter
 _CONST_GATES = {
@@ -56,7 +61,15 @@ def _pauli_pair_phase(name: str, theta: float) -> mx.array:
 
 
 class Device:
-    def __init__(self, wires: int, shots: int = 1000, backend: Optional[str] = None, mps_opts: Optional[MPSOptions] = None):
+    def __init__(
+        self,
+        wires: int,
+        shots: int = 1000,
+        backend: Optional[str] = None,
+        mps_opts: Optional[MPSOptions] = None,
+        *,
+        metal_checkpoint_budget_bytes: Optional[int] = None,
+    ):
         self.wires = int(wires)
         self.shots = int(shots)
         if backend is None:
@@ -78,10 +91,17 @@ class Device:
         else:
             self.backend = 'sv'
             self.sim = StateVectorSimulator(self.wires)
+        if metal_checkpoint_budget_bytes is not None:
+            metal_checkpoint_policy(metal_checkpoint_budget_bytes)
+        self._metal_checkpoint_budget_bytes = metal_checkpoint_budget_bytes
+        self._pending_custom_passes = 0
+        self._pending_custom_io_bytes = 0
         self.last_execution_plan: Optional[Dict[str, Any]] = None
 
     def reset(self):
         self.sim.reset()
+        self._pending_custom_passes = 0
+        self._pending_custom_io_bytes = 0
 
     def execute(self, operations: List[Dict[str, Any]], *, report: Optional[bool] = None):
         # Optional ASCII dump for any executed circuit (controlled via env)
@@ -102,6 +122,9 @@ class Device:
                     pass
         except Exception:
             pass
+        checkpoint_policy_data = metal_checkpoint_policy(
+            self._metal_checkpoint_budget_bytes
+        )
         optimized_operations = self._fuse_zz_layers(operations)
         if report is None:
             report = _os.environ.get("MLXQ_EXECUTION_REPORT", "0") == "1"
@@ -111,90 +134,191 @@ class Device:
                 backend=self.backend,
                 operations=list(operations),
                 optimized_operations=optimized_operations,
+                checkpoint_policy_data=checkpoint_policy_data,
+                initial_pending_custom_passes=self._pending_custom_passes,
+                initial_pending_custom_io_bytes=self._pending_custom_io_bytes,
             )
         else:
             self.last_execution_plan = None
-        for op in optimized_operations:
-            if op.get("name") == "_ZZLAYER":
-                record_custom_dispatch(self.last_execution_plan, op)
+
+        if self.last_execution_plan is not None:
+            checkpoint_enabled = bool(
+                self.last_execution_plan["checkpointing"]["enabled"]
+            )
+        else:
+            checkpoint_enabled = bool(
+                checkpoint_policy_data["configured"]
+                and self.backend == "sv"
+                and hasattr(self.sim, "state")
+                and metal_runtime_enabled(self.wires, backend=self.backend)
+            )
+        if not checkpoint_enabled:
+            self._pending_custom_passes = 0
+            self._pending_custom_io_bytes = 0
+        checkpoint_budget = int(
+            checkpoint_policy_data.get("budget_bytes") or 0
+        )
+        checkpoint_bytes_per_pass = (
+            int(state_memory_estimate(self.wires)[
+                "minimum_input_plus_output_bytes"
+            ] or 0)
+            if checkpoint_enabled else 0
+        )
+
+        for optimized_index, op in enumerate(optimized_operations):
+            dispatch = None
+            if self.last_execution_plan is not None or checkpoint_enabled:
+                dispatch = record_custom_dispatch(
+                    self.last_execution_plan,
+                    op,
+                    n_qubits=self.wires,
+                    optimized_operation_index=optimized_index,
+                )
+            layer_passes = (
+                int(dispatch["expected_metal_launches"])
+                if checkpoint_enabled and dispatch is not None else 0
+            )
+            layer_io_bytes = checkpoint_bytes_per_pass * layer_passes
+            if (checkpoint_enabled and self._pending_custom_io_bytes > 0
+                    and self._pending_custom_io_bytes + layer_io_bytes
+                    > checkpoint_budget):
+                self._evaluate_pending_custom_graph(
+                    boundary="before_optimized_operation",
+                    optimized_operation_index=optimized_index,
+                    reason="next_fused_layer_would_exceed_budget",
+                    adjacent_dispatch=dispatch,
+                )
+
+            op_name = op.get("name")
+            if op_name == "_ZZLAYER":
                 self.sim.apply_zz_layer(op["theta"], op["bonds"])
-                continue
-            if op.get("name") == "_RXLAYER":
+            elif op_name == "_RXLAYER":
                 from . import shaders as metal_kernels
-                record_custom_dispatch(self.last_execution_plan, op)
                 self.sim.state = metal_kernels.rx_layer_all(
                     self.sim.state, self.sim.n, op["theta"])
-                continue
-            if op.get("name") == "_U2LAYER":
+            elif op_name == "_U2LAYER":
                 from . import shaders as metal_kernels
-                record_custom_dispatch(self.last_execution_plan, op)
                 gate = self._dense_gate_for(op["gate"], op["params"])
                 u = mx.reshape(gate.astype(mx.complex64), (4,))
                 self.sim.state = metal_kernels.u2_layer_all(
                     self.sim.state, self.sim.n, u)
-                continue
-            if op.get("name") == "_DIAGLAYER":
+            elif op_name == "_DIAGLAYER":
                 from . import shaders as metal_kernels
-                record_custom_dispatch(self.last_execution_plan, op)
                 self.sim.state = metal_kernels.diag_pair_layer(
                     self.sim.state, op["theta"], self.sim.n, op["bonds"])
-                continue
-            if op.get("name") == "_DIAGWEIGHTED":
+            elif op_name == "_DIAGWEIGHTED":
                 from . import shaders as metal_kernels
-                record_custom_dispatch(self.last_execution_plan, op)
                 self.sim.state = metal_kernels.diag_weighted_layer(
                     self.sim.state, self.sim.n, op["bonds"], op["thetas"])
-                continue
-            if op.get("name") == "_ZZWEIGHTED":
+            elif op_name == "_ZZWEIGHTED":
                 from . import shaders as metal_kernels
-                record_custom_dispatch(self.last_execution_plan, op)
                 self.sim.state = metal_kernels.zz_weighted_layer(
                     self.sim.state, self.sim.n, op["bonds"], op["thetas"])
-                continue
-            if op.get("name") == "_QFTSTAGE":
+            elif op_name == "_QFTSTAGE":
                 from . import shaders as metal_kernels
-                record_custom_dispatch(self.last_execution_plan, op)
                 self.sim.state = metal_kernels.qft_stage_sub(
                     self.sim.state, self.sim.n, op["j"], op["m"],
                     inverse=op["inverse"])
-                continue
-            if op.get("name") in ("_XXLAYER", "_YYLAYER"):
+            elif op_name in ("_XXLAYER", "_YYLAYER"):
                 from . import shaders as metal_kernels
-                record_custom_dispatch(self.last_execution_plan, op)
-                fn = (metal_kernels.xx_layer if op["name"] == "_XXLAYER"
+                fn = (metal_kernels.xx_layer if op_name == "_XXLAYER"
                       else metal_kernels.yy_layer)
                 self.sim.state = fn(self.sim.state, op["theta"],
                                     self.sim.n, op["bonds"])
-                continue
-            if op.get("name") == "_XORLAYER":
+            elif op_name == "_XORLAYER":
                 from . import shaders as metal_kernels
-                record_custom_dispatch(self.last_execution_plan, op)
                 self.sim.state = metal_kernels.xor_affine_gather(
                     self.sim.state, self.sim.n, op["rows"], op["c"])
-                continue
-            if op.get("name") == "_U2LISTLAYER":
+            elif op_name == "_U2LISTLAYER":
                 from . import shaders as metal_kernels
-                record_custom_dispatch(self.last_execution_plan, op)
                 self.sim.state = metal_kernels.u2_list_layer_all(
                     self.sim.state, self.sim.n, op["mats"],
                     active=op.get("active"))
-                continue
-            name = str(op.get("name", "")).upper()
-            wires = list(op.get("wires", []))
-            params = list(op.get("parameters", []))
-            self._apply(name, wires, params)
-        mark_graph_built(self.last_execution_plan)
+            else:
+                name = str(op_name or "").upper()
+                wires = list(op.get("wires", []))
+                params = list(op.get("parameters", []))
+                self._apply(name, wires, params)
+
+            if checkpoint_enabled and dispatch is not None:
+                self._pending_custom_passes += layer_passes
+                self._pending_custom_io_bytes += layer_io_bytes
+                if layer_io_bytes > checkpoint_budget:
+                    self._evaluate_pending_custom_graph(
+                        boundary="after_optimized_operation",
+                        optimized_operation_index=optimized_index,
+                        reason="single_fused_layer_exceeds_budget",
+                        adjacent_dispatch=dispatch,
+                    )
+        if self.last_execution_plan is not None:
+            mark_graph_built(
+                self.last_execution_plan,
+                pending_custom_passes=self._pending_custom_passes,
+                pending_custom_io_bytes=self._pending_custom_io_bytes,
+            )
         # Return state vector only for SV; MPS has no .state
         return getattr(self.sim, 'state', None)
 
+    def _evaluate_pending_custom_graph(
+        self,
+        *,
+        boundary: str,
+        optimized_operation_index: int,
+        reason: str,
+        adjacent_dispatch: Optional[Dict[str, Any]],
+    ) -> None:
+        """Synchronize a pending graph at a fused-operation boundary."""
+        state = getattr(self.sim, "state", None)
+        if state is None or self._pending_custom_passes <= 0:
+            return
+        if self.last_execution_plan is None:
+            mx.eval(state)
+            self._pending_custom_passes = 0
+            self._pending_custom_io_bytes = 0
+            return
+        passes = self._pending_custom_passes
+        io_bytes = self._pending_custom_io_bytes
+        memory_before = metal_memory_snapshot()
+        start = _time.perf_counter_ns()
+        mx.eval(state)
+        elapsed_ms = (_time.perf_counter_ns() - start) / 1e6
+        memory_after = metal_memory_snapshot()
+        event = {
+            "boundary": boundary,
+            "optimized_operation_index": optimized_operation_index,
+            "reason": reason,
+            "adjacent_kernel_family": (
+                adjacent_dispatch.get("kernel_family")
+                if adjacent_dispatch is not None else None
+            ),
+            "adjacent_expected_metal_launches": (
+                int(adjacent_dispatch["expected_metal_launches"])
+                if adjacent_dispatch is not None else None
+            ),
+            "estimated_passes_evaluated": passes,
+            "estimated_input_output_bytes_evaluated": io_bytes,
+            "evaluation_ms": elapsed_ms,
+            "metal_memory_before": memory_before,
+            "metal_memory_after": memory_after,
+        }
+        record_evaluation_checkpoint(self.last_execution_plan, event)
+        self._pending_custom_passes = 0
+        self._pending_custom_io_bytes = 0
+
     def explain(self, operations: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Build an execution report without applying any gates."""
+        checkpoint_policy_data = metal_checkpoint_policy(
+            self._metal_checkpoint_budget_bytes
+        )
         optimized_operations = self._fuse_zz_layers(operations)
         return build_execution_plan(
             n_qubits=self.wires,
             backend=self.backend,
             operations=list(operations),
             optimized_operations=optimized_operations,
+            checkpoint_policy_data=checkpoint_policy_data,
+            initial_pending_custom_passes=self._pending_custom_passes,
+            initial_pending_custom_io_bytes=self._pending_custom_io_bytes,
         )
 
     def synchronize(self):
@@ -206,6 +330,8 @@ class Device:
             tensors = getattr(self.sim, 'tensors', None)
             if tensors:
                 mx.eval(*tensors)
+        self._pending_custom_passes = 0
+        self._pending_custom_io_bytes = 0
         mark_synchronized(self.last_execution_plan)
         return state
 

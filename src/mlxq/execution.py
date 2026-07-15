@@ -23,6 +23,7 @@ STATE_BYTES_PER_AMPLITUDE = 8
 METAL_INDEX_BITS = 32
 # n_state itself is passed as uint32, so 2**32 cannot be represented.
 METAL_INDEX_QUBIT_LIMIT = 31
+METAL_CHECKPOINT_BUDGET_ENV = "MLXQ_METAL_CHECKPOINT_BUDGET_MB"
 
 _TRUE_VALUES = {"1", "true", "on", "yes", "enabled"}
 _FALSE_VALUES = {"0", "false", "off", "no", "disabled", ""}
@@ -195,6 +196,72 @@ def state_memory_estimate(n_qubits: int, dtype: str = STATE_DTYPE) -> Dict[str, 
             "out-of-place custom kernels require one input and one output "
             "state; lazy graphs and lookup tables can add intermediates"
         ),
+    }
+
+
+def metal_checkpoint_policy(
+    budget_bytes: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Resolve the opt-in lazy-graph checkpoint budget.
+
+    An explicit byte budget is intended for SDKs and tests. When it is not
+    supplied, ``MLXQ_METAL_CHECKPOINT_BUDGET_MB`` accepts a positive MiB value.
+    Unset, empty, ``0``, and normal false-like values preserve the existing
+    fully lazy behavior. Invalid or negative values are rejected instead of
+    silently changing execution semantics.
+    """
+    if budget_bytes is not None:
+        if isinstance(budget_bytes, bool) or not isinstance(budget_bytes, int):
+            raise TypeError("metal checkpoint budget must be an integer byte count")
+        if budget_bytes < 0:
+            raise ValueError("metal checkpoint budget must be non-negative")
+        return {
+            "configured": budget_bytes > 0,
+            "budget_bytes": budget_bytes or None,
+            "source": "device_argument",
+            "environment_variable": METAL_CHECKPOINT_BUDGET_ENV,
+            "environment_value": os.environ.get(METAL_CHECKPOINT_BUDGET_ENV),
+        }
+
+    raw = os.environ.get(METAL_CHECKPOINT_BUDGET_ENV)
+    normalized = "" if raw is None else raw.strip().lower()
+    if raw is None:
+        return {
+            "configured": False,
+            "budget_bytes": None,
+            "source": "default_disabled",
+            "environment_variable": METAL_CHECKPOINT_BUDGET_ENV,
+            "environment_value": None,
+        }
+    if normalized in _FALSE_VALUES:
+        return {
+            "configured": False,
+            "budget_bytes": None,
+            "source": "environment",
+            "environment_variable": METAL_CHECKPOINT_BUDGET_ENV,
+            "environment_value": raw,
+        }
+    try:
+        mib = float(normalized)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{METAL_CHECKPOINT_BUDGET_ENV} must be a non-negative MiB value"
+        ) from exc
+    if not math.isfinite(mib) or mib < 0:
+        raise ValueError(
+            f"{METAL_CHECKPOINT_BUDGET_ENV} must be a finite non-negative MiB value"
+        )
+    resolved = int(mib * 1024 * 1024)
+    if mib > 0 and resolved <= 0:
+        raise ValueError(
+            f"{METAL_CHECKPOINT_BUDGET_ENV} is smaller than one byte"
+        )
+    return {
+        "configured": resolved > 0,
+        "budget_bytes": resolved or None,
+        "source": "environment",
+        "environment_variable": METAL_CHECKPOINT_BUDGET_ENV,
+        "environment_value": raw,
     }
 
 
@@ -449,13 +516,17 @@ def build_execution_plan(
     backend: str,
     operations: List[Dict[str, Any]],
     optimized_operations: List[Dict[str, Any]],
+    checkpoint_policy_data: Optional[Dict[str, Any]] = None,
+    initial_pending_custom_passes: int = 0,
+    initial_pending_custom_io_bytes: int = 0,
 ) -> Dict[str, Any]:
     status = metal_runtime_status(n_qubits, backend=backend)
     cache = kernel_cache_snapshot()
     matched: List[Dict[str, Any]] = []
-    for op in optimized_operations:
+    for optimized_index, op in enumerate(optimized_operations):
         spec = _custom_dispatch_spec(op, n_qubits)
         if spec is not None:
+            spec["optimized_operation_index"] = optimized_index
             spec["cache_before"] = {
                 kernel: cache.get(kernel, False)
                 for kernel in spec["concrete_kernels"]
@@ -489,8 +560,59 @@ def build_execution_plan(
     else:
         compilation_status = "cold_process_wrapper_lazy_compilation_pending"
 
+    memory = state_memory_estimate(n_qubits)
+    state_bytes = int(memory.get("state_bytes") or 0)
+    policy = dict(checkpoint_policy_data or metal_checkpoint_policy())
+    checkpoint_enabled = bool(
+        policy.get("configured")
+        and status["enabled"]
+        and backend == "sv"
+        and state_bytes > 0
+    )
+    budget = int(policy.get("budget_bytes") or 0)
+    pending_passes = int(initial_pending_custom_passes)
+    pending_io_bytes = int(initial_pending_custom_io_bytes)
+    predicted_checkpoints: List[Dict[str, Any]] = []
+    for spec in selected:
+        layer_passes = int(spec["expected_metal_launches"])
+        layer_io_bytes = 2 * state_bytes * layer_passes
+        spec["estimated_input_output_bytes"] = layer_io_bytes
+        if (checkpoint_enabled and pending_io_bytes > 0
+                and pending_io_bytes + layer_io_bytes > budget):
+            predicted_checkpoints.append({
+                "boundary": "before_optimized_operation",
+                "optimized_operation_index": spec["optimized_operation_index"],
+                "reason": "next_fused_layer_would_exceed_budget",
+                "estimated_passes_evaluated": pending_passes,
+                "estimated_input_output_bytes_evaluated": pending_io_bytes,
+            })
+            pending_passes = 0
+            pending_io_bytes = 0
+        pending_passes += layer_passes
+        pending_io_bytes += layer_io_bytes
+        if checkpoint_enabled and layer_io_bytes > budget:
+            predicted_checkpoints.append({
+                "boundary": "after_optimized_operation",
+                "optimized_operation_index": spec["optimized_operation_index"],
+                "reason": "single_fused_layer_exceeds_budget",
+                "estimated_passes_evaluated": pending_passes,
+                "estimated_input_output_bytes_evaluated": pending_io_bytes,
+            })
+            pending_passes = 0
+            pending_io_bytes = 0
+
+    if checkpoint_enabled:
+        checkpoint_reason = "configured budget and Metal statevector path selected"
+    elif not policy.get("configured"):
+        checkpoint_reason = "checkpoint budget is not configured"
+    else:
+        checkpoint_reason = (
+            "checkpoint budget configured but custom Metal is not selected: "
+            + status["reason"]
+        )
+
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "backend": backend,
         "selected_device": status["mlx"]["default_device"],
         "dtype": STATE_DTYPE,
@@ -526,7 +648,39 @@ def build_execution_plan(
             ),
         },
         "capabilities": status,
-        "memory": state_memory_estimate(n_qubits),
+        "memory": memory,
+        "checkpointing": {
+            **policy,
+            "enabled": checkpoint_enabled,
+            "reason": checkpoint_reason,
+            "accounting_basis": (
+                "two statevector byte-transfers (input plus output) per "
+                "expected custom Metal launch"
+            ),
+            "state_bytes": state_bytes,
+            "estimated_input_output_bytes_per_pass": 2 * state_bytes,
+            "safe_boundaries": "between optimized fused operations only",
+            "initial_pending_custom_passes": int(initial_pending_custom_passes),
+            "initial_pending_custom_io_bytes": int(
+                initial_pending_custom_io_bytes
+            ),
+            "predicted_checkpoints": predicted_checkpoints,
+            "predicted_checkpoint_count": len(predicted_checkpoints),
+            "predicted_pending_custom_passes_after_graph_build": pending_passes,
+            "predicted_pending_custom_io_bytes_after_graph_build": (
+                pending_io_bytes
+            ),
+            "actual_checkpoints": [],
+            "actual_checkpoint_count": 0,
+            "actual_evaluated_custom_passes": 0,
+            "actual_evaluated_custom_io_bytes": 0,
+            "pending_custom_passes_after_graph_build": int(
+                initial_pending_custom_passes
+            ),
+            "pending_custom_io_bytes_after_graph_build": int(
+                initial_pending_custom_io_bytes
+            ),
+        },
         "observed_custom_dispatches": [],
         "execution_status": "planned",
         "synchronized": False,
@@ -534,17 +688,67 @@ def build_execution_plan(
     }
 
 
-def record_custom_dispatch(plan: Optional[Dict[str, Any]], op: Dict[str, Any]) -> None:
-    if plan is None or not plan.get("capabilities", {}).get("enabled", False):
-        return
-    spec = _custom_dispatch_spec(op, int(plan["qubits"]))
-    if spec is not None:
+def record_custom_dispatch(
+    plan: Optional[Dict[str, Any]],
+    op: Dict[str, Any],
+    *,
+    n_qubits: Optional[int] = None,
+    optimized_operation_index: Optional[int] = None,
+) -> Optional[Dict[str, Any]]:
+    """Return a dispatch estimate and append it to an enabled report."""
+    if n_qubits is None:
+        if plan is None:
+            return None
+        n_qubits = int(plan["qubits"])
+    spec = _custom_dispatch_spec(op, int(n_qubits))
+    if spec is not None and optimized_operation_index is not None:
+        spec["optimized_operation_index"] = optimized_operation_index
+    if (spec is not None and plan is not None
+            and plan.get("capabilities", {}).get("enabled", False)):
         plan["observed_custom_dispatches"].append(spec)
+    return spec
 
 
-def mark_graph_built(plan: Optional[Dict[str, Any]]) -> None:
+def record_evaluation_checkpoint(
+    plan: Optional[Dict[str, Any]], event: Dict[str, Any]
+) -> None:
+    if plan is None:
+        return
+    checkpointing = plan.get("checkpointing")
+    if not checkpointing or not checkpointing.get("enabled", False):
+        return
+    checkpointing["actual_checkpoints"].append(event)
+    checkpointing["actual_checkpoint_count"] += 1
+    checkpointing["actual_evaluated_custom_passes"] += int(
+        event["estimated_passes_evaluated"]
+    )
+    checkpointing["actual_evaluated_custom_io_bytes"] += int(
+        event["estimated_input_output_bytes_evaluated"]
+    )
+
+
+def mark_graph_built(
+    plan: Optional[Dict[str, Any]],
+    *,
+    pending_custom_passes: int = 0,
+    pending_custom_io_bytes: int = 0,
+) -> None:
     if plan is not None:
-        plan["execution_status"] = "lazy_graph_built"
+        checkpoints = plan.get("checkpointing", {}).get(
+            "actual_checkpoint_count", 0
+        )
+        plan["execution_status"] = (
+            "checkpointed_lazy_graph_built" if checkpoints
+            else "lazy_graph_built"
+        )
+        checkpointing = plan.get("checkpointing")
+        if checkpointing is not None:
+            checkpointing["pending_custom_passes_after_graph_build"] = int(
+                pending_custom_passes
+            )
+            checkpointing["pending_custom_io_bytes_after_graph_build"] = int(
+                pending_custom_io_bytes
+            )
         plan["metal_memory_after_graph_build"] = metal_memory_snapshot()
 
 
@@ -553,6 +757,10 @@ def mark_synchronized(plan: Optional[Dict[str, Any]]) -> None:
         return
     plan["execution_status"] = "evaluated"
     plan["synchronized"] = True
+    checkpointing = plan.get("checkpointing")
+    if checkpointing is not None:
+        checkpointing["pending_custom_passes_after_synchronize"] = 0
+        checkpointing["pending_custom_io_bytes_after_synchronize"] = 0
     plan["metal_memory_after_evaluation"] = metal_memory_snapshot()
     after = kernel_cache_snapshot()
     plan["compilation_cache"]["process_wrapper_cache_after"] = after
@@ -565,15 +773,18 @@ def mark_synchronized(plan: Optional[Dict[str, Any]]) -> None:
 __all__ = [
     "METAL_INDEX_BITS",
     "METAL_INDEX_QUBIT_LIMIT",
+    "METAL_CHECKPOINT_BUDGET_ENV",
     "STATE_DTYPE",
     "build_execution_plan",
     "clear_metal_capability_cache",
     "kernel_cache_snapshot",
     "mark_graph_built",
     "mark_synchronized",
+    "metal_checkpoint_policy",
     "metal_memory_snapshot",
     "metal_runtime_enabled",
     "metal_runtime_status",
     "record_custom_dispatch",
+    "record_evaluation_checkpoint",
     "state_memory_estimate",
 ]

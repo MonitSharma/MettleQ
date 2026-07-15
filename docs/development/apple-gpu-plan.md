@@ -1,5 +1,86 @@
 # Apple GPU engineering log
 
+## 2026-07-15 — Step 2: memory-budgeted Metal graph evaluation
+
+### Change and safety model
+
+Long custom-Metal circuits previously built one fully lazy MLX graph and
+evaluated only the final state. Step 2 adds an opt-in checkpoint controller
+that estimates two full-state byte transfers (input plus output) for every
+expected custom Metal launch. Before adding a fused operation that would cross
+the configured budget, it evaluates the current state. If one fused operation
+alone exceeds the budget, evaluation occurs immediately after that operation.
+The controller never synchronizes inside a fused operation.
+
+The default remains fully lazy. Users can set a positive MiB value through
+`MLXQ_METAL_CHECKPOINT_BUDGET_MB` or pass an exact byte value through
+`Device(..., metal_checkpoint_budget_bytes=...)`. Zero, false-like, empty, or
+unset configuration disables checkpointing. Invalid, negative, non-finite, or
+sub-byte values raise an explicit error.
+
+Execution-plan schema version 2 reports the policy source, accounting basis,
+budget, predicted checkpoint boundaries, actual checkpoint boundaries,
+evaluated-pass and traffic estimates, evaluation durations, allocator
+snapshots, and remaining pending passes. Predicted and observed schedules are
+separate so runtime evidence cannot be confused with a planner claim.
+
+Four new tests cover configuration validation, checkpoint/state parity,
+boundary placement, oversized multi-launch fused layers, and inactive fallback
+when Metal is unavailable. The full suite passed: 298 tests, with the same
+three third-party deprecation warnings.
+
+### Crossover measurement
+
+Command:
+
+```bash
+PYTHONPATH=src .venv/bin/python tools/checkpoint_sweep.py \
+  --outdir /tmp/qupertino-step2-checkpoints \
+  --qubits 20 --steps 6 --repeats 9 --warmups 1 \
+  --budgets-mib 512 384 256 192 128
+```
+
+The workload was the same 254-operation, six-step TFIM circuit used in Phase D.
+The lazy arm and five budget arms rotated order every repeat. Every arm used a
+fresh `Device`; the MLX allocation cache and peak counter were reset between
+runs. Values are medians on the Apple M3 Pro with Python 3.13.2 and MLX 0.32.0.
+The budget is the scheduling estimate described above, not an allocator cap.
+
+| Policy | Predicted/observed checkpoints | Peak | Peak reduction | Total time | Runtime change |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Fully lazy | 0 / 0 | 616.0 MiB | — | 29.033 ms | — |
+| 512 MiB | 2 / 2 | 264.0 MiB | 57.14% | 26.673 ms | −8.13% |
+| 384 MiB | 3 / 3 | 184.0 MiB | 70.13% | 24.792 ms | −14.61% |
+| 256 MiB | 6 / 6 | 96.0 MiB | 84.42% | 22.712 ms | −21.77% |
+| 192 MiB | 6 / 6 | 96.0 MiB | 84.42% | 21.808 ms | −24.89% |
+| 128 MiB | 13 / 13 | 88.0 MiB | 85.71% | 26.517 ms | −8.67% |
+
+The 192 MiB arm was marginally fastest in this session but did not improve peak
+memory beyond 256 MiB. The 256 MiB arm is therefore the conservative measured
+operating point: it stays farther from the cliff where every multi-launch layer
+is forced to synchronize while retaining the same measured peak.
+
+All six arms had the same maximum TFIM amplitude error versus pure MLX:
+`5.155240678789141e-09`. A separate 256 MiB validation produced zero error for
+QFT and the affine workload. This is well inside the `5e-6` acceptance limit.
+
+### Disabled-path guardrail
+
+The existing 29-workload sweep compared the checkpoint-disabled working tree
+with Step 1 commit `ee46a8e` at 20 qubits. Four seven-repeat campaigns ran in
+working-tree/base/base/working-tree (A–B–B–A) order. The drift-balanced median
+Metal change was −0.02%; 26 of 29 workloads were within ±3%, and the geometric
+mean moved +0.82%. One short 3–4 ms workload was noisy at +11.1%, while its pure
+path was unchanged. This shows no broad disabled-path shift, but the short row
+should remain a guardrail in the next full publication campaign.
+
+### Outcome
+
+The acceptance targets were met: peak memory fell by more than 50%, runtime did
+not regress, numerical error stayed below `5e-6`, every checkpoint is reported,
+and no fused layer is split. The feature remains opt-in until a broader
+workload/size campaign supports an automatic budget policy.
+
 ## 2026-07-15 — Step 1: remove repeated capability-probe overhead
 
 ### Change

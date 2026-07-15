@@ -10,6 +10,19 @@ pure-MLX path, and the codex CLI review outcome.
 Per-shader workflow (enforced for every entry below): implement → measure →
 codex CLI review → re-test → document.
 
+## Lazy-graph memory checkpoints
+
+Custom kernels remain fully lazy by default. For long graphs,
+`MLXQ_METAL_CHECKPOINT_BUDGET_MB` or the `Device` byte-budget argument enables
+evaluation only between fused operations. Scheduling counts two statevector
+byte transfers per expected Metal launch; it never splits a fused shader layer.
+Execution-plan schema version 2 records predicted and actual boundaries,
+evaluation time, estimated traffic, and allocator counters. A 20-qubit
+six-step TFIM sweep measured 616 MiB fully lazy versus 96 MiB with a 256 MiB
+estimated-I/O budget, with a 21.8% median runtime improvement and `5.16e-9`
+maximum amplitude error versus pure MLX. The budget is a scheduling proxy, not
+a hard allocator ceiling.
+
 ## Shipped shaders
 
 ### zz.py — fused ZZ Trotter layer (`zz_chain_layer`)

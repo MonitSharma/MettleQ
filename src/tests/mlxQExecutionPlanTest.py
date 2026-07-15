@@ -1,12 +1,15 @@
 """Capability, execution-plan, and synchronized-dispatch evidence tests."""
 import math
 
+import mlx.core as mx
 import pytest
 
 from mlxq.device import Device
 import mlxq.execution as execution
 from mlxq.execution import (
+    METAL_CHECKPOINT_BUDGET_ENV,
     clear_metal_capability_cache,
+    metal_checkpoint_policy,
     metal_runtime_enabled,
     metal_runtime_status,
     state_memory_estimate,
@@ -114,6 +117,97 @@ def test_fast_selector_keeps_selected_device_and_other_checks_live(monkeypatch):
     monkeypatch.delenv("MLXQ_DENSE_ONLY")
     assert not metal_runtime_enabled(4, dtype="complex128")
     assert not metal_runtime_enabled(32)
+
+
+def test_checkpoint_budget_policy_is_opt_in_and_rejects_invalid_values(monkeypatch):
+    monkeypatch.delenv(METAL_CHECKPOINT_BUDGET_ENV, raising=False)
+    assert not metal_checkpoint_policy()["configured"]
+
+    monkeypatch.setenv(METAL_CHECKPOINT_BUDGET_ENV, "1.5")
+    policy = metal_checkpoint_policy()
+    assert policy["configured"]
+    assert policy["budget_bytes"] == int(1.5 * 1024 * 1024)
+    assert policy["source"] == "environment"
+
+    monkeypatch.setenv(METAL_CHECKPOINT_BUDGET_ENV, "not-a-size")
+    with pytest.raises(ValueError, match=METAL_CHECKPOINT_BUDGET_ENV):
+        metal_checkpoint_policy()
+    with pytest.raises(ValueError, match="non-negative"):
+        metal_checkpoint_policy(-1)
+    with pytest.raises(TypeError, match="integer byte count"):
+        metal_checkpoint_policy(1.5)
+
+
+def test_checkpointing_occurs_between_fused_layers_and_preserves_state(monkeypatch):
+    monkeypatch.setenv("MLXQ_METAL_KERNELS", "1")
+    capability = metal_runtime_status(4)
+    if not capability["enabled"]:
+        pytest.skip(capability["reason"])
+
+    ops = _qft_ops(4)
+    reference = Device(4)
+    reference.execute(ops)
+    reference.synchronize()
+
+    checkpointed = Device(4, metal_checkpoint_budget_bytes=512)
+    checkpointed.execute(ops, report=True)
+    plan = checkpointed.last_execution_plan
+    policy = plan["checkpointing"]
+    assert policy["enabled"]
+    assert policy["predicted_checkpoint_count"] == 1
+    assert policy["actual_checkpoint_count"] == 1
+    assert policy["actual_checkpoints"][0]["boundary"] == (
+        "before_optimized_operation"
+    )
+    assert policy["actual_checkpoints"][0]["optimized_operation_index"] == 2
+    assert policy["actual_checkpoints"][0]["estimated_passes_evaluated"] == 2
+    assert policy["pending_custom_passes_after_graph_build"] == 1
+    assert plan["execution_status"] == "checkpointed_lazy_graph_built"
+
+    checkpointed.synchronize()
+    error = mx.max(mx.abs(reference.sim.state - checkpointed.sim.state))
+    mx.eval(error)
+    assert float(error.item()) <= 5e-6
+    assert policy["pending_custom_passes_after_synchronize"] == 0
+
+
+def test_oversized_fused_layer_is_checkpointed_only_after_layer(monkeypatch):
+    monkeypatch.setenv("MLXQ_METAL_KERNELS", "1")
+    capability = metal_runtime_status(4)
+    if not capability["enabled"]:
+        pytest.skip(capability["reason"])
+
+    ops = [
+        {"name": "RX", "wires": [wire], "parameters": [0.2]}
+        for wire in range(4)
+    ]
+    dev = Device(4, metal_checkpoint_budget_bytes=256)
+    dev.execute(ops, report=True)
+    plan = dev.last_execution_plan
+    checkpoints = plan["checkpointing"]["actual_checkpoints"]
+    assert plan["matched_structured_patterns"] == {"uniform_rx_layer": 1}
+    assert plan["expected_custom_kernel_launches"] == 2
+    assert len(checkpoints) == 1
+    assert checkpoints[0]["boundary"] == "after_optimized_operation"
+    assert checkpoints[0]["optimized_operation_index"] == 0
+    assert checkpoints[0]["estimated_passes_evaluated"] == 2
+    assert checkpoints[0]["reason"] == "single_fused_layer_exceeds_budget"
+    assert plan["checkpointing"]["pending_custom_passes_after_graph_build"] == 0
+
+    unreported = Device(4, metal_checkpoint_budget_bytes=256)
+    unreported.execute(ops, report=False)
+    assert unreported.last_execution_plan is None
+    assert unreported._pending_custom_passes == 0
+    assert unreported._pending_custom_io_bytes == 0
+
+
+def test_configured_checkpoint_budget_stays_inactive_without_metal(monkeypatch):
+    monkeypatch.setenv("MLXQ_METAL_KERNELS", "0")
+    plan = Device(4, metal_checkpoint_budget_bytes=512).explain(_qft_ops(4))
+    assert plan["checkpointing"]["configured"]
+    assert not plan["checkpointing"]["enabled"]
+    assert plan["checkpointing"]["predicted_checkpoint_count"] == 0
+    assert "custom Metal is not selected" in plan["checkpointing"]["reason"]
 
 
 def test_disabled_plan_reports_fallback_without_claiming_dispatch(monkeypatch):
