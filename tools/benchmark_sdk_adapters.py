@@ -257,7 +257,9 @@ def main() -> int:
 
     raw_path = args.outdir / "sdk_adapter_timings.csv"
     with raw_path.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(raw_rows[0]))
+        writer = csv.DictWriter(
+            handle, fieldnames=list(raw_rows[0]), lineterminator="\n"
+        )
         writer.writeheader()
         writer.writerows(raw_rows)
     (args.outdir / "sdk_adapter_summary.json").write_text(

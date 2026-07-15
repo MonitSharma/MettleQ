@@ -1,5 +1,54 @@
 # Apple GPU engineering log
 
+## 2026-07-15 — Step 5: native Qiskit and PennyLane execution
+
+### Shared compatibility boundary
+
+Qupertino now exposes its exact statevector engine through a Qiskit
+`BackendV2` and a registered PennyLane `qupertino` device. Both adapters emit
+the same validated operation dictionaries used by the direct API, so
+statevector preflight, capability-gated Metal dispatch, checkpoint policy, and
+execution-plan evidence stay inside the core engine.
+
+The Qiskit adapter uses a dynamic-width target (`num_qubits=None`) so
+transpilation does not pad a small circuit to a simulator maximum. It reverses
+the external register-to-engine wire mapping to preserve Qiskit's little-endian
+statevector convention, reconstructs classical memory by classical-bit index,
+returns a native synchronous job/result, and materializes the state only when
+`return_statevector=True`. Its initial scope is bound unitary circuits with
+final measurements; unsupported dynamic semantics raise `QiskitError`.
+
+The PennyLane adapter is discoverable through `qml.device("qupertino",
+wires=...)`. It preserves declared wire order, uses PennyLane preprocessing to
+decompose common gates, supports analytic and finite-shot native measurements,
+shot vectors, arbitrary wire labels, and framework-managed parameter-shift
+gradients. Local and Pauli-sentence observables are evaluated without a dense
+full-register observable; wide non-Pauli matrices are refused.
+
+Eight integration tests cover reference state ordering, classical-bit mapping,
+dynamic-width transpilation, explicit mid-circuit rejection, plugin discovery,
+wire/marginal order, gradients, shot vectors, and a ten-wire Pauli sentence.
+The complete repository suite passes 316 tests with the three existing
+third-party deprecation warnings.
+
+### Exact-commit SDK evidence
+
+Engine commit `0d0105245384bcda8a1117e9c293d2dfd5b1f8dd` ran a 20-qubit,
+four-step TFIM-style circuit on an Apple M3 Pro with MLX 0.32.0, Qiskit 2.5.0,
+Aer 0.17.2, and PennyLane 0.45.1. Each pair used one warmup and seven repeats,
+reversing implementation order on alternating repeats. Timing includes SDK
+translation, simulation, synchronization, and the requested result.
+
+| Native SDK contract | Qupertino median | CPU reference median | Speedup | Error |
+| --- | ---: | ---: | ---: | ---: |
+| Qiskit full statevector | 10.10 ms | Aer 74.65 ms | 7.39× | `1.287e-8` max amplitude |
+| PennyLane local `⟨Z⟩` | 18.31 ms | `default.qubit` 708.70 ms | 38.70× | `4.657e-9` absolute expectation |
+
+The SDK result contracts differ and are not compared against each other. These
+are scoped single-machine results rather than universal Apple-Silicon claims.
+Raw rows, summary, thresholds, chart, and exact manifest are frozen under
+[`assets/benchmarks-frozen/fork-m3pro-20260715-step5-sdk/`](../../assets/benchmarks-frozen/fork-m3pro-20260715-step5-sdk/).
+
 ## 2026-07-15 — Step 4: statevector preflight and cross-workload policy
 
 ### Pre-allocation trust boundary

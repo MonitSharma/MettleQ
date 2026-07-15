@@ -25,9 +25,11 @@
 > engine for Apple Silicon, with adapters that let Qiskit, PennyLane, and other
 > quantum SDK users transparently benefit from Apple GPUs.
 
-Qupertino is already a capable local simulator and benchmark stack. The native
-Qiskit and PennyLane device integrations are the next product layer; they are
-listed honestly as planned rather than presented as finished adapters.
+Qupertino now exposes the same validated Apple-GPU execution path through a
+native Qiskit `BackendV2` and a registered PennyLane device. These are initial
+exact-statevector integrations with explicit limits, native result objects,
+deterministic sampling, and the same memory preflight and execution evidence as
+the direct API.
 
 ## At a glance
 
@@ -35,12 +37,12 @@ listed honestly as planned rather than presented as finished adapters.
 | --- | --- |
 | Accelerated engine | MLX on Apple Silicon, plus opt-in hand-written Metal kernels |
 | Simulation backends | Exact statevector (`sv`) and matrix-product state (`mps`) |
-| Circuit inputs | Native Python operation dictionaries and strict unitary OpenQASM 2.0 |
+| Circuit inputs | Native Python operations, strict unitary OpenQASM 2.0, Qiskit circuits, and PennyLane QNodes |
 | Workloads | QFT, phase estimation, Grover, QAOA, VQE, QCBM, QNN, random circuits, and spin dynamics |
 | Trust model | Pre-allocation statevector checks, capability-gated dispatch, explicit cost/execution plans, numerical parity tests, synchronized benchmarks, and safe fallbacks |
-| Current test suite | **308 tests** across the simulator, algorithms, MPS, QASM, Metal dispatch, campaign analysis, and QuantumStudio backend |
+| Current test suite | **316 tests** across the simulator, SDK adapters, algorithms, MPS, QASM, Metal dispatch, campaign analysis, and QuantumStudio backend |
 | Desktop product | QuantumStudio orchestration, monitoring, plotting, and export |
-| SDK adapters | Native Qiskit backend and PennyLane device plugin are planned; `mlxq.qml` is currently an internal PennyLane-like wrapper |
+| SDK adapters | Native Qiskit backend and registered PennyLane device, plus the original internal `mlxq.qml` teaching wrapper |
 
 ## Project lineage
 
@@ -58,6 +60,7 @@ against upstream.
 | **25-qubit speed sweep revision** | Fork commit `e5d9577` |
 | **Step 3 memory-crossover revision** | Fork commit `a89bbd0` |
 | **Step 4 preflight/policy revision** | Fork commit `83940c0` |
+| **Step 5 native SDK engine revision** | Fork commit `0d01052` |
 
 Original authorship, licensing, and citation information are retained at the
 end of this README.
@@ -82,6 +85,55 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e '.[plot,tests,backend]'
 ```
+
+For an SDK-focused install without the development and desktop extras:
+
+```bash
+python -m pip install -e '.[sdk]'
+```
+
+### Use Qupertino from Qiskit
+
+```python
+from qiskit import QuantumCircuit, transpile
+from mlxq.integrations.qiskit import QupertinoBackend
+
+backend = QupertinoBackend()
+circuit = QuantumCircuit(3, 3)
+circuit.h(0)
+circuit.cx(0, 1)
+circuit.cx(1, 2)
+circuit.measure(range(3), range(3))
+
+compiled = transpile(circuit, backend)
+result = backend.run(compiled, shots=4096, seed_simulator=7).result()
+print(result.get_counts())
+```
+
+Pass `return_statevector=True` only when the caller needs a full state readback.
+`execution_report=True` adds the execution plan and statevector preflight to
+the native Qiskit result data.
+
+### Use Qupertino from PennyLane
+
+```python
+import pennylane as qml
+
+device = qml.device("qupertino", wires=3)
+
+@qml.qnode(device, diff_method="parameter-shift")
+def circuit(theta):
+    qml.Hadamard(0)
+    qml.CNOT(wires=[0, 1])
+    qml.RY(theta, wires=2)
+    return qml.expval(qml.Z(0)), qml.probs(wires=[2, 0])
+
+print(circuit(0.3))
+```
+
+Launch the Python process with `MLXQ_METAL_KERNELS=auto` to request custom
+Metal kernels when all capability checks pass. Without it, both SDK adapters
+use the safe pure-MLX path.
 
 ### Run a first accelerated circuit
 
@@ -162,8 +214,8 @@ is opt-in; unset preserves fully lazy execution.
 flowchart LR
     QASM["OpenQASM 2.0<br/>current"] --> IR["Validated operation stream"]
     PY["Native Python API<br/>current"] --> IR
-    QISKIT["Qiskit adapter<br/>planned"] -.-> IR
-    PL["PennyLane plugin<br/>planned"] -.-> IR
+    QISKIT["Qiskit BackendV2<br/>current"] --> IR
+    PL["PennyLane device<br/>current"] --> IR
     IR --> PLAN["Fusion + capability planner"]
     PLAN --> MLX["Pure MLX structured kernels"]
     PLAN --> METAL["Custom Metal kernels<br/>statevector, opt-in"]
@@ -426,6 +478,30 @@ claim rather than a newly reproduced four-backend result.
 
 </details>
 
+### Native SDK paths: exact-commit M3 Pro evidence
+
+Engine commit `0d01052` was measured through the public Qiskit and PennyLane
+interfaces, not the direct operation API. The 20-qubit, four-step TFIM-style
+circuit used one warmup and seven repeats with implementation order reversed on
+alternating repeats. Timings include SDK translation, execution,
+synchronization, and the requested native result.
+
+| SDK-native result | Qupertino median | CPU reference median | Speedup | Numerical check |
+| --- | ---: | ---: | ---: | --- |
+| Qiskit full statevector | **10.10 ms** | Aer 74.65 ms | **7.39×** | max amplitude error `1.287e-8` |
+| PennyLane local `⟨Z⟩` | **18.31 ms** | `default.qubit` 708.70 ms | **38.70×** | expectation error `4.657e-9` |
+
+<div align="center">
+  <img src="assets/benchmarks-frozen/fork-m3pro-20260715-step5-sdk/sdk_adapter_timings.png" alt="Native Qiskit and PennyLane adapter timing comparison on Apple M3 Pro" width="820"/>
+  <br/><em>Scoped comparisons within each SDK. The Qiskit and PennyLane result contracts differ and are not compared to each other.</em>
+</div>
+
+This is evidence for one Apple M3 Pro, circuit family, and package set—not a
+universal claim across Apple chips or SDK configurations. The raw timings,
+summary, validation thresholds, exact command, versions, and clean-engine
+manifest are frozen in
+[`fork-m3pro-20260715-step5-sdk/`](assets/benchmarks-frozen/fork-m3pro-20260715-step5-sdk/).
+
 ## Trust, correctness, and observability
 
 Fast simulation is useful only when dispatch, semantics, and measurements are
@@ -461,9 +537,10 @@ auditable. This fork adds explicit evidence at each layer:
 | QPE energy estimation | 2 |
 | Benchmark protocol and plotting | 4 |
 | Custom Metal parity and dispatch | 19 |
-| Execution plans and capability reporting | 15 |
+| Execution plans, memory policy, and capability reporting | 21 |
+| Native Qiskit and PennyLane integrations | 8 |
 | QuantumStudio backend and MCP API | 18 |
-| **Total** | **302** |
+| **Total** | **316** |
 
 Run everything with:
 
@@ -482,7 +559,14 @@ Silicon runner labeled `macOS` and `ARM64`.
 - The bundled strict importer accepts 33 of 42 OpenQASM files. It rejects reset,
   classical control, mid-circuit measurement, opaque gates, arbitrary includes,
   and malformed declarations.
-- Native Qiskit and PennyLane plugin interfaces are not complete yet.
+- The native SDK adapters currently expose the exact statevector backend. The
+  Qiskit backend accepts unitary circuits with final measurements; reset,
+  mid-circuit measurement, classical control, and noise are rejected. The
+  PennyLane device supports common decomposable unitary gates, state,
+  probabilities, samples, counts, expectations, variances, shot vectors, and
+  framework-managed parameter-shift gradients; dynamic wires, mid-circuit
+  measurement, backpropagation, and device adjoint gradients are not yet
+  implemented.
 - Checkpoint budgets use conservative statevector input/output traffic as a
   scheduling signal; they are not hard allocator ceilings. Supported
   multi-launch layers can evaluate between launches, but one custom kernel
@@ -497,14 +581,16 @@ Silicon runner labeled `macOS` and `ARM64`.
 | Native `mlxq` Python operations | Available | Execute validated operation dictionaries directly |
 | OpenQASM 2.0 | Available, strict unitary subset | Import supported circuits with explicit rejection of dynamic semantics |
 | `mlxq.qml` | Available, internal wrapper | PennyLane-like tapes, measurements, templates, and parameter-shift gradients |
-| Qiskit backend | Planned | Select Qupertino as a local backend without rewriting the circuit |
-| PennyLane device plugin | Planned | Use a Qupertino device from a normal QNode |
-| Other SDKs | Planned after canonical adapter layer | Normalize SDK circuits once, then reuse the same planner and execution evidence |
+| Qiskit `BackendV2` | Available, initial exact-statevector scope | Transpile and run ordinary unitary circuits; receive native `Result`, counts, memory, optional statevector, and optional execution evidence |
+| PennyLane `qupertino` device | Available, initial exact-statevector scope | Use `qml.device("qupertino", wires=...)` in a normal QNode with analytic or finite-shot measurements |
+| Other SDKs | Planned on the shared adapter layer | Normalize SDK circuits once, then reuse the same planner and execution evidence |
 
-The integration design target is a small, tested canonical operation layer.
-SDK adapters should translate circuit semantics, preserve wire order and
-parameters, surface unsupported operations explicitly, and return native SDK
-result objects without bypassing Qupertino's capability and correctness checks.
+Both adapters translate through one tested canonical operation layer. Qiskit's
+little-endian state and classical-bit conventions and PennyLane's declared wire
+order are covered by reference-parity tests. Unsupported semantics raise native
+SDK errors, while statevector preflight, capability-gated dispatch, checkpoint
+policy, and execution reports remain in the core rather than being reimplemented
+or bypassed by an adapter.
 
 ## Running benchmarks
 
@@ -578,6 +664,9 @@ validation, drift-balanced comparison output, and the plotted source data.
 The Step 4 preflight and 22–27-qubit cross-workload evidence is frozen under
 [`assets/benchmarks-frozen/fork-m3pro-20260715-step4/`](assets/benchmarks-frozen/fork-m3pro-20260715-step4/). It contains 324 raw timing rows, reviewed paired summaries, 90 full-state validation rows, the exact-commit and 36 child manifests, M3 Pro preflight reports through 31 qubits, and the plotted source data.
 
+The Step 5 native-SDK evidence is frozen under
+[`assets/benchmarks-frozen/fork-m3pro-20260715-step5-sdk/`](assets/benchmarks-frozen/fork-m3pro-20260715-step5-sdk/). It contains rotating-order Qiskit and PennyLane timings, separate native-result comparisons, numerical validation, the exact engine manifest, and a chart generated from the summary JSON.
+
 Recreate the current sweep and comparison:
 
 ```bash
@@ -609,6 +698,15 @@ PYTHONPATH=src caffeinate -i .venv/bin/python \
 PYTHONPATH=src .venv/bin/python tools/plot_memory_policy_campaign.py \
   --summary bench/runs/memory_policy_current/memory_policy_summary.csv \
   --output bench/runs/memory_policy_current/memory_policy.png
+
+MLXQ_METAL_KERNELS=auto PYTHONPATH=src caffeinate -i .venv/bin/python \
+  tools/benchmark_sdk_adapters.py \
+  --outdir bench/runs/sdk-adapters \
+  --qubits 20 --steps 4 --warmups 1 --repeats 7
+
+PYTHONPATH=src .venv/bin/python tools/plot_sdk_adapters.py \
+  --summary bench/runs/sdk-adapters/sdk_adapter_summary.json \
+  --output bench/runs/sdk-adapters/sdk_adapter_timings.png
 ```
 
 Transient runs belong under `bench/runs/`. Promote only reviewed evidence to
@@ -649,8 +747,9 @@ Build local UI artifacts with:
 | Path | Purpose |
 | --- | --- |
 | `src/mlxq/` | Simulator, gates, statevector, MPS, QASM, QML wrapper, execution plans, and Metal shaders |
+| `src/mlxq/integrations/` | Shared adapter layer, Qiskit `BackendV2`, and PennyLane device plugin |
 | `src/tests/` | Simulator, algorithm, correctness, protocol, and Metal tests |
-| `tools/` | GPU profiler, sweep runner, comparison plots, and supporting utilities |
+| `tools/` | GPU profiler, sweep runners, SDK benchmark, comparison plots, and supporting utilities |
 | `bench.sh` | Main benchmark launcher |
 | `bench_with_logging.sh` | Orchestrated benchmark and promotion workflow |
 | `bench/runs/` | Ignored transient run output |
