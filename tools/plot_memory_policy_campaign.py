@@ -60,7 +60,10 @@ def main() -> int:
                 float(row["peak_reduction_percent"]) for row in selected
             ))
             runtime_values.append(statistics.median(
-                float(row["runtime_change_percent"]) for row in selected
+                float(row.get(
+                    "paired_runtime_change_percent_median",
+                    row["runtime_change_percent"],
+                )) for row in selected
             ))
         memory_axis.plot(
             qubits, peak_values, marker="o", linewidth=2.3,
@@ -73,7 +76,7 @@ def main() -> int:
 
     memory_axis.set_ylabel("Median peak reduction vs lazy (%)")
     memory_axis.legend(frameon=False, ncol=2)
-    runtime_axis.set_ylabel("Median runtime change vs lazy (%)")
+    runtime_axis.set_ylabel("Median paired runtime change vs lazy (%)")
     runtime_axis.set_xlabel("Qubits (median across workloads)")
     runtime_axis.set_xticks(qubits)
     runtime_axis.text(

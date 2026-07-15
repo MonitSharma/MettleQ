@@ -52,11 +52,43 @@ PYTHONPATH=src caffeinate -i .venv/bin/python \
   --qubits 22 23 24 25 26 27 --repeats 3 --warmups 1
 ```
 
-The repository will keep checkpointing opt-in unless the campaign shows
-numerical parity, exact planner/runtime schedule agreement, a meaningful peak
-reduction, and no material cross-workload runtime regressions. Evidence from
-one M3 Pro can qualify a policy for further device testing, but cannot by
-itself justify a universal Apple-Silicon default.
+### Exact-commit results and decision
+
+Engine commit `83940c017e372b08a236eca8dbb797e7edb50f1b` produced 324
+measured timing rows across 36 isolated cells. The review pairs each candidate
+with fully lazy execution inside the same repeat before aggregation:
+
+| Policy | Median peak reduction | Minimum cell reduction | Paired geometric-mean runtime | Paired cells faster | Worst paired cell |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Balanced | 71.79% | 50.00% | 16.46% faster | 35 / 36 | 7.59% slower |
+| Minimum-memory | 77.50% | 58.33% | 14.64% faster | 36 / 36 | 1.48% faster |
+
+The balanced outlier was 27-qubit Heisenberg. That cell exhibited material
+session drift across its three rotations; its paired median was 7.59% slower
+and remains a named guardrail. No minimum-memory cell was slower by its paired
+median. Neither policy increased the per-cell median allocator peak.
+
+Predicted and observed checkpoint counts agreed for all 324 executions. The
+maximum full-state amplitude error was `1.0289356850989861e-6`, below the
+`5e-6` threshold. Maximum norm error was `6.9141387939453125e-6`, below the
+separate `1e-5` reduction tolerance. No unsafe preflight override was used.
+The engine commit passed 306 tests; the reviewed publication tree adds two
+campaign-analysis regression cases and passes 308 tests, with three unchanged
+third-party deprecation warnings.
+
+The measured M3 Pro reports a 21.06 GiB maximum buffer and 28.08 GiB
+recommended working set. The preflight lower bounds permit 30 qubits but
+refuse 31 before allocation: a 16 GiB state requires at least 32 GiB for one
+out-of-place operation. This is a lower-bound decision, not a claim that an
+arbitrary 30-qubit lazy graph fits.
+
+Both formulas qualify for wider device testing, with minimum-memory providing
+the stronger peak result and no slower paired cell. Checkpointing remains
+opt-in because evidence from one M3 Pro cannot justify a universal default for
+M1, M2, M3, and M4 systems or different unified-memory sizes. The complete
+raw rows, reviewed aggregates, validation, manifests, preflight reports, and
+chart are frozen under
+[`assets/benchmarks-frozen/fork-m3pro-20260715-step4/`](../../assets/benchmarks-frozen/fork-m3pro-20260715-step4/).
 
 ## 2026-07-15 — Step 3: intra-layer Metal streaming
 

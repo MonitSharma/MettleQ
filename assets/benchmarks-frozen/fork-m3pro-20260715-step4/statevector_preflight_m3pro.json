@@ -1,0 +1,454 @@
+{
+  "22": {
+    "schema_version": 1,
+    "allowed": true,
+    "decision": "allowed_within_reported_lower_bounds",
+    "reason": "statevector lower bounds fit within the reported device limits",
+    "overridden": false,
+    "override": {
+      "enabled": false,
+      "source": "default_disabled",
+      "environment_variable": "MLXQ_ALLOW_UNSAFE_STATEVECTOR",
+      "environment_value": null
+    },
+    "failure_reasons": [],
+    "qubits": 22,
+    "dtype": "complex64",
+    "device": {
+      "name": "Apple M3 Pro",
+      "architecture": "applegpu_g15s",
+      "max_buffer_length": 22613000192,
+      "max_recommended_working_set_size": 30150672384
+    },
+    "checks": {
+      "single_state_within_max_buffer_length": true,
+      "two_state_lower_bound_within_recommended_working_set": true
+    },
+    "cost_model": {
+      "dtype": "complex64",
+      "amplitudes": 4194304,
+      "bytes_per_amplitude": 8,
+      "state_bytes": 33554432,
+      "state_mib": 32.0,
+      "temporary_memory_expectation_bytes": 33554432,
+      "minimum_input_plus_output_bytes": 67108864,
+      "expectation_basis": "out-of-place custom kernels require one input and one output state; lazy graphs and lookup tables can add intermediates",
+      "recommended_working_set_headroom_bytes": 30083563520,
+      "scope": "allocation preflight lower bound",
+      "not_included": [
+        "additional lazy-graph intermediates",
+        "lookup and index buffers",
+        "allocator cache",
+        "memory used by other processes"
+      ]
+    },
+    "passing_guarantee": "Passing does not guarantee that an arbitrary circuit fits; it only establishes that the reported single-buffer and two-state lower bounds do not already rule it out."
+  },
+  "23": {
+    "schema_version": 1,
+    "allowed": true,
+    "decision": "allowed_within_reported_lower_bounds",
+    "reason": "statevector lower bounds fit within the reported device limits",
+    "overridden": false,
+    "override": {
+      "enabled": false,
+      "source": "default_disabled",
+      "environment_variable": "MLXQ_ALLOW_UNSAFE_STATEVECTOR",
+      "environment_value": null
+    },
+    "failure_reasons": [],
+    "qubits": 23,
+    "dtype": "complex64",
+    "device": {
+      "name": "Apple M3 Pro",
+      "architecture": "applegpu_g15s",
+      "max_buffer_length": 22613000192,
+      "max_recommended_working_set_size": 30150672384
+    },
+    "checks": {
+      "single_state_within_max_buffer_length": true,
+      "two_state_lower_bound_within_recommended_working_set": true
+    },
+    "cost_model": {
+      "dtype": "complex64",
+      "amplitudes": 8388608,
+      "bytes_per_amplitude": 8,
+      "state_bytes": 67108864,
+      "state_mib": 64.0,
+      "temporary_memory_expectation_bytes": 67108864,
+      "minimum_input_plus_output_bytes": 134217728,
+      "expectation_basis": "out-of-place custom kernels require one input and one output state; lazy graphs and lookup tables can add intermediates",
+      "recommended_working_set_headroom_bytes": 30016454656,
+      "scope": "allocation preflight lower bound",
+      "not_included": [
+        "additional lazy-graph intermediates",
+        "lookup and index buffers",
+        "allocator cache",
+        "memory used by other processes"
+      ]
+    },
+    "passing_guarantee": "Passing does not guarantee that an arbitrary circuit fits; it only establishes that the reported single-buffer and two-state lower bounds do not already rule it out."
+  },
+  "24": {
+    "schema_version": 1,
+    "allowed": true,
+    "decision": "allowed_within_reported_lower_bounds",
+    "reason": "statevector lower bounds fit within the reported device limits",
+    "overridden": false,
+    "override": {
+      "enabled": false,
+      "source": "default_disabled",
+      "environment_variable": "MLXQ_ALLOW_UNSAFE_STATEVECTOR",
+      "environment_value": null
+    },
+    "failure_reasons": [],
+    "qubits": 24,
+    "dtype": "complex64",
+    "device": {
+      "name": "Apple M3 Pro",
+      "architecture": "applegpu_g15s",
+      "max_buffer_length": 22613000192,
+      "max_recommended_working_set_size": 30150672384
+    },
+    "checks": {
+      "single_state_within_max_buffer_length": true,
+      "two_state_lower_bound_within_recommended_working_set": true
+    },
+    "cost_model": {
+      "dtype": "complex64",
+      "amplitudes": 16777216,
+      "bytes_per_amplitude": 8,
+      "state_bytes": 134217728,
+      "state_mib": 128.0,
+      "temporary_memory_expectation_bytes": 134217728,
+      "minimum_input_plus_output_bytes": 268435456,
+      "expectation_basis": "out-of-place custom kernels require one input and one output state; lazy graphs and lookup tables can add intermediates",
+      "recommended_working_set_headroom_bytes": 29882236928,
+      "scope": "allocation preflight lower bound",
+      "not_included": [
+        "additional lazy-graph intermediates",
+        "lookup and index buffers",
+        "allocator cache",
+        "memory used by other processes"
+      ]
+    },
+    "passing_guarantee": "Passing does not guarantee that an arbitrary circuit fits; it only establishes that the reported single-buffer and two-state lower bounds do not already rule it out."
+  },
+  "25": {
+    "schema_version": 1,
+    "allowed": true,
+    "decision": "allowed_within_reported_lower_bounds",
+    "reason": "statevector lower bounds fit within the reported device limits",
+    "overridden": false,
+    "override": {
+      "enabled": false,
+      "source": "default_disabled",
+      "environment_variable": "MLXQ_ALLOW_UNSAFE_STATEVECTOR",
+      "environment_value": null
+    },
+    "failure_reasons": [],
+    "qubits": 25,
+    "dtype": "complex64",
+    "device": {
+      "name": "Apple M3 Pro",
+      "architecture": "applegpu_g15s",
+      "max_buffer_length": 22613000192,
+      "max_recommended_working_set_size": 30150672384
+    },
+    "checks": {
+      "single_state_within_max_buffer_length": true,
+      "two_state_lower_bound_within_recommended_working_set": true
+    },
+    "cost_model": {
+      "dtype": "complex64",
+      "amplitudes": 33554432,
+      "bytes_per_amplitude": 8,
+      "state_bytes": 268435456,
+      "state_mib": 256.0,
+      "temporary_memory_expectation_bytes": 268435456,
+      "minimum_input_plus_output_bytes": 536870912,
+      "expectation_basis": "out-of-place custom kernels require one input and one output state; lazy graphs and lookup tables can add intermediates",
+      "recommended_working_set_headroom_bytes": 29613801472,
+      "scope": "allocation preflight lower bound",
+      "not_included": [
+        "additional lazy-graph intermediates",
+        "lookup and index buffers",
+        "allocator cache",
+        "memory used by other processes"
+      ]
+    },
+    "passing_guarantee": "Passing does not guarantee that an arbitrary circuit fits; it only establishes that the reported single-buffer and two-state lower bounds do not already rule it out."
+  },
+  "26": {
+    "schema_version": 1,
+    "allowed": true,
+    "decision": "allowed_within_reported_lower_bounds",
+    "reason": "statevector lower bounds fit within the reported device limits",
+    "overridden": false,
+    "override": {
+      "enabled": false,
+      "source": "default_disabled",
+      "environment_variable": "MLXQ_ALLOW_UNSAFE_STATEVECTOR",
+      "environment_value": null
+    },
+    "failure_reasons": [],
+    "qubits": 26,
+    "dtype": "complex64",
+    "device": {
+      "name": "Apple M3 Pro",
+      "architecture": "applegpu_g15s",
+      "max_buffer_length": 22613000192,
+      "max_recommended_working_set_size": 30150672384
+    },
+    "checks": {
+      "single_state_within_max_buffer_length": true,
+      "two_state_lower_bound_within_recommended_working_set": true
+    },
+    "cost_model": {
+      "dtype": "complex64",
+      "amplitudes": 67108864,
+      "bytes_per_amplitude": 8,
+      "state_bytes": 536870912,
+      "state_mib": 512.0,
+      "temporary_memory_expectation_bytes": 536870912,
+      "minimum_input_plus_output_bytes": 1073741824,
+      "expectation_basis": "out-of-place custom kernels require one input and one output state; lazy graphs and lookup tables can add intermediates",
+      "recommended_working_set_headroom_bytes": 29076930560,
+      "scope": "allocation preflight lower bound",
+      "not_included": [
+        "additional lazy-graph intermediates",
+        "lookup and index buffers",
+        "allocator cache",
+        "memory used by other processes"
+      ]
+    },
+    "passing_guarantee": "Passing does not guarantee that an arbitrary circuit fits; it only establishes that the reported single-buffer and two-state lower bounds do not already rule it out."
+  },
+  "27": {
+    "schema_version": 1,
+    "allowed": true,
+    "decision": "allowed_within_reported_lower_bounds",
+    "reason": "statevector lower bounds fit within the reported device limits",
+    "overridden": false,
+    "override": {
+      "enabled": false,
+      "source": "default_disabled",
+      "environment_variable": "MLXQ_ALLOW_UNSAFE_STATEVECTOR",
+      "environment_value": null
+    },
+    "failure_reasons": [],
+    "qubits": 27,
+    "dtype": "complex64",
+    "device": {
+      "name": "Apple M3 Pro",
+      "architecture": "applegpu_g15s",
+      "max_buffer_length": 22613000192,
+      "max_recommended_working_set_size": 30150672384
+    },
+    "checks": {
+      "single_state_within_max_buffer_length": true,
+      "two_state_lower_bound_within_recommended_working_set": true
+    },
+    "cost_model": {
+      "dtype": "complex64",
+      "amplitudes": 134217728,
+      "bytes_per_amplitude": 8,
+      "state_bytes": 1073741824,
+      "state_mib": 1024.0,
+      "temporary_memory_expectation_bytes": 1073741824,
+      "minimum_input_plus_output_bytes": 2147483648,
+      "expectation_basis": "out-of-place custom kernels require one input and one output state; lazy graphs and lookup tables can add intermediates",
+      "recommended_working_set_headroom_bytes": 28003188736,
+      "scope": "allocation preflight lower bound",
+      "not_included": [
+        "additional lazy-graph intermediates",
+        "lookup and index buffers",
+        "allocator cache",
+        "memory used by other processes"
+      ]
+    },
+    "passing_guarantee": "Passing does not guarantee that an arbitrary circuit fits; it only establishes that the reported single-buffer and two-state lower bounds do not already rule it out."
+  },
+  "28": {
+    "schema_version": 1,
+    "allowed": true,
+    "decision": "allowed_within_reported_lower_bounds",
+    "reason": "statevector lower bounds fit within the reported device limits",
+    "overridden": false,
+    "override": {
+      "enabled": false,
+      "source": "default_disabled",
+      "environment_variable": "MLXQ_ALLOW_UNSAFE_STATEVECTOR",
+      "environment_value": null
+    },
+    "failure_reasons": [],
+    "qubits": 28,
+    "dtype": "complex64",
+    "device": {
+      "name": "Apple M3 Pro",
+      "architecture": "applegpu_g15s",
+      "max_buffer_length": 22613000192,
+      "max_recommended_working_set_size": 30150672384
+    },
+    "checks": {
+      "single_state_within_max_buffer_length": true,
+      "two_state_lower_bound_within_recommended_working_set": true
+    },
+    "cost_model": {
+      "dtype": "complex64",
+      "amplitudes": 268435456,
+      "bytes_per_amplitude": 8,
+      "state_bytes": 2147483648,
+      "state_mib": 2048.0,
+      "temporary_memory_expectation_bytes": 2147483648,
+      "minimum_input_plus_output_bytes": 4294967296,
+      "expectation_basis": "out-of-place custom kernels require one input and one output state; lazy graphs and lookup tables can add intermediates",
+      "recommended_working_set_headroom_bytes": 25855705088,
+      "scope": "allocation preflight lower bound",
+      "not_included": [
+        "additional lazy-graph intermediates",
+        "lookup and index buffers",
+        "allocator cache",
+        "memory used by other processes"
+      ]
+    },
+    "passing_guarantee": "Passing does not guarantee that an arbitrary circuit fits; it only establishes that the reported single-buffer and two-state lower bounds do not already rule it out."
+  },
+  "29": {
+    "schema_version": 1,
+    "allowed": true,
+    "decision": "allowed_within_reported_lower_bounds",
+    "reason": "statevector lower bounds fit within the reported device limits",
+    "overridden": false,
+    "override": {
+      "enabled": false,
+      "source": "default_disabled",
+      "environment_variable": "MLXQ_ALLOW_UNSAFE_STATEVECTOR",
+      "environment_value": null
+    },
+    "failure_reasons": [],
+    "qubits": 29,
+    "dtype": "complex64",
+    "device": {
+      "name": "Apple M3 Pro",
+      "architecture": "applegpu_g15s",
+      "max_buffer_length": 22613000192,
+      "max_recommended_working_set_size": 30150672384
+    },
+    "checks": {
+      "single_state_within_max_buffer_length": true,
+      "two_state_lower_bound_within_recommended_working_set": true
+    },
+    "cost_model": {
+      "dtype": "complex64",
+      "amplitudes": 536870912,
+      "bytes_per_amplitude": 8,
+      "state_bytes": 4294967296,
+      "state_mib": 4096.0,
+      "temporary_memory_expectation_bytes": 4294967296,
+      "minimum_input_plus_output_bytes": 8589934592,
+      "expectation_basis": "out-of-place custom kernels require one input and one output state; lazy graphs and lookup tables can add intermediates",
+      "recommended_working_set_headroom_bytes": 21560737792,
+      "scope": "allocation preflight lower bound",
+      "not_included": [
+        "additional lazy-graph intermediates",
+        "lookup and index buffers",
+        "allocator cache",
+        "memory used by other processes"
+      ]
+    },
+    "passing_guarantee": "Passing does not guarantee that an arbitrary circuit fits; it only establishes that the reported single-buffer and two-state lower bounds do not already rule it out."
+  },
+  "30": {
+    "schema_version": 1,
+    "allowed": true,
+    "decision": "allowed_within_reported_lower_bounds",
+    "reason": "statevector lower bounds fit within the reported device limits",
+    "overridden": false,
+    "override": {
+      "enabled": false,
+      "source": "default_disabled",
+      "environment_variable": "MLXQ_ALLOW_UNSAFE_STATEVECTOR",
+      "environment_value": null
+    },
+    "failure_reasons": [],
+    "qubits": 30,
+    "dtype": "complex64",
+    "device": {
+      "name": "Apple M3 Pro",
+      "architecture": "applegpu_g15s",
+      "max_buffer_length": 22613000192,
+      "max_recommended_working_set_size": 30150672384
+    },
+    "checks": {
+      "single_state_within_max_buffer_length": true,
+      "two_state_lower_bound_within_recommended_working_set": true
+    },
+    "cost_model": {
+      "dtype": "complex64",
+      "amplitudes": 1073741824,
+      "bytes_per_amplitude": 8,
+      "state_bytes": 8589934592,
+      "state_mib": 8192.0,
+      "temporary_memory_expectation_bytes": 8589934592,
+      "minimum_input_plus_output_bytes": 17179869184,
+      "expectation_basis": "out-of-place custom kernels require one input and one output state; lazy graphs and lookup tables can add intermediates",
+      "recommended_working_set_headroom_bytes": 12970803200,
+      "scope": "allocation preflight lower bound",
+      "not_included": [
+        "additional lazy-graph intermediates",
+        "lookup and index buffers",
+        "allocator cache",
+        "memory used by other processes"
+      ]
+    },
+    "passing_guarantee": "Passing does not guarantee that an arbitrary circuit fits; it only establishes that the reported single-buffer and two-state lower bounds do not already rule it out."
+  },
+  "31": {
+    "schema_version": 1,
+    "allowed": false,
+    "decision": "refused",
+    "reason": "reported device limits are below the statevector lower bound",
+    "overridden": false,
+    "override": {
+      "enabled": false,
+      "source": "default_disabled",
+      "environment_variable": "MLXQ_ALLOW_UNSAFE_STATEVECTOR",
+      "environment_value": null
+    },
+    "failure_reasons": [
+      "two_state_lower_bound_exceeds_recommended_working_set"
+    ],
+    "qubits": 31,
+    "dtype": "complex64",
+    "device": {
+      "name": "Apple M3 Pro",
+      "architecture": "applegpu_g15s",
+      "max_buffer_length": 22613000192,
+      "max_recommended_working_set_size": 30150672384
+    },
+    "checks": {
+      "single_state_within_max_buffer_length": true,
+      "two_state_lower_bound_within_recommended_working_set": false
+    },
+    "cost_model": {
+      "dtype": "complex64",
+      "amplitudes": 2147483648,
+      "bytes_per_amplitude": 8,
+      "state_bytes": 17179869184,
+      "state_mib": 16384.0,
+      "temporary_memory_expectation_bytes": 17179869184,
+      "minimum_input_plus_output_bytes": 34359738368,
+      "expectation_basis": "out-of-place custom kernels require one input and one output state; lazy graphs and lookup tables can add intermediates",
+      "recommended_working_set_headroom_bytes": -4209065984,
+      "scope": "allocation preflight lower bound",
+      "not_included": [
+        "additional lazy-graph intermediates",
+        "lookup and index buffers",
+        "allocator cache",
+        "memory used by other processes"
+      ]
+    },
+    "passing_guarantee": "Passing does not guarantee that an arbitrary circuit fits; it only establishes that the reported single-buffer and two-state lower bounds do not already rule it out."
+  }
+}

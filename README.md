@@ -38,7 +38,7 @@ listed honestly as planned rather than presented as finished adapters.
 | Circuit inputs | Native Python operation dictionaries and strict unitary OpenQASM 2.0 |
 | Workloads | QFT, phase estimation, Grover, QAOA, VQE, QCBM, QNN, random circuits, and spin dynamics |
 | Trust model | Pre-allocation statevector checks, capability-gated dispatch, explicit cost/execution plans, numerical parity tests, synchronized benchmarks, and safe fallbacks |
-| Current test suite | **306 tests** across the simulator, algorithms, MPS, QASM, Metal dispatch, and QuantumStudio backend |
+| Current test suite | **308 tests** across the simulator, algorithms, MPS, QASM, Metal dispatch, campaign analysis, and QuantumStudio backend |
 | Desktop product | QuantumStudio orchestration, monitoring, plotting, and export |
 | SDK adapters | Native Qiskit backend and PennyLane device plugin are planned; `mlxq.qml` is currently an internal PennyLane-like wrapper |
 
@@ -57,6 +57,7 @@ against upstream.
 | **Benchmark baseline** | Upstream commit `2b99d30` |
 | **25-qubit speed sweep revision** | Fork commit `e5d9577` |
 | **Step 3 memory-crossover revision** | Fork commit `a89bbd0` |
+| **Step 4 preflight/policy revision** | Fork commit `83940c0` |
 
 Original authorship, licensing, and citation information are retained at the
 end of this README.
@@ -375,6 +376,33 @@ a hard allocator cap.
   <br/><em>Median allocator peak and synchronized wall time for the rotating 25-qubit TFIM crossover.</em>
 </div>
 
+Step 4 broadens that single workload into 36 isolated workload/qubit cells:
+TFIM, QFT, QAOA, QCBM, Heisenberg, and SU(2), each from 22 through 27 qubits.
+Every cell used a fresh Python/MLX process, one warmup per arm, three rotating
+repeats, and paired runtime analysis. The exact engine revision was `83940c0`.
+
+| Adaptive policy | Median peak reduction | Minimum cell reduction | Paired geometric-mean runtime | Paired cells faster | Worst paired cell |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Balanced: `max(256 MiB, 4 × state)` | 71.79% | 50.00% | 16.46% faster | 35 / 36 | 7.59% slower |
+| Minimum: `max(128 MiB, 2 × state)` | **77.50%** | **58.33%** | 14.64% faster | **36 / 36** | **1.48% faster** |
+
+All 324 measured executions had identical predicted and observed checkpoint
+counts. Maximum amplitude error was `1.03e-6` (limit `5e-6`) and maximum norm
+error was `6.91e-6` (limit `1e-5`). Pure MLX was the full-state reference
+through 24 qubits; 25–27 qubits used the identical fully lazy Metal kernels,
+which validates scheduling parity rather than independently revalidating Metal
+algebra at those sizes.
+
+Both formulas qualify for wider hardware testing on the measured M3 Pro.
+Automatic checkpointing remains disabled by default until M1/M2/M3/M4 and
+different unified-memory sizes are tested; users can select the measured byte
+formulas through the existing explicit budget API.
+
+<div align="center">
+  <img src="assets/perf-charts/chart_memory_policy_q22_27_step4_20260715.png" alt="Step 4 adaptive memory policy across six workloads and 22 to 27 qubits" width="820"/>
+  <br/><em>Median peak reduction and paired runtime change across six isolated workloads at each size.</em>
+</div>
+
 <details>
 <summary><strong>Show the original upstream four-backend M1 Max result</strong></summary>
 
@@ -546,6 +574,9 @@ The Step 3 memory and default-path evidence is tracked separately under
 [`assets/benchmarks-frozen/fork-m3pro-20260715-step3/`](assets/benchmarks-frozen/fork-m3pro-20260715-step3/). It contains the exact-commit 20- and
 25-qubit crossovers, four raw A–B–B–A guardrail campaigns, numerical
 validation, drift-balanced comparison output, and the plotted source data.
+
+The Step 4 preflight and 22–27-qubit cross-workload evidence is frozen under
+[`assets/benchmarks-frozen/fork-m3pro-20260715-step4/`](assets/benchmarks-frozen/fork-m3pro-20260715-step4/). It contains 324 raw timing rows, reviewed paired summaries, 90 full-state validation rows, the exact-commit and 36 child manifests, M3 Pro preflight reports through 31 qubits, and the plotted source data.
 
 Recreate the current sweep and comparison:
 

@@ -1,0 +1,11 @@
+{
+  "amplitude_tolerance": 5e-06,
+  "norm_tolerance": 1e-05,
+  "maximum_amplitude_error": 1.0289356850989861e-06,
+  "maximum_norm_error": 6.9141387939453125e-06,
+  "amplitude_parity_passed": true,
+  "norm_parity_passed": true,
+  "numerical_parity_passed": true,
+  "planner_runtime_checkpoint_agreement": true,
+  "unsafe_override_used": false
+}

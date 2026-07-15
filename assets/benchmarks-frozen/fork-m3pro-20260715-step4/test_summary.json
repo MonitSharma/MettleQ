@@ -1,0 +1,9 @@
+{
+  "engine_commit": "83940c017e372b08a236eca8dbb797e7edb50f1b",
+  "engine_commit_passed": 306,
+  "publication_command": "./test.sh",
+  "publication_passed": 308,
+  "publication_failed": 0,
+  "publication_warnings": 3,
+  "warning_scope": "unchanged third-party deprecation warnings"
+}

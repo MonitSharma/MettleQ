@@ -288,6 +288,22 @@ def _percentile(values: List[float], fraction: float) -> float:
 def _summarize(
     rows: List[Dict[str, Any]],
 ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    repeat_timings: Dict[tuple[str, int, int], Dict[str, float]] = {}
+    for row in rows:
+        repeat_key = (
+            str(row["workload"]), int(row["qubits"]), int(row["repeat"])
+        )
+        repeat_timings.setdefault(repeat_key, {})[str(row["policy"])] = float(
+            row["total_ms"]
+        )
+    paired_changes: Dict[tuple[str, int, str], List[float]] = {}
+    for (workload, qubits, _), timings in repeat_timings.items():
+        lazy = timings["lazy"]
+        for policy in POLICIES:
+            paired_changes.setdefault((workload, qubits, policy), []).append(
+                100 * (timings[policy] / lazy - 1)
+            )
+
     grouped: Dict[tuple[str, int, str], List[Dict[str, Any]]] = {}
     for row in rows:
         key = (str(row["workload"]), int(row["qubits"]), str(row["policy"]))
@@ -328,6 +344,15 @@ def _summarize(
         row["peak_reduction_percent"] = 100 * (
             1 - row["peak_bytes_median"] / baseline["peak_bytes_median"]
         )
+        changes = paired_changes[
+            (row["workload"], row["qubits"], row["policy"])
+        ]
+        row["paired_runtime_change_percent_median"] = statistics.median(changes)
+        row["paired_runtime_change_percent_geomean"] = 100 * (
+            math.exp(statistics.fmean(
+                math.log(1 + change / 100) for change in changes
+            )) - 1
+        )
 
     aggregate: List[Dict[str, Any]] = []
     for policy in POLICIES[1:]:
@@ -336,6 +361,13 @@ def _summarize(
             row for row in selected if row["observed_checkpoints_median"] > 0
         ]
         runtime_ratios = [1 + row["runtime_change_percent"] / 100 for row in selected]
+        paired_medians = [
+            row["paired_runtime_change_percent_median"] for row in selected
+        ]
+        paired_geomean_ratios = [
+            1 + row["paired_runtime_change_percent_geomean"] / 100
+            for row in selected
+        ]
         aggregate.append({
             "policy": policy,
             "cells": len(selected),
@@ -367,6 +399,22 @@ def _summarize(
             "planner_runtime_checkpoint_agreement": all(
                 row["predicted_observed_checkpoints_match"] for row in selected
             ),
+            "median_cell_paired_runtime_change_percent": statistics.median(
+                paired_medians
+            ),
+            "geomean_paired_runtime_change_percent": 100 * (
+                math.exp(statistics.fmean(
+                    math.log(value) for value in paired_geomean_ratios
+                )) - 1
+            ),
+            "p90_cell_paired_runtime_change_percent": _percentile(
+                paired_medians, 0.9
+            ),
+            "maximum_cell_paired_runtime_change_percent": max(paired_medians),
+            "paired_cells_over_10_percent_slower": sum(
+                change > 10 for change in paired_medians
+            ),
+            "paired_cells_faster": sum(change < 0 for change in paired_medians),
         })
     return cells, aggregate
 
@@ -382,16 +430,22 @@ def _acceptance(
     rows: List[Dict[str, Any]],
     validation: List[Dict[str, Any]],
     tolerance: float,
+    norm_tolerance: float,
     *,
     unsafe_override_used: bool,
 ) -> Dict[str, Any]:
     maximum_error = max(float(row["max_amplitude_error"]) for row in validation)
     maximum_norm_error = max(float(row["norm_error"]) for row in validation)
     return {
-        "tolerance": tolerance,
+        "amplitude_tolerance": tolerance,
+        "norm_tolerance": norm_tolerance,
         "maximum_amplitude_error": maximum_error,
         "maximum_norm_error": maximum_norm_error,
-        "numerical_parity_passed": maximum_error <= tolerance,
+        "amplitude_parity_passed": maximum_error <= tolerance,
+        "norm_parity_passed": maximum_norm_error <= norm_tolerance,
+        "numerical_parity_passed": (
+            maximum_error <= tolerance and maximum_norm_error <= norm_tolerance
+        ),
         "planner_runtime_checkpoint_agreement": all(
             int(row["predicted_checkpoints"])
             == int(row["observed_checkpoints"])
@@ -425,6 +479,7 @@ def _run_isolated(args: argparse.Namespace) -> int:
                 "--pure-reference-max-qubits",
                 str(args.pure_reference_max_qubits),
                 "--tolerance", str(args.tolerance),
+                "--norm-tolerance", str(args.norm_tolerance),
             ]
             subprocess.run(command, cwd=ROOT, check=True)
             with (child_dir / "memory_policy_raw.csv").open(newline="") as file:
@@ -446,6 +501,7 @@ def _run_isolated(args: argparse.Namespace) -> int:
         rows,
         validation,
         args.tolerance,
+        args.norm_tolerance,
         unsafe_override_used=any(
             report["overridden"]
             for manifest in child_manifests
@@ -475,6 +531,8 @@ def _run_isolated(args: argparse.Namespace) -> int:
             "pure_mlx_through_qubits": args.pure_reference_max_qubits,
             "larger_reference": "fully lazy execution using the same Metal kernels",
             "comparison": "full-state maximum amplitude error and state norm",
+            "amplitude_tolerance": args.tolerance,
+            "norm_tolerance": args.norm_tolerance,
         },
         "platform": platform.platform(),
         "python": sys.version,
@@ -510,6 +568,7 @@ def main() -> int:
     parser.add_argument("--warmups", type=int, default=1)
     parser.add_argument("--pure-reference-max-qubits", type=int, default=24)
     parser.add_argument("--tolerance", type=float, default=5e-6)
+    parser.add_argument("--norm-tolerance", type=float, default=1e-5)
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if any(n < 1 for n in args.qubits):
@@ -518,6 +577,8 @@ def main() -> int:
         parser.error("repeats must be positive and warmups non-negative")
     if not math.isfinite(args.tolerance) or args.tolerance <= 0:
         parser.error("tolerance must be finite and positive")
+    if not math.isfinite(args.norm_tolerance) or args.norm_tolerance <= 0:
+        parser.error("norm tolerance must be finite and positive")
     if not args.worker:
         return _run_isolated(args)
 
@@ -587,6 +648,7 @@ def main() -> int:
         rows,
         validation,
         args.tolerance,
+        args.norm_tolerance,
         unsafe_override_used=any(
             report["overridden"] for report in preflights.values()
         ),
