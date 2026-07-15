@@ -1,5 +1,69 @@
 # Apple GPU engineering log
 
+## 2026-07-15 — refreshed 25-qubit evidence at Step 2 commit
+
+### Exact-commit publication sweep
+
+After Step 2 was committed as `e5d9577301fa506a6f130e81ccd9968cf1a97500`,
+the full 29-workload suite ran at 25 qubits on the Apple M3 Pro with macOS
+26.5.2, Python 3.13.2, and MLX 0.32.0. Each arm received one warmup and ten
+paired measured repeats; pure MLX and custom Metal alternated first position
+inside every repeat. Checkpointing and dense ablation were disabled. The result
+contains 290 raw rows.
+
+```bash
+env -u MLXQ_METAL_CHECKPOINT_BUDGET_MB -u MLXQ_DENSE_ONLY \
+PYTHONPATH=src caffeinate -i .venv/bin/python tools/shader_suite_sweep.py \
+  --outdir bench/runs/shader_sweep_20260715_m3pro_e5d9577_n25_r10 \
+  --qubits 25 --repeats 10
+```
+
+The median paired pure-MLX/Metal ratio was 10.1689× and the geometric mean was
+9.0537×. Metal reached at least 1.1× on 26 of 29 workloads, at least 4× on 25,
+and at least 10× on 19. Long-range Ising was highest at 32.6462×. Amplitude
+estimation, W state, and ladder Heisenberg remained at effective parity.
+
+Against the previous five-repeat M3 Pro campaign at `a73436e`, a ±0.25× band
+classified five ratios as higher, 22 as unchanged, and two as lower. The median
+ratio delta was +0.0245×. Absolute time drift affected both paths in the same
+direction: pure MLX was 3.93% slower and Metal 3.39% slower by geometric mean.
+The refreshed run therefore supports stable relative acceleration, but is not
+a controlled attribution test for Step 2.
+
+### 25-qubit checkpoint crossover and boundary
+
+A separate six-step TFIM run tested fully lazy execution and 16, 12, 8, 6,
+and 4 GiB scheduling budgets with one warmup and seven rotating repeats per
+arm:
+
+```bash
+PYTHONPATH=src .venv/bin/python tools/checkpoint_sweep.py \
+  --outdir bench/runs/checkpoint_sweep_20260715_m3pro_e5d9577_n25_r7 \
+  --qubits 25 --steps 6 --repeats 7 --warmups 1 \
+  --budgets-mib 16384 12288 8192 6144 4096
+```
+
+| Policy | Checkpoints | Median peak | Median runtime | Runtime change |
+| --- | ---: | ---: | ---: | ---: |
+| Fully lazy | 0 | 3.00 GiB | 468.204 ms | — |
+| 16 GiB budget | 3 | 3.00 GiB | 470.111 ms | +0.41% |
+| 12 GiB budget | 6 | 3.00 GiB | 470.324 ms | +0.45% |
+| 8 GiB budget | 6 | 3.00 GiB | 471.966 ms | +0.80% |
+| 6 GiB budget | 13 | 3.00 GiB | 475.464 ms | +1.55% |
+| 4 GiB budget | 13 | 3.00 GiB | 473.623 ms | +1.16% |
+
+Every arm matched pure MLX within `1.4081562582646256e-09` maximum amplitude
+error, and predicted/observed checkpoint counts agreed. Unlike the 20-qubit
+crossover below, safe fused-layer boundary checkpoints did not materially
+lower the 25-qubit peak. One fused all-qubit layer dominates the allocation;
+the controller deliberately cannot split inside it. This workload should keep
+checkpointing disabled. The next memory phase must target intra-layer buffer
+reuse, streaming, or lower-memory kernels before an automatic 25-qubit policy
+is justified.
+
+The reviewed data, manifests, comparisons, and plots are frozen under
+[`assets/benchmarks-frozen/fork-m3pro-20260715/`](../../assets/benchmarks-frozen/fork-m3pro-20260715/).
+
 ## 2026-07-15 — Step 2: memory-budgeted Metal graph evaluation
 
 ### Change and safety model

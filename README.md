@@ -55,7 +55,7 @@ against upstream.
 | **Original website** | [QupertinoWEB](https://boltzmannentropy.github.io/QupertinoWEB/) |
 | **Original author** | Shlomo Kashani |
 | **Benchmark baseline** | Upstream commit `2b99d30` |
-| **Measured fork revision** | Fork commit `a73436e` |
+| **Measured fork revision** | Fork commit `e5d9577` |
 
 Original authorship, licensing, and citation information are retained at the
 end of this README.
@@ -158,29 +158,32 @@ operation stream.
 
 ### Current fork: Apple M3 Pro, 25 qubits
 
-The 2026-07-14 fork campaign ran 29 workloads with one warmup per arm and five
-paired repeats, alternating pure MLX and custom Metal inside every repeat. The
-environment used Python 3.13.2 and MLX 0.32.0 at fork commit `a73436e`.
+The 2026-07-15 campaign ran 29 workloads with one warmup per arm and ten paired
+repeats, alternating pure MLX and custom Metal inside every repeat. The
+environment used macOS 26.5.2, Python 3.13.2, and MLX 0.32.0 at fork commit
+`e5d9577`. Checkpointing was disabled in both arms for direct comparability.
 
-- Median Metal speedup over pure MLX: **10.19×**
+- Median Metal speedup over pure MLX: **10.17×**
+- Geometric-mean Metal speedup: **9.05×**
 - Workloads at or above 1.1×: **26 of 29**
+- Workloads at or above 4×: **25 of 29**
 - Workloads at or above 10×: **19 of 29**
-- Maximum: **32.30×** on long-range Ising
+- Maximum: **32.65×** on long-range Ising
 - Near parity: amplitude estimation, W state, and ladder Heisenberg
 
 | Representative workload | Pure MLX | Custom Metal | Speedup |
 | --- | ---: | ---: | ---: |
-| Long-range Ising | 16,440.5 ms | **509.1 ms** | **32.30×** |
-| Grover | 2,611.6 ms | **118.3 ms** | **22.08×** |
-| EfficientSU2 | 4,845.9 ms | **263.4 ms** | **18.44×** |
-| TFIM Trotter, second order | 20,674.7 ms | **1,269.4 ms** | **16.29×** |
-| GHZ | 391.3 ms | **25.3 ms** | **15.47×** |
-| QFT | 1,742.2 ms | **136.6 ms** | **12.76×** |
-| QAOA | 3,850.2 ms | **375.1 ms** | **10.28×** |
-| VQE plus energy evaluation | 4,236.5 ms | **1,122.5 ms** | **3.77×** |
+| Long-range Ising | 16,439.7 ms | **503.6 ms** | **32.65×** |
+| Grover | 3,101.4 ms | **137.0 ms** | **22.64×** |
+| EfficientSU2 | 4,670.9 ms | **240.0 ms** | **19.46×** |
+| TFIM Trotter, second order | 20,266.3 ms | **1,257.1 ms** | **16.12×** |
+| GHZ | 461.9 ms | **27.7 ms** | **16.71×** |
+| QFT | 2,052.5 ms | **158.2 ms** | **12.98×** |
+| QAOA | 4,307.7 ms | **424.5 ms** | **10.15×** |
+| VQE plus energy evaluation | 4,413.9 ms | **1,145.5 ms** | **3.86×** |
 
 <div align="center">
-  <img src="assets/perf-charts/chart_fork_m3pro_speedup_20260714.png" alt="Metal speedup over pure MLX for 29 workloads on an Apple M3 Pro" width="820"/>
+  <img src="assets/perf-charts/chart_fork_m3pro_speedup_20260715.png" alt="Metal speedup over pure MLX for 29 workloads on an Apple M3 Pro" width="820"/>
   <br/><em>Paired pure-MLX divided by Metal wall time at 25 qubits; larger is better.</em>
 </div>
 
@@ -188,8 +191,27 @@ environment used Python 3.13.2 and MLX 0.32.0 at fork commit `a73436e`.
 <summary><strong>Show absolute M3 Pro runtimes</strong></summary>
 
 <div align="center">
-  <img src="assets/perf-charts/chart_fork_m3pro_runtime_20260714.png" alt="Pure MLX and custom Metal runtimes for 29 workloads on an Apple M3 Pro" width="820"/>
+  <img src="assets/perf-charts/chart_fork_m3pro_runtime_20260715.png" alt="Pure MLX and custom Metal runtimes for 29 workloads on an Apple M3 Pro" width="820"/>
   <br/><em>Mean synchronized wall time on a log scale; lower is better.</em>
+</div>
+
+</details>
+
+#### Stability versus the previous fork campaign
+
+The previous M3 Pro campaign used five repeats at `a73436e`. With a ±0.25×
+ratio band, the refreshed ten-repeat result has five higher ratios, 22
+unchanged ratios, and two lower ratios. The median ratio moved only +0.0245×.
+Both arms were slightly slower in the new session by geometric mean (pure MLX
++3.93%, Metal +3.39%), so this is evidence of stable relative acceleration—not
+a controlled claim that Step 2 changed 25-qubit wall time.
+
+<details>
+<summary><strong>Show previous fork run versus refreshed evidence</strong></summary>
+
+<div align="center">
+  <img src="assets/perf-charts/chart_previous_vs_current_speedup_20260715.png" alt="Previous five-repeat fork speedup compared with the refreshed ten-repeat fork speedup" width="820"/>
+  <br/><em>Change in paired pure-MLX/Metal speedup on the same M3 Pro; a narrow ±0.25× band is treated as unchanged.</em>
 </div>
 
 </details>
@@ -205,7 +227,7 @@ With a ±0.25× band, the fork rerun has 17 higher ratios, five effectively
 unchanged ratios, and seven lower ratios.
 
 <div align="center">
-  <img src="assets/perf-charts/chart_original_vs_fork_speedup_20260714.png" alt="Historical upstream M1 Max speedup compared with the current fork M3 Pro speedup" width="820"/>
+  <img src="assets/perf-charts/chart_original_vs_fork_speedup_20260715.png" alt="Historical upstream M1 Max speedup compared with the current fork M3 Pro speedup" width="820"/>
   <br/><em>Original published M1 Max ratio → private-fork M3 Pro ratio. Positive does not imply lower cross-machine wall time.</em>
 </div>
 
@@ -214,34 +236,34 @@ unchanged ratios, and seven lower ratios.
 
 | Workload | Original upstream, M1 Max | Private fork, M3 Pro | Ratio difference |
 | --- | ---: | ---: | ---: |
-| Long-range Ising | 24.3× | 32.30× | +8.00× |
-| Grover | 11.5× | 22.08× | +10.58× |
-| EfficientSU2 | 10.6× | 18.44× | +7.84× |
-| TFIM Trotter (2nd) | 25.0× | 16.29× | -8.71× |
-| Variational | 14.3× | 16.24× | +1.94× |
-| QCBM | 12.0× | 16.13× | +4.13× |
-| GHZ | 9.1× | 15.47× | +6.37× |
+| Long-range Ising | 24.3× | 32.65× | +8.35× |
+| Grover | 11.5× | 22.64× | +11.14× |
+| EfficientSU2 | 10.6× | 19.46× | +8.86× |
+| GHZ | 9.1× | 16.71× | +7.61× |
+| TFIM Trotter (2nd) | 25.0× | 16.12× | -8.88× |
+| QCBM | 12.0× | 16.06× | +4.06× |
+| Variational | 14.3× | 15.93× | +1.63× |
 | QFT (entangled) | 7.3× | 13.46× | +6.16× |
-| cuQuantum proxy | 13.2× | 13.05× | -0.15× |
-| QFT | 8.4× | 12.76× | +4.36× |
-| Quantum walk (V-chain) | 11.6× | 11.56× | -0.04× |
-| Phase estimation | 8.0× | 10.80× | +2.80× |
-| Graph state | 8.9× | 10.38× | +1.48× |
-| QAOA | 8.4× | 10.28× | +1.88× |
-| RealAmplitudes | 5.1× | 10.19× | +5.09× |
-| Heisenberg XXZ | 13.2× | 10.18× | -3.02× |
-| Heisenberg | 13.8× | 10.15× | -3.65× |
-| Quantum walk | 11.4× | 10.08× | -1.32× |
-| Phase estimation (inexact) | 8.8× | 10.01× | +1.21× |
-| QNN | 7.4× | 9.97× | +2.57× |
-| Random circuit | 4.7× | 9.16× | +4.46× |
-| Deutsch-Jozsa | 8.4× | 8.72× | +0.32× |
-| TFIM Trotter (1st) | 12.3× | 8.70× | -3.60× |
-| TFIM random field | 13.1× | 8.48× | -4.62× |
-| Heisenberg random field | 8.9× | 7.76× | -1.14× |
-| VQE plus energy evaluation | 1.3× | 3.77× | +2.47× |
-| Heisenberg ladder | 1.0× | 1.03× | +0.03× |
-| W state | 1.0× | 1.00× | +0.00× |
+| cuQuantum proxy | 13.2× | 13.10× | -0.10× |
+| QFT | 8.4× | 12.98× | +4.58× |
+| Quantum walk (V-chain) | 11.6× | 11.49× | -0.11× |
+| Phase estimation | 8.0× | 11.03× | +3.03× |
+| QNN | 7.4× | 10.27× | +2.87× |
+| Graph state | 8.9× | 10.22× | +1.32× |
+| Phase estimation (inexact) | 8.8× | 10.17× | +1.37× |
+| QAOA | 8.4× | 10.15× | +1.75× |
+| Heisenberg XXZ | 13.2× | 10.15× | -3.05× |
+| Heisenberg | 13.8× | 10.14× | -3.66× |
+| Quantum walk | 11.4× | 10.13× | -1.27× |
+| RealAmplitudes | 5.1× | 9.92× | +4.82× |
+| Random circuit | 4.7× | 9.18× | +4.48× |
+| Deutsch-Jozsa | 8.4× | 8.79× | +0.39× |
+| TFIM random field | 13.1× | 8.51× | -4.59× |
+| TFIM Trotter (1st) | 12.3× | 8.50× | -3.80× |
+| Heisenberg random field | 8.9× | 7.80× | -1.10× |
+| VQE plus energy evaluation | 1.3× | 3.86× | +2.56× |
+| Heisenberg ladder | 1.0× | 1.00× | +0.00× |
+| W state | 1.0× | 1.00× | -0.00× |
 | Amplitude estimation | 1.0× | 0.99× | -0.01× |
 
 </details>
@@ -298,6 +320,15 @@ All arms matched the pure-MLX statevector within `5.16e-9` maximum amplitude
 error. QFT and affine validation errors were exactly zero. The sweep is
 reproducible with `tools/checkpoint_sweep.py`; full protocol and guardrail
 results are in the [Apple GPU engineering log](docs/development/apple-gpu-plan.md).
+
+The refreshed 25-qubit crossover is an equally important negative result. On
+the six-step TFIM workload, fully lazy execution and all five budget policies
+peaked at approximately 3.00 GiB. Checkpointing added 0.4%–1.6% runtime without
+material peak reduction; every arm stayed within `1.41e-9` of pure MLX. A
+single fused all-qubit layer dominates this workload's allocation, and the safe
+boundary-only controller cannot split it. The next memory phase therefore
+needs intra-layer buffer reuse or lower-memory kernels. Keep checkpointing off
+for this particular 25-qubit workload.
 
 <details>
 <summary><strong>Show the original upstream four-backend M1 Max result</strong></summary>
@@ -454,28 +485,34 @@ qubit schedules, caps, MPS controls, QASM options, and reproducibility settings.
 
 ## Reproducing the results
 
-The complete 2026-07-14 evidence bundle is tracked under
-[`assets/benchmarks-frozen/fork-m3pro-20260714/`](assets/benchmarks-frozen/fork-m3pro-20260714/):
+The complete 2026-07-15 evidence bundle is tracked under
+[`assets/benchmarks-frozen/fork-m3pro-20260715/`](assets/benchmarks-frozen/fork-m3pro-20260715/):
 
-- 145 paired raw timing rows
+- 290 paired raw timing rows
 - 29-workload summary CSV
-- run manifest
+- exact-commit run manifest and aggregate evidence summary
 - transcribed historical ratios with source attribution
 - historical/current comparison CSV and JSON summary
-- controlled same-machine upstream/fork CSV
+- prior-fork/current comparison CSV and JSON summary
+- 25-qubit checkpoint crossover raw data, validation, summary, and manifest
 
 Recreate the current sweep and comparison:
 
 ```bash
-PYTHONPATH=src .venv/bin/python tools/shader_suite_sweep.py \
-  --outdir bench/runs/shader_sweep_current --qubits 25 --repeats 5
+env -u MLXQ_METAL_CHECKPOINT_BUDGET_MB -u MLXQ_DENSE_ONLY \
+PYTHONPATH=src caffeinate -i .venv/bin/python tools/shader_suite_sweep.py \
+  --outdir bench/runs/shader_sweep_current --qubits 25 --repeats 10
 
 PYTHONPATH=src .venv/bin/python tools/compare_shader_sweeps.py \
-  --historical assets/benchmarks-frozen/fork-m3pro-20260714/historical_chart_ratios.csv \
+  --historical assets/benchmarks-frozen/fork-m3pro-20260715/historical_chart_ratios.csv \
   --current bench/runs/shader_sweep_current/shader_sweep_summary.csv \
   --outdir bench/runs/shader_sweep_current \
-  --historical-label "published M1 Max chart" \
-  --current-label "M3 Pro rerun"
+  --historical-label "upstream M1 Max chart" \
+  --current-label "fork M3 Pro current"
+
+PYTHONPATH=src .venv/bin/python tools/checkpoint_sweep.py \
+  --outdir bench/runs/checkpoint_sweep_n25 --qubits 25 --steps 6 \
+  --repeats 7 --warmups 1 --budgets-mib 16384 12288 8192 6144 4096
 ```
 
 Transient runs belong under `bench/runs/`. Promote only reviewed evidence to
