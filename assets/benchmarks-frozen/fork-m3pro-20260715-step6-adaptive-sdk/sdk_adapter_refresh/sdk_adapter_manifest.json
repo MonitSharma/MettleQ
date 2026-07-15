@@ -1,0 +1,18 @@
+{
+  "chip": "Apple M3 Pro",
+  "command": "tools/benchmark_sdk_adapters.py --outdir bench/runs/step6-sdk-adapters --qubits 20 --steps 4 --warmups 1 --repeats 7",
+  "created_at_utc": "2026-07-15T13:10:23.584031+00:00",
+  "git_commit": "3f40a474b337cb094e4c40c57fa9e1ba2002f890",
+  "machine": "arm64",
+  "metal_available": true,
+  "mlx": "0.32.0",
+  "mlx_default_device": "Device(gpu, 0)",
+  "mlxq_metal_kernels": "auto",
+  "pennylane": "0.45.1",
+  "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "python": "3.13.2",
+  "qiskit": "2.5.0",
+  "qiskit_aer": "0.17.2",
+  "schema_version": 1,
+  "tracked_worktree_clean": true
+}

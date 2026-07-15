@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "engine_commit": "3f40a474b337cb094e4c40c57fa9e1ba2002f890",
+  "command": "./test.sh",
+  "simulator_tests": 311,
+  "quantumstudio_tests": 18,
+  "total_tests": 329,
+  "passed": 329,
+  "failed": 0,
+  "warnings": 3,
+  "elapsed_seconds": 4.89
+}

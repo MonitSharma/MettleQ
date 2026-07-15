@@ -62,6 +62,7 @@ against upstream.
 | **Step 3 memory-crossover revision** | Fork commit `a89bbd0` |
 | **Step 4 preflight/policy revision** | Fork commit `83940c0` |
 | **Step 5 native SDK engine revision** | Fork commit `0d01052` |
+| **Step 6 adaptive statevector/MPS revision** | Fork commit `3f40a47` |
 
 Original authorship, licensing, and citation information are retained at the
 end of this README.
@@ -286,6 +287,74 @@ returned. MPS marginals, local expectations, and sequential samples contract
 the tensor network without constructing a dense `2**n` state.
 
 ## Performance
+
+### Current adaptive SDK result: Apple M3 Pro
+
+Commit `3f40a47` was measured through Qiskit and PennyLane using the same
+20-qubit, two-step local circuit and the same analytic `⟨Z₀⟩` result contract.
+Each implementation received one warmup and seven rotating-order repeats.
+Custom Metal was enabled for compatible statevector layers. MPS used
+`Dmax=32`, `eps=1e-10`, and recorded zero truncation events and zero discarded
+weight on this shallow circuit.
+
+| SDK | Path | Median | Reference / Qupertino | Absolute error |
+| --- | --- | ---: | ---: | ---: |
+| Qiskit | Statevector CPU | 238.69 ms | 2.77× | `4.42e-11` |
+| Qiskit | Statevector GPU | **18.11 ms** | **36.54×** | `4.42e-10` |
+| Qiskit | MPS CPU | **7.80 ms** | **84.81×** | `6.22e-8` |
+| Qiskit | MPS GPU tensors + CPU SVD | 24.67 ms | 26.83× | `1.12e-7` |
+| PennyLane | Statevector CPU | 236.91 ms | 2.58× | `2.79e-9` |
+| PennyLane | Statevector GPU | **16.28 ms** | **37.49×** | `1.12e-8` |
+| PennyLane | MPS CPU | **10.79 ms** | **56.56×** | `1.95e-7` |
+| PennyLane | MPS GPU tensors + CPU SVD | 27.75 ms | 21.99× | `2.26e-7` |
+
+Qiskit rows use `StatevectorEstimator` at 661.79 ms as their reference;
+PennyLane rows use `default.qubit` at 610.25 ms. MPS wins this particular
+low-entanglement workload because it avoids a dense `2**n` state. It is not a
+general random-circuit claim: bond growth, `Dmax`, and truncation determine MPS
+cost and accuracy.
+
+<div align="center">
+  <img src="assets/benchmarks-frozen/fork-m3pro-20260715-step6-adaptive-sdk/sdk_method_matrix/sdk_method_matrix.png" alt="Qiskit and PennyLane statevector CPU, statevector GPU, MPS CPU, and MPS GPU method timing matrix" width="900"/>
+  <br/><em>End-to-end SDK timing on a log scale. CPU and GPU are independent alternatives, not cooperative arms.</em>
+</div>
+
+#### Why automatic selection uses CPU for small circuits
+
+The same circuit family was swept from 4–20 qubits for statevector and 4–32
+qubits for MPS. On the safe pure-MLX default, statevector GPU becomes at least
+1.10× faster for consecutive sizes starting at 14 qubits. Compatible custom
+Metal layers move this workload-specific crossover to 6 qubits. At 20 qubits,
+pure-MLX GPU is 5.53× faster than CPU; compatible Metal GPU is 18.64× faster.
+
+MPS GPU did not cross CPU at any measured size. At 32 qubits, MPS CPU took
+10.69 ms and the explicit GPU tensor path took 28.41 ms because SVD remains on
+CPU. Accordingly, automatic MPS stays on CPU; explicit GPU remains available
+and auditable.
+
+<div align="center">
+  <img src="assets/benchmarks-frozen/fork-m3pro-20260715-step6-adaptive-sdk/policy_pure_mlx/execution_policy.png" alt="Pure MLX CPU versus GPU crossover for exact statevector and MPS execution" width="900"/>
+  <br/><em>Safe default policy calibration. Lower is better; both panels use logarithmic time axes.</em>
+</div>
+
+The full raw rows, summaries, selection records, MPS diagnostics, manifests,
+and charts are frozen in
+[`fork-m3pro-20260715-step6-adaptive-sdk/`](assets/benchmarks-frozen/fork-m3pro-20260715-step6-adaptive-sdk/).
+
+#### Unchanged Step 5 protocol: historical versus current session
+
+The older four-step protocol was also rerun unchanged. Qupertino itself was
+slower in the current session, so the larger PennyLane ratio must not be read as
+an engine improvement:
+
+| SDK contract | Previous Qupertino | Current Qupertino | Current reference | Current speedup | Qupertino change |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Qiskit full statevector | 10.10 ms | 11.01 ms | Aer CPU 77.61 ms | 7.05× | 8.98% slower |
+| PennyLane local `⟨Z⟩` | 18.31 ms | 21.44 ms | `default.qubit` 1,075.41 ms | 50.15× | 17.12% slower |
+
+This refresh is a session-to-session stability check. The new method-matrix
+results above use a different, intentionally shared expectation contract and
+must not be compared directly with the Qiskit full-state row.
 
 ### Current fork: Apple M3 Pro, 25 qubits
 
@@ -752,6 +821,9 @@ The Step 4 preflight and 22–27-qubit cross-workload evidence is frozen under
 The Step 5 native-SDK evidence is frozen under
 [`assets/benchmarks-frozen/fork-m3pro-20260715-step5-sdk/`](assets/benchmarks-frozen/fork-m3pro-20260715-step5-sdk/). It contains rotating-order Qiskit and PennyLane timings, separate native-result comparisons, numerical validation, the exact engine manifest, and a chart generated from the summary JSON.
 
+The Step 6 adaptive statevector/MPS evidence is frozen under
+[`assets/benchmarks-frozen/fork-m3pro-20260715-step6-adaptive-sdk/`](assets/benchmarks-frozen/fork-m3pro-20260715-step6-adaptive-sdk/). It contains pure-MLX and custom-Metal CPU/GPU crossover sweeps, the Qiskit/PennyLane method matrix, MPS device and truncation diagnostics, the unchanged Step 5 protocol refresh, and the 329-test result.
+
 Recreate the current sweep and comparison:
 
 ```bash
@@ -792,6 +864,19 @@ MLXQ_METAL_KERNELS=auto PYTHONPATH=src caffeinate -i .venv/bin/python \
 PYTHONPATH=src .venv/bin/python tools/plot_sdk_adapters.py \
   --summary bench/runs/sdk-adapters/sdk_adapter_summary.json \
   --output bench/runs/sdk-adapters/sdk_adapter_timings.png
+
+unset MLXQ_METAL_KERNELS
+PYTHONPATH=src .venv/bin/python tools/benchmark_execution_policy.py \
+  --outdir bench/runs/execution-policy-pure-mlx --warmups 1 --repeats 7
+
+MLXQ_METAL_KERNELS=auto PYTHONPATH=src .venv/bin/python \
+  tools/benchmark_execution_policy.py \
+  --outdir bench/runs/execution-policy-metal --warmups 1 --repeats 7
+
+MLXQ_METAL_KERNELS=auto PYTHONPATH=src .venv/bin/python \
+  tools/benchmark_sdk_method_matrix.py \
+  --outdir bench/runs/sdk-method-matrix \
+  --qubits 20 --steps 2 --warmups 1 --repeats 7
 ```
 
 Transient runs belong under `bench/runs/`. Promote only reviewed evidence to

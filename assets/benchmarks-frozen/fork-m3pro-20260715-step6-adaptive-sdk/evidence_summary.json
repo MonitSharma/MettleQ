@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "engine_commit": "3f40a474b337cb094e4c40c57fa9e1ba2002f890",
+  "hardware": "Apple M3 Pro",
+  "python": "3.13.2",
+  "mlx": "0.32.0",
+  "timing_protocol": {
+    "warmups_per_arm": 1,
+    "rotating_repeats": 7,
+    "cpu_gpu_policy": "independent arms; one numerical device per execution"
+  },
+  "statevector_policy": {
+    "pure_mlx_sustained_gpu_crossover_qubits": 14,
+    "metal_sustained_gpu_crossover_qubits": 6,
+    "qubits_20": {
+      "pure_mlx_cpu_ms": 230.496,
+      "pure_mlx_gpu_ms": 41.670375,
+      "pure_mlx_cpu_over_gpu_speedup": 5.531411704358312,
+      "metal_cpu_ms": 231.562542,
+      "metal_gpu_ms": 12.420625,
+      "metal_cpu_over_gpu_speedup": 18.64338887938409
+    }
+  },
+  "mps_policy": {
+    "dmax": 32,
+    "eps": 1e-10,
+    "measured_qubit_range": [4, 32],
+    "sustained_gpu_crossover_qubits": null,
+    "qubits_32_pure_mlx": {
+      "cpu_ms": 10.685459,
+      "gpu_tensor_path_ms": 28.40775,
+      "gpu_over_cpu_slowdown": 2.6585427916573354
+    },
+    "tensor_device_for_gpu_arm": "gpu",
+    "svd_device_for_gpu_arm": "cpu",
+    "maximum_truncation_events": 0
+  },
+  "sdk_method_matrix_20_qubits": {
+    "result_contract": "analytic local Pauli-Z expectation",
+    "qiskit": {
+      "reference_ms": 661.792292,
+      "statevector_cpu_ms": 238.692583,
+      "statevector_gpu_ms": 18.109625,
+      "statevector_gpu_speedup": 36.54367729867404,
+      "mps_cpu_ms": 7.803041,
+      "mps_cpu_speedup": 84.81209979545153,
+      "mps_gpu_ms": 24.66525,
+      "mps_gpu_speedup": 26.83095821043776
+    },
+    "pennylane": {
+      "reference_ms": 610.245125,
+      "statevector_cpu_ms": 236.910458,
+      "statevector_gpu_ms": 16.278208,
+      "statevector_gpu_speedup": 37.48847078253331,
+      "mps_cpu_ms": 10.790292,
+      "mps_cpu_speedup": 56.55501491525901,
+      "mps_gpu_ms": 27.753041,
+      "mps_gpu_speedup": 21.98840570300026
+    },
+    "maximum_absolute_expectation_error": 2.2647104682599064e-7,
+    "mps_truncation_events": 0
+  },
+  "step5_protocol_refresh": {
+    "qiskit_qupertino_ms": 11.007833,
+    "qiskit_aer_cpu_ms": 77.610334,
+    "qiskit_speedup": 7.050464337531283,
+    "qiskit_qupertino_change_vs_step5_percent": 8.979457436827243,
+    "pennylane_qupertino_ms": 21.444459,
+    "pennylane_default_qubit_ms": 1075.41325,
+    "pennylane_speedup": 50.1487703653424,
+    "pennylane_qupertino_change_vs_step5_percent": 17.11750625661925,
+    "interpretation": "positive change percentages mean slower Qupertino wall time in the refreshed session"
+  }
+}

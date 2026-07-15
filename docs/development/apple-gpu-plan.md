@@ -43,6 +43,39 @@ suite passes 329 tests. `tools/benchmark_execution_policy.py` calibrates CPU/GPU
 crossovers independently, and `tools/benchmark_sdk_method_matrix.py` compares
 the four method/device paths through both public SDKs.
 
+### Exact-commit adaptive SDK evidence
+
+Engine commit `3f40a474b337cb094e4c40c57fa9e1ba2002f890` was measured on an
+Apple M3 Pro with Python 3.13.2 and MLX 0.32.0. Every family used one warmup
+and seven rotating repeats.
+
+The pure-MLX statevector GPU crossover was 14 qubits; compatible custom Metal
+reduced the workload-specific crossover to 6. At 20 qubits, the pure-MLX GPU
+was 5.53× faster than CPU (41.67 versus 230.50 ms), while the compatible Metal
+GPU was 18.64× faster (12.42 versus 231.56 ms). MPS showed no GPU crossover
+through 32 qubits: CPU took 10.69 ms there versus 28.41 ms for GPU tensors with
+CPU SVD.
+
+The shared 20-qubit analytic `Z₀` SDK contract produced:
+
+| SDK path | Median | SDK reference / Qupertino | Absolute error |
+| --- | ---: | ---: | ---: |
+| Qiskit statevector GPU | 18.11 ms | 36.54× | `4.42e-10` |
+| Qiskit MPS CPU | 7.80 ms | 84.81× | `6.22e-8` |
+| PennyLane statevector GPU | 16.28 ms | 37.49× | `1.12e-8` |
+| PennyLane MPS CPU | 10.79 ms | 56.56× | `1.95e-7` |
+
+MPS recorded zero truncation events and zero discarded weight for this shallow
+local circuit. The result does not generalize to high-entanglement circuits.
+The unchanged Step 5 protocol was also rerun; Qupertino full-state Qiskit and
+local-expectation PennyLane times were 8.98% and 17.12% slower than the prior
+session, respectively. That stability result is reported directly rather than
+using reference variation to imply an engine improvement.
+
+Raw rows, charts, summaries, manifests, execution selections, MPS diagnostics,
+and test evidence are frozen under
+[`assets/benchmarks-frozen/fork-m3pro-20260715-step6-adaptive-sdk/`](../../assets/benchmarks-frozen/fork-m3pro-20260715-step6-adaptive-sdk/).
+
 ## 2026-07-15 — Step 5: native Qiskit and PennyLane execution
 
 ### Shared compatibility boundary

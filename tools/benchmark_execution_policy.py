@@ -270,11 +270,15 @@ def main() -> int:
     raw_path = args.outdir / "execution_policy_raw.csv"
     summary_csv_path = args.outdir / "execution_policy_summary.csv"
     with raw_path.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(raw_rows[0]))
+        writer = csv.DictWriter(
+            handle, fieldnames=list(raw_rows[0]), lineterminator="\n"
+        )
         writer.writeheader()
         writer.writerows(raw_rows)
     with summary_csv_path.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(summary_rows[0]))
+        writer = csv.DictWriter(
+            handle, fieldnames=list(summary_rows[0]), lineterminator="\n"
+        )
         writer.writeheader()
         writer.writerows(summary_rows)
 

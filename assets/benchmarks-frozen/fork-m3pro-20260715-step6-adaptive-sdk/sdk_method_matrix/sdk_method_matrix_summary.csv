@@ -1,0 +1,11 @@
+sdk,implementation,is_reference,median_ms,reference_over_implementation_speedup,absolute_expectation_error
+qiskit,qiskit_statevector_reference,True,661.792292,1.0,0.0
+qiskit,qupertino_statevector_cpu,False,238.692583,2.7725716638627182,4.4181547301516217e-11
+qiskit,qupertino_statevector_gpu,False,18.109625,36.54367729867404,4.424833832752916e-10
+qiskit,qupertino_mps_cpu,False,7.803041,84.81209979545153,6.222285832470893e-08
+qiskit,qupertino_mps_gpu,False,24.66525,26.83095821043776,1.116692393418784e-07
+pennylane,pennylane_default_qubit_reference,True,610.245125,1.0,0.0
+pennylane,qupertino_statevector_cpu,False,236.910458,2.5758471371491756,2.7939677238464355e-09
+pennylane,qupertino_statevector_gpu,False,16.278208,37.48847078253331,1.1175870895385742e-08
+pennylane,qupertino_mps_cpu,False,10.790292,56.55501491525901,1.9521772149735222e-07
+pennylane,qupertino_mps_gpu,False,27.753041,21.98840570300026,2.2647104682599064e-07

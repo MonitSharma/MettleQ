@@ -1,0 +1,230 @@
+{
+  "schema_version": 1,
+  "workload": "H + nearest-neighbor ZZ + RX; local Pauli-Z expectation",
+  "timing_scope": "canonical translation output through method/device selection, allocation, execution, synchronization, and local expectation",
+  "policy": "CPU and GPU arms are independent. One numerical device is selected per execution; their times are not combined.",
+  "warmups_per_arm": 1,
+  "paired_rotating_repeats": 7,
+  "minimum_gpu_speedup": 1.1,
+  "consecutive_sizes_required": 2,
+  "mps": {
+    "dmax": 32,
+    "eps": 1e-10
+  },
+  "sustained_gpu_crossover_qubits": {
+    "statevector": 14,
+    "matrix_product_state": null
+  },
+  "recommended_defaults": {
+    "statevector_gpu_min_qubits": 14,
+    "mps_gpu_min_qubits": null,
+    "mps_none_interpretation": "automatic MPS should stay on CPU over the measured range"
+  },
+  "maximum_cpu_gpu_expectation_delta": 2.775816370064099e-07,
+  "rows": [
+    {
+      "method": "statevector",
+      "qubits": 4,
+      "cpu_median_ms": 1.178125,
+      "gpu_median_ms": 1.691375,
+      "cpu_over_gpu_speedup": 0.6965486660261622,
+      "cpu_gpu_expectation_delta": 0.0,
+      "mps_truncation_events": null,
+      "mps_local_discarded_weight_sum": null,
+      "mps_tensor_device_for_gpu_arm": null,
+      "mps_svd_device_for_gpu_arm": null
+    },
+    {
+      "method": "statevector",
+      "qubits": 6,
+      "cpu_median_ms": 1.8145,
+      "gpu_median_ms": 2.164917,
+      "cpu_over_gpu_speedup": 0.8381383674293287,
+      "cpu_gpu_expectation_delta": 3.725290298461914e-09,
+      "mps_truncation_events": null,
+      "mps_local_discarded_weight_sum": null,
+      "mps_tensor_device_for_gpu_arm": null,
+      "mps_svd_device_for_gpu_arm": null
+    },
+    {
+      "method": "statevector",
+      "qubits": 8,
+      "cpu_median_ms": 1.524417,
+      "gpu_median_ms": 2.006042,
+      "cpu_over_gpu_speedup": 0.7599128034208655,
+      "cpu_gpu_expectation_delta": 0.0,
+      "mps_truncation_events": null,
+      "mps_local_discarded_weight_sum": null,
+      "mps_tensor_device_for_gpu_arm": null,
+      "mps_svd_device_for_gpu_arm": null
+    },
+    {
+      "method": "statevector",
+      "qubits": 10,
+      "cpu_median_ms": 1.58725,
+      "gpu_median_ms": 2.28425,
+      "cpu_over_gpu_speedup": 0.69486702418737,
+      "cpu_gpu_expectation_delta": 7.450580596923828e-09,
+      "mps_truncation_events": null,
+      "mps_local_discarded_weight_sum": null,
+      "mps_tensor_device_for_gpu_arm": null,
+      "mps_svd_device_for_gpu_arm": null
+    },
+    {
+      "method": "statevector",
+      "qubits": 12,
+      "cpu_median_ms": 2.350959,
+      "gpu_median_ms": 3.309709,
+      "cpu_over_gpu_speedup": 0.7103219648615634,
+      "cpu_gpu_expectation_delta": 1.1175870895385742e-08,
+      "mps_truncation_events": null,
+      "mps_local_discarded_weight_sum": null,
+      "mps_tensor_device_for_gpu_arm": null,
+      "mps_svd_device_for_gpu_arm": null
+    },
+    {
+      "method": "statevector",
+      "qubits": 14,
+      "cpu_median_ms": 4.17575,
+      "gpu_median_ms": 3.138708,
+      "cpu_over_gpu_speedup": 1.3304041025797877,
+      "cpu_gpu_expectation_delta": 7.450580596923828e-09,
+      "mps_truncation_events": null,
+      "mps_local_discarded_weight_sum": null,
+      "mps_tensor_device_for_gpu_arm": null,
+      "mps_svd_device_for_gpu_arm": null
+    },
+    {
+      "method": "statevector",
+      "qubits": 16,
+      "cpu_median_ms": 11.03575,
+      "gpu_median_ms": 4.719333,
+      "cpu_over_gpu_speedup": 2.338413076593663,
+      "cpu_gpu_expectation_delta": 1.30385160446167e-08,
+      "mps_truncation_events": null,
+      "mps_local_discarded_weight_sum": null,
+      "mps_tensor_device_for_gpu_arm": null,
+      "mps_svd_device_for_gpu_arm": null
+    },
+    {
+      "method": "statevector",
+      "qubits": 18,
+      "cpu_median_ms": 49.442292,
+      "gpu_median_ms": 11.9655,
+      "cpu_over_gpu_speedup": 4.132070703271907,
+      "cpu_gpu_expectation_delta": 1.1175870895385742e-08,
+      "mps_truncation_events": null,
+      "mps_local_discarded_weight_sum": null,
+      "mps_tensor_device_for_gpu_arm": null,
+      "mps_svd_device_for_gpu_arm": null
+    },
+    {
+      "method": "statevector",
+      "qubits": 20,
+      "cpu_median_ms": 230.496,
+      "gpu_median_ms": 41.670375,
+      "cpu_over_gpu_speedup": 5.531411704358312,
+      "cpu_gpu_expectation_delta": 7.450580596923828e-09,
+      "mps_truncation_events": null,
+      "mps_local_discarded_weight_sum": null,
+      "mps_tensor_device_for_gpu_arm": null,
+      "mps_svd_device_for_gpu_arm": null
+    },
+    {
+      "method": "matrix_product_state",
+      "qubits": 4,
+      "cpu_median_ms": 1.35825,
+      "gpu_median_ms": 3.5385,
+      "cpu_over_gpu_speedup": 0.38384908859686306,
+      "cpu_gpu_expectation_delta": 2.7536251853700843e-07,
+      "mps_truncation_events": 0,
+      "mps_local_discarded_weight_sum": 0.0,
+      "mps_tensor_device_for_gpu_arm": "gpu",
+      "mps_svd_device_for_gpu_arm": "cpu"
+    },
+    {
+      "method": "matrix_product_state",
+      "qubits": 8,
+      "cpu_median_ms": 2.755125,
+      "gpu_median_ms": 5.947666,
+      "cpu_over_gpu_speedup": 0.46322792840082144,
+      "cpu_gpu_expectation_delta": 2.775816370064099e-07,
+      "mps_truncation_events": 0,
+      "mps_local_discarded_weight_sum": 0.0,
+      "mps_tensor_device_for_gpu_arm": "gpu",
+      "mps_svd_device_for_gpu_arm": "cpu"
+    },
+    {
+      "method": "matrix_product_state",
+      "qubits": 12,
+      "cpu_median_ms": 4.043542,
+      "gpu_median_ms": 9.279583,
+      "cpu_over_gpu_speedup": 0.4357460890214571,
+      "cpu_gpu_expectation_delta": 2.775816370062282e-07,
+      "mps_truncation_events": 0,
+      "mps_local_discarded_weight_sum": 0.0,
+      "mps_tensor_device_for_gpu_arm": "gpu",
+      "mps_svd_device_for_gpu_arm": "cpu"
+    },
+    {
+      "method": "matrix_product_state",
+      "qubits": 16,
+      "cpu_median_ms": 5.433083,
+      "gpu_median_ms": 12.654167,
+      "cpu_over_gpu_speedup": 0.4293512959011842,
+      "cpu_gpu_expectation_delta": 2.77581637006228e-07,
+      "mps_truncation_events": 0,
+      "mps_local_discarded_weight_sum": 0.0,
+      "mps_tensor_device_for_gpu_arm": "gpu",
+      "mps_svd_device_for_gpu_arm": "cpu"
+    },
+    {
+      "method": "matrix_product_state",
+      "qubits": 20,
+      "cpu_median_ms": 6.778333,
+      "gpu_median_ms": 17.168625,
+      "cpu_over_gpu_speedup": 0.3948093105883552,
+      "cpu_gpu_expectation_delta": 2.7758163700622795e-07,
+      "mps_truncation_events": 0,
+      "mps_local_discarded_weight_sum": 0.0,
+      "mps_tensor_device_for_gpu_arm": "gpu",
+      "mps_svd_device_for_gpu_arm": "cpu"
+    },
+    {
+      "method": "matrix_product_state",
+      "qubits": 24,
+      "cpu_median_ms": 8.091958,
+      "gpu_median_ms": 20.956291,
+      "cpu_over_gpu_speedup": 0.3861350274244617,
+      "cpu_gpu_expectation_delta": 2.775816370062279e-07,
+      "mps_truncation_events": 0,
+      "mps_local_discarded_weight_sum": 0.0,
+      "mps_tensor_device_for_gpu_arm": "gpu",
+      "mps_svd_device_for_gpu_arm": "cpu"
+    },
+    {
+      "method": "matrix_product_state",
+      "qubits": 28,
+      "cpu_median_ms": 9.288292,
+      "gpu_median_ms": 25.290416,
+      "cpu_over_gpu_speedup": 0.36726529132616875,
+      "cpu_gpu_expectation_delta": 2.775816370062279e-07,
+      "mps_truncation_events": 0,
+      "mps_local_discarded_weight_sum": 0.0,
+      "mps_tensor_device_for_gpu_arm": "gpu",
+      "mps_svd_device_for_gpu_arm": "cpu"
+    },
+    {
+      "method": "matrix_product_state",
+      "qubits": 32,
+      "cpu_median_ms": 10.685459,
+      "gpu_median_ms": 28.40775,
+      "cpu_over_gpu_speedup": 0.37614591088699384,
+      "cpu_gpu_expectation_delta": 2.775816370062282e-07,
+      "mps_truncation_events": 0,
+      "mps_local_discarded_weight_sum": 0.0,
+      "mps_tensor_device_for_gpu_arm": "gpu",
+      "mps_svd_device_for_gpu_arm": "cpu"
+    }
+  ]
+}

@@ -243,13 +243,17 @@ def main() -> int:
     with (args.outdir / "sdk_method_matrix_raw.csv").open(
         "w", newline=""
     ) as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(raw_rows[0]))
+        writer = csv.DictWriter(
+            handle, fieldnames=list(raw_rows[0]), lineterminator="\n"
+        )
         writer.writeheader()
         writer.writerows(raw_rows)
     with (args.outdir / "sdk_method_matrix_summary.csv").open(
         "w", newline=""
     ) as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(summary_rows[0]))
+        writer = csv.DictWriter(
+            handle, fieldnames=list(summary_rows[0]), lineterminator="\n"
+        )
         writer.writeheader()
         writer.writerows(summary_rows)
 
