@@ -5,14 +5,18 @@ import mlx.core as mx
 import pytest
 
 from mlxq.device import Device
+from mlxq.sim import StateVectorSimulator
 import mlxq.execution as execution
 from mlxq.execution import (
     METAL_CHECKPOINT_BUDGET_ENV,
+    STATEVECTOR_UNSAFE_OVERRIDE_ENV,
+    StatevectorMemoryError,
     clear_metal_capability_cache,
     metal_checkpoint_policy,
     metal_runtime_enabled,
     metal_runtime_status,
     state_memory_estimate,
+    statevector_preflight,
 )
 
 
@@ -59,6 +63,80 @@ def test_capability_report_exposes_index_and_memory_limits(monkeypatch):
     memory = state_memory_estimate(10)
     assert memory["state_bytes"] == 8 * (1 << 10)
     assert memory["minimum_input_plus_output_bytes"] == 16 * (1 << 10)
+
+
+def _set_memory_limits(monkeypatch, *, max_buffer, working_set):
+    monkeypatch.setattr(
+        execution,
+        "_device_info",
+        lambda: {
+            "device_name": "Constrained test GPU",
+            "architecture": "test",
+            "max_buffer_length": max_buffer,
+            "max_recommended_working_set_size": working_set,
+        },
+    )
+    clear_metal_capability_cache()
+
+
+def test_statevector_preflight_refuses_before_array_allocation(monkeypatch):
+    # A 10-qubit complex64 state is 8192 bytes; an out-of-place operation has
+    # a 16384-byte lower bound. Both synthetic limits reject it.
+    _set_memory_limits(monkeypatch, max_buffer=4096, working_set=12000)
+    report = statevector_preflight(10)
+    assert not report["allowed"]
+    assert report["decision"] == "refused"
+    assert report["failure_reasons"] == [
+        "single_state_exceeds_max_buffer_length",
+        "two_state_lower_bound_exceeds_recommended_working_set",
+    ]
+    assert report["cost_model"]["state_bytes"] == 8192
+    assert report["cost_model"]["minimum_input_plus_output_bytes"] == 16384
+
+    with pytest.raises(StatevectorMemoryError) as caught:
+        StateVectorSimulator(10)
+    assert caught.value.report == report
+    assert "before allocation" in str(caught.value)
+    assert STATEVECTOR_UNSAFE_OVERRIDE_ENV in str(caught.value)
+
+
+def test_statevector_preflight_override_is_explicit_and_observable(monkeypatch):
+    _set_memory_limits(monkeypatch, max_buffer=4096, working_set=12000)
+    report = statevector_preflight(10, allow_unsafe=True)
+    assert report["allowed"]
+    assert report["overridden"]
+    assert report["decision"] == "allowed_with_unsafe_override"
+    assert report["override"]["source"] == "constructor_argument"
+    assert report["failure_reasons"]
+
+    simulator = StateVectorSimulator(10, allow_unsafe_statevector=True)
+    assert simulator.preflight["overridden"]
+    assert simulator.state.shape == (1 << 10,)
+
+
+def test_statevector_preflight_environment_fails_closed(monkeypatch):
+    _set_memory_limits(monkeypatch, max_buffer=4096, working_set=12000)
+    monkeypatch.setenv(STATEVECTOR_UNSAFE_OVERRIDE_ENV, "typo")
+    with pytest.raises(ValueError, match=STATEVECTOR_UNSAFE_OVERRIDE_ENV):
+        statevector_preflight(10)
+
+    monkeypatch.setenv(STATEVECTOR_UNSAFE_OVERRIDE_ENV, "1")
+    assert statevector_preflight(10)["overridden"]
+    # An explicit False takes precedence over an enabled environment override.
+    assert not statevector_preflight(10, allow_unsafe=False)["allowed"]
+
+
+def test_statevector_preflight_reports_unverified_missing_limits(monkeypatch):
+    _set_memory_limits(monkeypatch, max_buffer=0, working_set=0)
+    report = statevector_preflight(20)
+    assert report["allowed"]
+    assert report["decision"] == "allowed_with_unverified_device_limits"
+    assert report["checks"] == {
+        "single_state_within_max_buffer_length": None,
+        "two_state_lower_bound_within_recommended_working_set": None,
+    }
+    with pytest.raises(ValueError, match="complex64"):
+        statevector_preflight(4, dtype="complex128")
 
 
 def test_static_capabilities_are_cached_but_policy_remains_dynamic(monkeypatch):
@@ -187,7 +265,7 @@ def test_oversized_fused_layer_streams_between_custom_launches(monkeypatch):
     checkpoints = plan["checkpointing"]["actual_checkpoints"]
     assert plan["matched_structured_patterns"] == {"uniform_rx_layer": 1}
     assert plan["expected_custom_kernel_launches"] == 2
-    assert plan["schema_version"] == 3
+    assert plan["schema_version"] == 4
     assert plan["checkpointing"][
         "max_pending_custom_passes_per_streamed_chunk"
     ] == 1
@@ -303,6 +381,10 @@ def test_disabled_plan_reports_fallback_without_claiming_dispatch(monkeypatch):
     assert plan["fallback_reasons"]
     assert plan["dtype"] == "complex64"
     assert plan["selected_device"]
+    assert plan["statevector_preflight"] == dev.statevector_preflight
+    assert plan["execution_cost_model"]["state_bytes"] == 128
+    assert plan["execution_cost_model"]["predicted_custom_launches"] == 0
+    assert not plan["execution_cost_model"]["pure_mlx_operations_modeled"]
     dev.execute([{"name": "H", "wires": [0]}])
     assert dev.last_execution_plan is None
 

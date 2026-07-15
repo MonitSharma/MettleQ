@@ -37,8 +37,8 @@ listed honestly as planned rather than presented as finished adapters.
 | Simulation backends | Exact statevector (`sv`) and matrix-product state (`mps`) |
 | Circuit inputs | Native Python operation dictionaries and strict unitary OpenQASM 2.0 |
 | Workloads | QFT, phase estimation, Grover, QAOA, VQE, QCBM, QNN, random circuits, and spin dynamics |
-| Trust model | Capability-gated dispatch, explicit execution plans, numerical parity tests, synchronized benchmarks, and safe fallbacks |
-| Current test suite | **302 tests** across the simulator, algorithms, MPS, QASM, Metal dispatch, and QuantumStudio backend |
+| Trust model | Pre-allocation statevector checks, capability-gated dispatch, explicit cost/execution plans, numerical parity tests, synchronized benchmarks, and safe fallbacks |
+| Current test suite | **306 tests** across the simulator, algorithms, MPS, QASM, Metal dispatch, and QuantumStudio backend |
 | Desktop product | QuantumStudio orchestration, monitoring, plotting, and export |
 | SDK adapters | Native Qiskit backend and PennyLane device plugin are planned; `mlxq.qml` is currently an internal PennyLane-like wrapper |
 
@@ -108,6 +108,28 @@ PY
 that the platform, GPU device, dtype, backend, indexing, and memory constraints
 are compatible. The unset default remains off; unsupported configurations fall
 back safely.
+
+Every exact statevector now receives a memory preflight before MLX constructs
+the array. It reports the state size, the minimum two-state out-of-place cost,
+the device's maximum buffer and recommended working-set limits, and the
+remaining lower-bound headroom:
+
+```python
+from mlxq import statevector_preflight
+
+report = statevector_preflight(27)
+print(report["decision"])
+print(report["cost_model"])
+```
+
+`StateVectorSimulator` and the `sv` `Device` enforce the same decision before
+allocation. A pass means the reported lower bounds do not already rule the
+request out; it is not a promise that an arbitrary lazy circuit graph will
+fit. If a lower bound exceeds a device limit, Qupertino raises
+`StatevectorMemoryError` with the computed sizes and suggests the MPS backend
+or fewer qubits. The last-resort `MLXQ_ALLOW_UNSAFE_STATEVECTOR=1` override (or
+`Device(..., allow_unsafe_statevector=True)`) is explicit, defaults off, and is
+recorded in the preflight and execution plan.
 
 Long lazy Metal graphs can optionally be evaluated at safe custom-launch and
 fused-layer boundaries. Multi-launch single-qubit and XX/YY layers stream in
@@ -547,6 +569,15 @@ PYTHONPATH=src .venv/bin/python tools/plot_checkpoint_sweep.py \
   --summary bench/runs/checkpoint_sweep_n25/checkpoint_sweep_summary.csv \
   --output bench/runs/checkpoint_sweep_n25/checkpoint_tradeoff.png \
   --title "25-qubit TFIM: intra-layer Metal streaming"
+
+PYTHONPATH=src caffeinate -i .venv/bin/python \
+  tools/memory_policy_campaign.py \
+  --outdir bench/runs/memory_policy_current \
+  --qubits 22 23 24 25 26 27 --repeats 3 --warmups 1
+
+PYTHONPATH=src .venv/bin/python tools/plot_memory_policy_campaign.py \
+  --summary bench/runs/memory_policy_current/memory_policy_summary.csv \
+  --output bench/runs/memory_policy_current/memory_policy.png
 ```
 
 Transient runs belong under `bench/runs/`. Promote only reviewed evidence to

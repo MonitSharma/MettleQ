@@ -1,5 +1,63 @@
 # Apple GPU engineering log
 
+## 2026-07-15 — Step 4: statevector preflight and cross-workload policy
+
+### Pre-allocation trust boundary
+
+The exact statevector path now computes its complex64 allocation lower bound
+before constructing an MLX array. The shared report compares one state against
+the device's maximum buffer length and the minimum input-plus-output pair
+against the recommended working set. If either reported limit is already too
+small, direct simulator and `Device` construction raise
+`StatevectorMemoryError` before allocation. Missing limits produce an explicit
+unverified decision instead of an invented guarantee.
+
+The check is deliberately one-sided: passing proves only that the reported
+lower bounds fit. Additional lazy intermediates, lookup buffers, allocator
+cache, and other processes are listed as unmodeled costs. A false-like default
+keeps the unsafe override disabled. `MLXQ_ALLOW_UNSAFE_STATEVECTOR=1` or the
+boolean constructor argument can bypass a refusal, but the failure reasons,
+override source, and original device limits remain observable.
+
+State initialization no longer creates a Python list with `2**n` boxed complex
+objects. It constructs the zero state on the selected MLX device, avoiding a
+large unreported host allocation before simulation begins. Execution-plan
+schema version 4 embeds the allocation preflight separately from the selected
+custom-launch traffic estimate, which is explicitly not described as an
+allocator peak.
+
+### Cross-workload decision protocol
+
+`tools/memory_policy_campaign.py` evaluates TFIM, QFT, QAOA, QCBM,
+Heisenberg, and SU(2) circuits from 22 through 27 qubits. Fully lazy execution
+is compared with two prospective state-size-aware policies:
+
+- balanced: `max(256 MiB, 4 * state bytes)`;
+- minimum-memory: `max(128 MiB, 2 * state bytes)`.
+
+Every workload/qubit cell runs in a fresh Python and MLX process so allocator
+and compiler state from a previous size cannot create a false peak floor.
+Policy order rotates across repeats, qubit counts, and workloads. Every row
+captures synchronized time, allocator peak, predicted and observed checkpoint
+counts, predicted launch traffic, and the preflight decision. Full-state
+validation uses pure MLX through 24 qubits and the identical fully lazy Metal
+kernels above 24 qubits, with both maximum amplitude and norm error reported.
+This larger-size comparison isolates checkpoint scheduling correctness; it is
+not represented as an independent validation of the Metal kernel algebra.
+
+```bash
+PYTHONPATH=src caffeinate -i .venv/bin/python \
+  tools/memory_policy_campaign.py \
+  --outdir bench/runs/memory_policy_current \
+  --qubits 22 23 24 25 26 27 --repeats 3 --warmups 1
+```
+
+The repository will keep checkpointing opt-in unless the campaign shows
+numerical parity, exact planner/runtime schedule agreement, a meaningful peak
+reduction, and no material cross-workload runtime regressions. Evidence from
+one M3 Pro can qualify a policy for further device testing, but cannot by
+itself justify a universal Apple-Silicon default.
+
 ## 2026-07-15 — Step 3: intra-layer Metal streaming
 
 ### Measured cause and implementation

@@ -24,9 +24,18 @@ METAL_INDEX_BITS = 32
 # n_state itself is passed as uint32, so 2**32 cannot be represented.
 METAL_INDEX_QUBIT_LIMIT = 31
 METAL_CHECKPOINT_BUDGET_ENV = "MLXQ_METAL_CHECKPOINT_BUDGET_MB"
+STATEVECTOR_UNSAFE_OVERRIDE_ENV = "MLXQ_ALLOW_UNSAFE_STATEVECTOR"
 
 _TRUE_VALUES = {"1", "true", "on", "yes", "enabled"}
 _FALSE_VALUES = {"0", "false", "off", "no", "disabled", ""}
+
+
+class StatevectorMemoryError(MemoryError):
+    """Raised before allocation when reported device limits are insufficient."""
+
+    def __init__(self, message: str, report: Dict[str, Any]):
+        super().__init__(message)
+        self.report = report
 
 
 def _package_version(name: str) -> str:
@@ -197,6 +206,190 @@ def state_memory_estimate(n_qubits: int, dtype: str = STATE_DTYPE) -> Dict[str, 
             "state; lazy graphs and lookup tables can add intermediates"
         ),
     }
+
+
+def statevector_unsafe_override_policy(
+    allow_unsafe: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """Resolve the deliberate escape hatch for statevector preflight refusals.
+
+    An explicit constructor argument takes precedence over the environment.
+    Invalid environment values fail closed so a typo cannot silently permit a
+    statevector allocation that the device limits reject.
+    """
+    raw = os.environ.get(STATEVECTOR_UNSAFE_OVERRIDE_ENV)
+    if allow_unsafe is not None:
+        if not isinstance(allow_unsafe, bool):
+            raise TypeError("allow_unsafe_statevector must be a boolean or None")
+        return {
+            "enabled": allow_unsafe,
+            "source": "constructor_argument",
+            "environment_variable": STATEVECTOR_UNSAFE_OVERRIDE_ENV,
+            "environment_value": raw,
+        }
+
+    normalized = "" if raw is None else raw.strip().lower()
+    if raw is None:
+        return {
+            "enabled": False,
+            "source": "default_disabled",
+            "environment_variable": STATEVECTOR_UNSAFE_OVERRIDE_ENV,
+            "environment_value": None,
+        }
+    if normalized in _TRUE_VALUES:
+        enabled = True
+    elif normalized in _FALSE_VALUES:
+        enabled = False
+    else:
+        raise ValueError(
+            f"{STATEVECTOR_UNSAFE_OVERRIDE_ENV} must be a boolean value"
+        )
+    return {
+        "enabled": enabled,
+        "source": "environment",
+        "environment_variable": STATEVECTOR_UNSAFE_OVERRIDE_ENV,
+        "environment_value": raw,
+    }
+
+
+def statevector_preflight(
+    n_qubits: int,
+    *,
+    dtype: str = STATE_DTYPE,
+    allow_unsafe: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """Estimate a statevector allocation before constructing the MLX array.
+
+    The check is intentionally one-sided. It refuses allocations whose single
+    state buffer or two-state out-of-place lower bound already exceeds a
+    reported device limit. Passing means only that those lower bounds fit; MLX
+    lazy graphs, lookup tables, caches, and other processes can consume more.
+    """
+    n = int(n_qubits)
+    if n < 0:
+        raise ValueError("n_qubits must be non-negative")
+    if dtype != STATE_DTYPE:
+        raise ValueError(
+            f"statevector preflight currently supports only {STATE_DTYPE}"
+        )
+    memory = state_memory_estimate(n, dtype=dtype)
+    override = statevector_unsafe_override_policy(allow_unsafe)
+    static = _static_metal_capabilities()
+    max_buffer = static.get("max_buffer_length")
+    working_set = static.get("max_recommended_working_set_size")
+    state_bytes = memory.get("state_bytes")
+    minimum_peak = memory.get("minimum_input_plus_output_bytes")
+
+    buffer_check = (
+        state_bytes <= max_buffer
+        if state_bytes is not None and max_buffer is not None else None
+    )
+    working_set_check = (
+        minimum_peak <= working_set
+        if minimum_peak is not None and working_set is not None else None
+    )
+    failures: List[str] = []
+    if buffer_check is False:
+        failures.append("single_state_exceeds_max_buffer_length")
+    if working_set_check is False:
+        failures.append("two_state_lower_bound_exceeds_recommended_working_set")
+
+    refused_without_override = bool(failures)
+    overridden = refused_without_override and bool(override["enabled"])
+    allowed = not refused_without_override or overridden
+    limits_available = buffer_check is not None and working_set_check is not None
+    if overridden:
+        decision = "allowed_with_unsafe_override"
+        reason = (
+            "reported device limits reject the allocation, but the explicit "
+            "unsafe override permits it"
+        )
+    elif refused_without_override:
+        decision = "refused"
+        reason = "reported device limits are below the statevector lower bound"
+    elif limits_available:
+        decision = "allowed_within_reported_lower_bounds"
+        reason = "statevector lower bounds fit within the reported device limits"
+    else:
+        decision = "allowed_with_unverified_device_limits"
+        reason = "one or more device memory limits are unavailable"
+
+    headroom = (
+        working_set - minimum_peak
+        if working_set is not None and minimum_peak is not None else None
+    )
+    return {
+        "schema_version": 1,
+        "allowed": allowed,
+        "decision": decision,
+        "reason": reason,
+        "overridden": overridden,
+        "override": override,
+        "failure_reasons": failures,
+        "qubits": n,
+        "dtype": dtype,
+        "device": {
+            "name": static.get("device_name"),
+            "architecture": static.get("device_architecture"),
+            "max_buffer_length": max_buffer,
+            "max_recommended_working_set_size": working_set,
+        },
+        "checks": {
+            "single_state_within_max_buffer_length": buffer_check,
+            "two_state_lower_bound_within_recommended_working_set": (
+                working_set_check
+            ),
+        },
+        "cost_model": {
+            **memory,
+            "recommended_working_set_headroom_bytes": headroom,
+            "scope": "allocation preflight lower bound",
+            "not_included": [
+                "additional lazy-graph intermediates",
+                "lookup and index buffers",
+                "allocator cache",
+                "memory used by other processes",
+            ],
+        },
+        "passing_guarantee": (
+            "Passing does not guarantee that an arbitrary circuit fits; it "
+            "only establishes that the reported single-buffer and two-state "
+            "lower bounds do not already rule it out."
+        ),
+    }
+
+
+def require_statevector_preflight(
+    n_qubits: int,
+    *,
+    dtype: str = STATE_DTYPE,
+    allow_unsafe: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """Return the preflight report or raise before statevector allocation."""
+    report = statevector_preflight(
+        n_qubits, dtype=dtype, allow_unsafe=allow_unsafe
+    )
+    if report["allowed"]:
+        return report
+    cost = report["cost_model"]
+    device = report["device"]
+    gib = 1024.0 ** 3
+    state_gib = float(cost["state_bytes"]) / gib
+    lower_gib = float(cost["minimum_input_plus_output_bytes"]) / gib
+    def _limit_text(value: Optional[int]) -> str:
+        return f"{float(value) / gib:.2f} GiB" if value is not None else "unknown"
+
+    message = (
+        f"Refusing {n_qubits}-qubit {dtype} statevector before allocation: "
+        f"one state is {state_gib:.2f} GiB and the out-of-place lower bound "
+        f"is {lower_gib:.2f} GiB; device max buffer is "
+        f"{_limit_text(device['max_buffer_length'])} and recommended working "
+        f"set is {_limit_text(device['max_recommended_working_set_size'])}. "
+        "Use the MPS backend, reduce qubits, or set "
+        f"{STATEVECTOR_UNSAFE_OVERRIDE_ENV}=1 to deliberately bypass this "
+        "preflight."
+    )
+    raise StatevectorMemoryError(message, report)
 
 
 def metal_checkpoint_policy(
@@ -527,6 +720,7 @@ def build_execution_plan(
     operations: List[Dict[str, Any]],
     optimized_operations: List[Dict[str, Any]],
     checkpoint_policy_data: Optional[Dict[str, Any]] = None,
+    statevector_preflight_data: Optional[Dict[str, Any]] = None,
     initial_pending_custom_passes: int = 0,
     initial_pending_custom_io_bytes: int = 0,
 ) -> Dict[str, Any]:
@@ -653,8 +847,24 @@ def build_execution_plan(
             + status["reason"]
         )
 
+    predicted_custom_io_bytes = sum(
+        int(item.get("estimated_input_output_bytes") or 0)
+        for item in selected
+    )
+
+    if backend == "sv":
+        preflight = dict(
+            statevector_preflight_data or statevector_preflight(n_qubits)
+        )
+    else:
+        preflight = {
+            "schema_version": 1,
+            "applicable": False,
+            "reason": "statevector allocation preflight does not apply to MPS",
+        }
+
     return {
-        "schema_version": 3,
+        "schema_version": 4,
         "backend": backend,
         "selected_device": status["mlx"]["default_device"],
         "dtype": STATE_DTYPE,
@@ -691,6 +901,21 @@ def build_execution_plan(
         },
         "capabilities": status,
         "memory": memory,
+        "statevector_preflight": preflight,
+        "execution_cost_model": {
+            "scope": "selected custom Metal launches",
+            "state_bytes": state_bytes,
+            "out_of_place_bytes_per_custom_launch": pass_io_bytes,
+            "predicted_custom_launches": sum(
+                item["expected_metal_launches"] for item in selected
+            ),
+            "predicted_custom_input_output_bytes": predicted_custom_io_bytes,
+            "pure_mlx_operations_modeled": False,
+            "note": (
+                "Traffic is a deterministic launch-accounting estimate, not "
+                "an allocator peak or a memory-bandwidth measurement."
+            ),
+        },
         "checkpointing": {
             **policy,
             "enabled": checkpoint_enabled,

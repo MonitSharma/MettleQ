@@ -34,7 +34,12 @@ if _HAS_MLX:
         )
         from .sim import StateVectorSimulator, qft, iqft
         from .device import Device
-        from .execution import metal_runtime_status, state_memory_estimate
+        from .execution import (
+            StatevectorMemoryError,
+            metal_runtime_status,
+            state_memory_estimate,
+            statevector_preflight,
+        )
         from .observables import is_hermitian, commutator
 
         __all__ += [
@@ -44,6 +49,7 @@ if _HAS_MLX:
             "Toffoli", "Fredkin", "CH", "MultiControlledX", "MultiControlledZ",
             "StateVectorSimulator", "qft", "iqft", "Device",
             "metal_runtime_status", "state_memory_estimate",
+            "statevector_preflight", "StatevectorMemoryError",
             "is_hermitian", "commutator",
         ]
     except Exception:

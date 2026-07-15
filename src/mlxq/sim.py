@@ -4,6 +4,7 @@ from typing import Iterable, List, Optional
 import mlx.core as mx
 
 from .gates import H, X, Z, CNOT, CZ, CPHASE
+from .execution import require_statevector_preflight
 
 
 def canonical_axis_index(qubit: int, total: int) -> int:
@@ -14,17 +15,34 @@ def canonical_axis_index(qubit: int, total: int) -> int:
 
 
 class StateVectorSimulator:
-    def __init__(self, n_qubits: int):
+    def __init__(
+        self,
+        n_qubits: int,
+        *,
+        allow_unsafe_statevector: Optional[bool] = None,
+    ):
         self.n = int(n_qubits)
         if self.n <= 0:
             raise ValueError("n_qubits must be positive")
+        self.preflight = require_statevector_preflight(
+            self.n, allow_unsafe=allow_unsafe_statevector
+        )
         self.reset()
 
     def reset(self):
         dim = 1 << self.n
-        data = [0j] * dim
-        data[0] = 1+0j
-        self.state = mx.array(data, mx.complex64)
+        # Keep initialization on the selected MLX device. The former Python
+        # list allocated 2**n boxed complex objects on the host before MLX saw
+        # the state and could multiply peak memory well beyond the cost model.
+        self.state = mx.concatenate([
+            mx.ones((1,), dtype=mx.complex64),
+            mx.zeros((dim - 1,), dtype=mx.complex64),
+        ])
+        # Do not let this construction expression become the root of the
+        # circuit's lazy graph: retaining its zero tail and concatenate output
+        # measurably inflates later peaks. Materializing here matches reset's
+        # semantic boundary while still avoiding Python-host state storage.
+        mx.eval(self.state)
 
     def apply_dense_gate(self, gate: mx.array, qubits: Iterable[int]):
         qs = list(qubits)

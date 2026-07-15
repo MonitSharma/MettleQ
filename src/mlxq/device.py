@@ -69,6 +69,7 @@ class Device:
         mps_opts: Optional[MPSOptions] = None,
         *,
         metal_checkpoint_budget_bytes: Optional[int] = None,
+        allow_unsafe_statevector: Optional[bool] = None,
     ):
         self.wires = int(wires)
         self.shots = int(shots)
@@ -90,7 +91,11 @@ class Device:
             self.sim = MPSState(self.wires, mps_opts)
         else:
             self.backend = 'sv'
-            self.sim = StateVectorSimulator(self.wires)
+            self.sim = StateVectorSimulator(
+                self.wires,
+                allow_unsafe_statevector=allow_unsafe_statevector,
+            )
+        self.statevector_preflight = getattr(self.sim, "preflight", None)
         if metal_checkpoint_budget_bytes is not None:
             metal_checkpoint_policy(metal_checkpoint_budget_bytes)
         self._metal_checkpoint_budget_bytes = metal_checkpoint_budget_bytes
@@ -135,6 +140,7 @@ class Device:
                 operations=list(operations),
                 optimized_operations=optimized_operations,
                 checkpoint_policy_data=checkpoint_policy_data,
+                statevector_preflight_data=self.statevector_preflight,
                 initial_pending_custom_passes=self._pending_custom_passes,
                 initial_pending_custom_io_bytes=self._pending_custom_io_bytes,
             )
@@ -415,6 +421,7 @@ class Device:
             operations=list(operations),
             optimized_operations=optimized_operations,
             checkpoint_policy_data=checkpoint_policy_data,
+            statevector_preflight_data=self.statevector_preflight,
             initial_pending_custom_passes=self._pending_custom_passes,
             initial_pending_custom_io_bytes=self._pending_custom_io_bytes,
         )
