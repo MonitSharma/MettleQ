@@ -164,6 +164,10 @@ class Device:
             ] or 0)
             if checkpoint_enabled else 0
         )
+        max_pending_passes = (
+            max(1, checkpoint_budget // checkpoint_bytes_per_pass)
+            if checkpoint_enabled and checkpoint_bytes_per_pass > 0 else None
+        )
 
         for optimized_index, op in enumerate(optimized_operations):
             dispatch = None
@@ -189,19 +193,53 @@ class Device:
                     adjacent_dispatch=dispatch,
                 )
 
+            streamed_layer_passes = 0
+            observed_layer_passes = 0
+            pending_stream_chunk_passes = 0
+            launch_observer = None
+            if (checkpoint_enabled and dispatch is not None
+                    and dispatch.get("supports_intra_layer_streaming", False)
+                    and max_pending_passes is not None
+                    and layer_passes > max_pending_passes):
+                def _observe_launch(state):
+                    nonlocal streamed_layer_passes
+                    nonlocal observed_layer_passes
+                    nonlocal pending_stream_chunk_passes
+                    observed_layer_passes += 1
+                    pending_stream_chunk_passes += 1
+                    if (pending_stream_chunk_passes >= max_pending_passes
+                            and observed_layer_passes < layer_passes):
+                        chunk_passes = pending_stream_chunk_passes
+                        self._evaluate_streamed_custom_chunk(
+                            state,
+                            optimized_operation_index=optimized_index,
+                            dispatch=dispatch,
+                            passes=chunk_passes,
+                            io_bytes=(
+                                chunk_passes * checkpoint_bytes_per_pass
+                            ),
+                            within_layer_launch_index=observed_layer_passes,
+                        )
+                        streamed_layer_passes += chunk_passes
+                        pending_stream_chunk_passes = 0
+
+                launch_observer = _observe_launch
+
             op_name = op.get("name")
             if op_name == "_ZZLAYER":
                 self.sim.apply_zz_layer(op["theta"], op["bonds"])
             elif op_name == "_RXLAYER":
                 from . import shaders as metal_kernels
                 self.sim.state = metal_kernels.rx_layer_all(
-                    self.sim.state, self.sim.n, op["theta"])
+                    self.sim.state, self.sim.n, op["theta"],
+                    on_launch=launch_observer)
             elif op_name == "_U2LAYER":
                 from . import shaders as metal_kernels
                 gate = self._dense_gate_for(op["gate"], op["params"])
                 u = mx.reshape(gate.astype(mx.complex64), (4,))
                 self.sim.state = metal_kernels.u2_layer_all(
-                    self.sim.state, self.sim.n, u)
+                    self.sim.state, self.sim.n, u,
+                    on_launch=launch_observer)
             elif op_name == "_DIAGLAYER":
                 from . import shaders as metal_kernels
                 self.sim.state = metal_kernels.diag_pair_layer(
@@ -224,7 +262,8 @@ class Device:
                 fn = (metal_kernels.xx_layer if op_name == "_XXLAYER"
                       else metal_kernels.yy_layer)
                 self.sim.state = fn(self.sim.state, op["theta"],
-                                    self.sim.n, op["bonds"])
+                                    self.sim.n, op["bonds"],
+                                    on_launch=launch_observer)
             elif op_name == "_XORLAYER":
                 from . import shaders as metal_kernels
                 self.sim.state = metal_kernels.xor_affine_gather(
@@ -233,7 +272,7 @@ class Device:
                 from . import shaders as metal_kernels
                 self.sim.state = metal_kernels.u2_list_layer_all(
                     self.sim.state, self.sim.n, op["mats"],
-                    active=op.get("active"))
+                    active=op.get("active"), on_launch=launch_observer)
             else:
                 name = str(op_name or "").upper()
                 wires = list(op.get("wires", []))
@@ -241,13 +280,31 @@ class Device:
                 self._apply(name, wires, params)
 
             if checkpoint_enabled and dispatch is not None:
-                self._pending_custom_passes += layer_passes
-                self._pending_custom_io_bytes += layer_io_bytes
-                if layer_io_bytes > checkpoint_budget:
+                if (launch_observer is not None
+                        and observed_layer_passes != layer_passes):
+                    raise RuntimeError(
+                        "intra-layer Metal launch accounting mismatch: "
+                        f"expected {layer_passes}, observed "
+                        f"{observed_layer_passes}"
+                    )
+                remaining_layer_passes = (
+                    layer_passes - streamed_layer_passes
+                )
+                self._pending_custom_passes += remaining_layer_passes
+                self._pending_custom_io_bytes += (
+                    remaining_layer_passes * checkpoint_bytes_per_pass
+                )
+                if self._pending_custom_io_bytes > checkpoint_budget:
+                    reason = (
+                        "single_custom_launch_exceeds_budget"
+                        if (remaining_layer_passes == 1
+                            and checkpoint_bytes_per_pass > checkpoint_budget)
+                        else "single_fused_layer_exceeds_budget"
+                    )
                     self._evaluate_pending_custom_graph(
                         boundary="after_optimized_operation",
                         optimized_operation_index=optimized_index,
-                        reason="single_fused_layer_exceeds_budget",
+                        reason=reason,
                         adjacent_dispatch=dispatch,
                     )
         if self.last_execution_plan is not None:
@@ -259,6 +316,47 @@ class Device:
         # Return state vector only for SV; MPS has no .state
         return getattr(self.sim, 'state', None)
 
+    def _evaluate_streamed_custom_chunk(
+        self,
+        state,
+        *,
+        optimized_operation_index: int,
+        dispatch: Dict[str, Any],
+        passes: int,
+        io_bytes: int,
+        within_layer_launch_index: int,
+    ) -> None:
+        """Evaluate a safe chunk between launches of one fused layer."""
+        if passes <= 0:
+            return
+        if self.last_execution_plan is None:
+            mx.eval(state)
+            return
+        memory_before = metal_memory_snapshot()
+        start = _time.perf_counter_ns()
+        mx.eval(state)
+        elapsed_ms = (_time.perf_counter_ns() - start) / 1e6
+        memory_after = metal_memory_snapshot()
+        event = {
+            "boundary": "within_optimized_operation",
+            "optimized_operation_index": optimized_operation_index,
+            "within_layer_launch_index": within_layer_launch_index,
+            "within_layer_launch_count": int(
+                dispatch["expected_metal_launches"]
+            ),
+            "reason": "multi_launch_layer_streaming_budget",
+            "adjacent_kernel_family": dispatch.get("kernel_family"),
+            "adjacent_expected_metal_launches": int(
+                dispatch["expected_metal_launches"]
+            ),
+            "estimated_passes_evaluated": passes,
+            "estimated_input_output_bytes_evaluated": io_bytes,
+            "evaluation_ms": elapsed_ms,
+            "metal_memory_before": memory_before,
+            "metal_memory_after": memory_after,
+        }
+        record_evaluation_checkpoint(self.last_execution_plan, event)
+
     def _evaluate_pending_custom_graph(
         self,
         *,
@@ -267,7 +365,7 @@ class Device:
         reason: str,
         adjacent_dispatch: Optional[Dict[str, Any]],
     ) -> None:
-        """Synchronize a pending graph at a fused-operation boundary."""
+        """Synchronize a pending graph at an optimized-operation boundary."""
         state = getattr(self.sim, "state", None)
         if state is None or self._pending_custom_passes <= 0:
             return

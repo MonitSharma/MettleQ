@@ -81,6 +81,11 @@ def _run_once(
 
     plan = dev.last_execution_plan
     checkpointing = plan["checkpointing"]
+    checkpoint_events = checkpointing["actual_checkpoints"]
+    intra_layer_events = [
+        event for event in checkpoint_events
+        if event["boundary"] == "within_optimized_operation"
+    ]
     memory = metal_memory_snapshot()
     result = {
         "graph_build_ms": (graph_built - start) / 1e6,
@@ -91,9 +96,17 @@ def _run_once(
         "cache_bytes": memory["cache_bytes"],
         "predicted_checkpoints": checkpointing["predicted_checkpoint_count"],
         "observed_checkpoints": checkpointing["actual_checkpoint_count"],
+        "intra_layer_checkpoints": len(intra_layer_events),
+        "inter_layer_checkpoints": (
+            len(checkpoint_events) - len(intra_layer_events)
+        ),
+        "streamed_custom_passes": sum(
+            int(event["estimated_passes_evaluated"])
+            for event in intra_layer_events
+        ),
         "checkpoint_evaluation_ms": sum(
             event["evaluation_ms"]
-            for event in checkpointing["actual_checkpoints"]
+            for event in checkpoint_events
         ),
         "pending_passes_before_final_synchronize": checkpointing[
             "pending_custom_passes_after_graph_build"
@@ -225,6 +238,15 @@ def main() -> int:
             ),
             "predicted_checkpoints_median": statistics.median(
                 int(row["predicted_checkpoints"]) for row in selected
+            ),
+            "intra_layer_checkpoints_median": statistics.median(
+                int(row["intra_layer_checkpoints"]) for row in selected
+            ),
+            "inter_layer_checkpoints_median": statistics.median(
+                int(row["inter_layer_checkpoints"]) for row in selected
+            ),
+            "streamed_custom_passes_median": statistics.median(
+                int(row["streamed_custom_passes"]) for row in selected
             ),
             "checkpoint_evaluation_ms_median": statistics.median(
                 float(row["checkpoint_evaluation_ms"]) for row in selected

@@ -54,6 +54,10 @@ a hard allocator ceiling.
 - Device detector: any maximal window of consecutive 1q ops where every wire
   sees the identical gate sequence fuses into a stack of layers (ops on
   distinct wires commute) — catches interleaved patterns (Grover H,X pairs).
+- With an opt-in Metal checkpoint budget, the device can evaluate between the
+  pair/single launches inside this logical layer. The shaders expose launch
+  boundaries through an observer; the default observer is absent, so fully
+  lazy execution remains unchanged. No custom kernel launch is split.
 - Codex: RX pair-kernel body from round-2 review, verified then adopted.
 
 ### diag.py — fused CZ/CPHASE diagonal layer (`diag_pair_layer`) [S1]
@@ -90,6 +94,8 @@ a hard allocator ceiling.
   float32 products + numpy default rtol silently dropped RZ(1e-6)-scale
   gates. Fixed (complex128 + rtol=0); regression test added. Confirmed
   product order, tensor order, and no detector double-consume.
+- Per-qubit pair launches participate in the same opt-in intra-layer streaming
+  policy as uniform U2/RX layers.
 
 ### diag.py — weighted diagonal layer (`diag_weighted_layer`) [S4]
 - CPHASE runs with per-bond angles (QPE controlled-power ladder base·2^p,
@@ -111,6 +117,8 @@ a hard allocator ceiling.
   ladder_heisenberg stays 1.0×: its XX,YY,ZZ per-bond interleave has no
   same-family runs, and cross-family reordering would change the Trotterized
   operator — refused for correctness.
+- H, ZZ, and S/S† sub-launches expose the same safe streaming boundaries when
+  the configured checkpoint budget requires them.
 - Codex round 3: CORRECT (V Z V†=Y verified numerically); Walsh radix-4 was
   codex's top perf suggestion, adopted and confirmed.
 

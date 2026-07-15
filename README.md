@@ -38,7 +38,7 @@ listed honestly as planned rather than presented as finished adapters.
 | Circuit inputs | Native Python operation dictionaries and strict unitary OpenQASM 2.0 |
 | Workloads | QFT, phase estimation, Grover, QAOA, VQE, QCBM, QNN, random circuits, and spin dynamics |
 | Trust model | Capability-gated dispatch, explicit execution plans, numerical parity tests, synchronized benchmarks, and safe fallbacks |
-| Current test suite | **298 tests** across the simulator, algorithms, MPS, QASM, Metal dispatch, and QuantumStudio backend |
+| Current test suite | **302 tests** across the simulator, algorithms, MPS, QASM, Metal dispatch, and QuantumStudio backend |
 | Desktop product | QuantumStudio orchestration, monitoring, plotting, and export |
 | SDK adapters | Native Qiskit backend and PennyLane device plugin are planned; `mlxq.qml` is currently an internal PennyLane-like wrapper |
 
@@ -108,9 +108,11 @@ that the platform, GPU device, dtype, backend, indexing, and memory constraints
 are compatible. The unset default remains off; unsupported configurations fall
 back safely.
 
-Long lazy Metal graphs can optionally be evaluated at safe fused-layer
-boundaries. The budget is an input/output traffic estimate used to choose
-checkpoint locations, not a promise that allocator peak will equal the value:
+Long lazy Metal graphs can optionally be evaluated at safe custom-launch and
+fused-layer boundaries. Multi-launch single-qubit and XX/YY layers stream in
+budgeted chunks; no individual Metal launch is split. The budget is an
+input/output traffic estimate used to choose evaluation locations, not a
+promise that allocator peak will equal the value:
 
 ```bash
 MLXQ_METAL_KERNELS=auto \
@@ -388,9 +390,9 @@ auditable. This fork adds explicit evidence at each layer:
 | QPE energy estimation | 2 |
 | Benchmark protocol and plotting | 4 |
 | Custom Metal parity and dispatch | 19 |
-| Execution plans and capability reporting | 11 |
+| Execution plans and capability reporting | 15 |
 | QuantumStudio backend and MCP API | 18 |
-| **Total** | **298** |
+| **Total** | **302** |
 
 Run everything with:
 
@@ -411,8 +413,9 @@ Silicon runner labeled `macOS` and `ARM64`.
   and malformed declarations.
 - Native Qiskit and PennyLane plugin interfaces are not complete yet.
 - Checkpoint budgets use conservative statevector input/output traffic as a
-  scheduling signal; they are not hard allocator ceilings, and a single fused
-  layer is never split internally.
+  scheduling signal; they are not hard allocator ceilings. Supported
+  multi-launch layers can evaluate between launches, but one custom kernel
+  launch remains the irreducible out-of-place input/output floor.
 - Cross-machine charts compare relative speedup only; absolute performance
   claims require the same machine and benchmark protocol.
 

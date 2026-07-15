@@ -17,6 +17,8 @@ across families.
 """
 from __future__ import annotations
 
+from typing import Callable, Optional
+
 import mlx.core as mx
 
 from .single_qubit import hadamard_layer_all, s_phase_layer
@@ -24,19 +26,39 @@ from .zz import zz_chain_layer
 
 __all__ = ["xx_layer", "yy_layer"]
 
+_LaunchObserver = Optional[Callable[[mx.array], None]]
 
-def xx_layer(state: mx.array, theta: float, n: int, bonds) -> mx.array:
+
+def xx_layer(
+    state: mx.array,
+    theta: float,
+    n: int,
+    bonds,
+    *,
+    on_launch: _LaunchObserver = None,
+) -> mx.array:
     """exp(-i*theta*sum XX) over `bonds`: H-layer, ZZ LUT pass, H-layer."""
-    state = hadamard_layer_all(state, n)
+    state = hadamard_layer_all(state, n, on_launch=on_launch)
     state = zz_chain_layer(state, theta, n, bonds)
-    return hadamard_layer_all(state, n)
+    if on_launch is not None:
+        on_launch(state)
+    return hadamard_layer_all(state, n, on_launch=on_launch)
 
 
-def yy_layer(state: mx.array, theta: float, n: int, bonds) -> mx.array:
+def yy_layer(
+    state: mx.array,
+    theta: float,
+    n: int,
+    bonds,
+    *,
+    on_launch: _LaunchObserver = None,
+) -> mx.array:
     """exp(-i*theta*sum YY) over `bonds` with V = S*H per qubit:
     V^dag = H*Sdag applies Sdag first, then H; V applies H first, then S."""
-    state = s_phase_layer(state, n, dagger=True)
-    state = hadamard_layer_all(state, n)
+    state = s_phase_layer(state, n, dagger=True, on_launch=on_launch)
+    state = hadamard_layer_all(state, n, on_launch=on_launch)
     state = zz_chain_layer(state, theta, n, bonds)
-    state = hadamard_layer_all(state, n)
-    return s_phase_layer(state, n, dagger=False)
+    if on_launch is not None:
+        on_launch(state)
+    state = hadamard_layer_all(state, n, on_launch=on_launch)
+    return s_phase_layer(state, n, dagger=False, on_launch=on_launch)

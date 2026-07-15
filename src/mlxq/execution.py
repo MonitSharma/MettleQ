@@ -507,6 +507,16 @@ def _custom_dispatch_spec(op: Dict[str, Any], n: int) -> Optional[Dict[str, Any]
         "kernel_family": family,
         "concrete_kernels": kernels,
         "expected_metal_launches": launches,
+        "supports_intra_layer_streaming": (
+            launches > 1
+            and name in {
+                "_RXLAYER",
+                "_U2LAYER",
+                "_U2LISTLAYER",
+                "_XXLAYER",
+                "_YYLAYER",
+            }
+        ),
     }
 
 
@@ -570,6 +580,11 @@ def build_execution_plan(
         and state_bytes > 0
     )
     budget = int(policy.get("budget_bytes") or 0)
+    pass_io_bytes = 2 * state_bytes
+    max_pending_passes = (
+        max(1, budget // pass_io_bytes)
+        if checkpoint_enabled and pass_io_bytes > 0 else None
+    )
     pending_passes = int(initial_pending_custom_passes)
     pending_io_bytes = int(initial_pending_custom_io_bytes)
     predicted_checkpoints: List[Dict[str, Any]] = []
@@ -588,13 +603,40 @@ def build_execution_plan(
             })
             pending_passes = 0
             pending_io_bytes = 0
-        pending_passes += layer_passes
-        pending_io_bytes += layer_io_bytes
-        if checkpoint_enabled and layer_io_bytes > budget:
+        remaining_layer_passes = layer_passes
+        if (checkpoint_enabled
+                and spec["supports_intra_layer_streaming"]
+                and max_pending_passes is not None
+                and layer_passes > max_pending_passes):
+            launch_index = 0
+            while remaining_layer_passes > max_pending_passes:
+                launch_index += max_pending_passes
+                predicted_checkpoints.append({
+                    "boundary": "within_optimized_operation",
+                    "optimized_operation_index": spec[
+                        "optimized_operation_index"
+                    ],
+                    "within_layer_launch_index": launch_index,
+                    "within_layer_launch_count": layer_passes,
+                    "reason": "multi_launch_layer_streaming_budget",
+                    "estimated_passes_evaluated": max_pending_passes,
+                    "estimated_input_output_bytes_evaluated": (
+                        max_pending_passes * pass_io_bytes
+                    ),
+                })
+                remaining_layer_passes -= max_pending_passes
+        pending_passes += remaining_layer_passes
+        pending_io_bytes += remaining_layer_passes * pass_io_bytes
+        if checkpoint_enabled and pending_io_bytes > budget:
+            reason = (
+                "single_custom_launch_exceeds_budget"
+                if remaining_layer_passes == 1 and pass_io_bytes > budget
+                else "single_fused_layer_exceeds_budget"
+            )
             predicted_checkpoints.append({
                 "boundary": "after_optimized_operation",
                 "optimized_operation_index": spec["optimized_operation_index"],
-                "reason": "single_fused_layer_exceeds_budget",
+                "reason": reason,
                 "estimated_passes_evaluated": pending_passes,
                 "estimated_input_output_bytes_evaluated": pending_io_bytes,
             })
@@ -612,7 +654,7 @@ def build_execution_plan(
         )
 
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "backend": backend,
         "selected_device": status["mlx"]["default_device"],
         "dtype": STATE_DTYPE,
@@ -659,7 +701,14 @@ def build_execution_plan(
             ),
             "state_bytes": state_bytes,
             "estimated_input_output_bytes_per_pass": 2 * state_bytes,
-            "safe_boundaries": "between optimized fused operations only",
+            "max_pending_custom_passes_per_streamed_chunk": (
+                max_pending_passes
+            ),
+            "safe_boundaries": (
+                "between custom Metal launches inside supported multi-launch "
+                "layers; otherwise between optimized fused operations; never "
+                "inside one custom kernel launch"
+            ),
             "initial_pending_custom_passes": int(initial_pending_custom_passes),
             "initial_pending_custom_io_bytes": int(
                 initial_pending_custom_io_bytes

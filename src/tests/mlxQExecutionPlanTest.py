@@ -171,7 +171,7 @@ def test_checkpointing_occurs_between_fused_layers_and_preserves_state(monkeypat
     assert policy["pending_custom_passes_after_synchronize"] == 0
 
 
-def test_oversized_fused_layer_is_checkpointed_only_after_layer(monkeypatch):
+def test_oversized_fused_layer_streams_between_custom_launches(monkeypatch):
     monkeypatch.setenv("MLXQ_METAL_KERNELS", "1")
     capability = metal_runtime_status(4)
     if not capability["enabled"]:
@@ -187,18 +187,102 @@ def test_oversized_fused_layer_is_checkpointed_only_after_layer(monkeypatch):
     checkpoints = plan["checkpointing"]["actual_checkpoints"]
     assert plan["matched_structured_patterns"] == {"uniform_rx_layer": 1}
     assert plan["expected_custom_kernel_launches"] == 2
+    assert plan["schema_version"] == 3
+    assert plan["checkpointing"][
+        "max_pending_custom_passes_per_streamed_chunk"
+    ] == 1
+    assert plan["checkpointing"]["predicted_checkpoint_count"] == 1
     assert len(checkpoints) == 1
-    assert checkpoints[0]["boundary"] == "after_optimized_operation"
+    assert checkpoints[0]["boundary"] == "within_optimized_operation"
     assert checkpoints[0]["optimized_operation_index"] == 0
-    assert checkpoints[0]["estimated_passes_evaluated"] == 2
-    assert checkpoints[0]["reason"] == "single_fused_layer_exceeds_budget"
-    assert plan["checkpointing"]["pending_custom_passes_after_graph_build"] == 0
+    assert checkpoints[0]["within_layer_launch_index"] == 1
+    assert checkpoints[0]["within_layer_launch_count"] == 2
+    assert checkpoints[0]["estimated_passes_evaluated"] == 1
+    assert checkpoints[0]["reason"] == "multi_launch_layer_streaming_budget"
+    assert plan["checkpointing"]["pending_custom_passes_after_graph_build"] == 1
 
     unreported = Device(4, metal_checkpoint_budget_bytes=256)
     unreported.execute(ops, report=False)
     assert unreported.last_execution_plan is None
-    assert unreported._pending_custom_passes == 0
-    assert unreported._pending_custom_io_bytes == 0
+    assert unreported._pending_custom_passes == 1
+    assert unreported._pending_custom_io_bytes == 256
+
+
+def _streaming_ops(kind, n):
+    if kind == "uniform_u2":
+        return [{"name": "H", "wires": [wire]} for wire in range(n)]
+    if kind == "per_qubit_u2":
+        ops = []
+        for wire in range(n):
+            ops.append({
+                "name": "RY",
+                "wires": [wire],
+                "parameters": [0.1 + 0.03 * wire],
+            })
+            ops.append({
+                "name": "RZ",
+                "wires": [wire],
+                "parameters": [-0.2 + 0.02 * wire],
+            })
+        return ops
+    gate = "XXPHASE" if kind == "xx" else "YYPHASE"
+    return [
+        {
+            "name": gate,
+            "wires": [wire, wire + 1],
+            "parameters": [0.07],
+        }
+        for wire in range(n - 1)
+    ]
+
+
+@pytest.mark.parametrize(
+    ("kind", "family", "expected_launches"),
+    [
+        ("uniform_u2", "uniform_single_qubit_layer", 3),
+        ("per_qubit_u2", "per_qubit_single_qubit_layer", 3),
+        ("xx", "xx_layer", 5),
+        ("yy", "yy_layer", 7),
+    ],
+)
+def test_streamable_layer_families_match_pure_mlx_and_plan(
+    monkeypatch, kind, family, expected_launches
+):
+    n = 5
+    ops = _streaming_ops(kind, n)
+    monkeypatch.setenv("MLXQ_METAL_KERNELS", "0")
+    reference = Device(n)
+    reference.execute(ops)
+    reference.synchronize()
+
+    monkeypatch.setenv("MLXQ_METAL_KERNELS", "1")
+    capability = metal_runtime_status(n)
+    if not capability["enabled"]:
+        pytest.skip(capability["reason"])
+    # A complex64 n=5 input/output pass is exactly 512 bytes.  This budget
+    # therefore evaluates after every launch except the final pending launch.
+    candidate = Device(n, metal_checkpoint_budget_bytes=512)
+    candidate.execute(ops, report=True)
+    plan = candidate.last_execution_plan
+    policy = plan["checkpointing"]
+    assert plan["matched_structured_patterns"] == {family: 1}
+    assert plan["expected_custom_kernel_launches"] == expected_launches
+    assert policy["predicted_checkpoint_count"] == expected_launches - 1
+    assert policy["actual_checkpoint_count"] == expected_launches - 1
+    assert [
+        event["within_layer_launch_index"]
+        for event in policy["actual_checkpoints"]
+    ] == list(range(1, expected_launches))
+    assert all(
+        event["boundary"] == "within_optimized_operation"
+        for event in policy["actual_checkpoints"]
+    )
+    assert policy["pending_custom_passes_after_graph_build"] == 1
+
+    candidate.synchronize()
+    error = mx.max(mx.abs(reference.sim.state - candidate.sim.state))
+    mx.eval(error)
+    assert float(error.item()) <= 5e-6
 
 
 def test_configured_checkpoint_budget_stays_inactive_without_metal(monkeypatch):

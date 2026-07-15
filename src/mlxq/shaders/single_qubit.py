@@ -10,6 +10,7 @@ adjacent bit pair) plus one single-qubit pass when n is odd. Two variants:
 from __future__ import annotations
 
 import math
+from typing import Callable, Optional
 
 import mlx.core as mx
 
@@ -210,6 +211,18 @@ _phase_popcount_kernel = None
 
 _H_FLAT_C64 = None
 
+_LaunchObserver = Optional[Callable[[mx.array], None]]
+
+
+def _launch_observed(state: mx.array, on_launch: _LaunchObserver) -> None:
+    """Expose a safe boundary after one out-of-place Metal launch.
+
+    The default remains fully lazy.  The device supplies an observer only
+    when an opt-in memory budget requires intra-layer evaluation.
+    """
+    if on_launch is not None:
+        on_launch(state)
+
 
 def _h_flat():
     global _H_FLAT_C64
@@ -219,7 +232,12 @@ def _h_flat():
     return _H_FLAT_C64
 
 
-def hadamard_layer_all(state: mx.array, n: int) -> mx.array:
+def hadamard_layer_all(
+    state: mx.array,
+    n: int,
+    *,
+    on_launch: _LaunchObserver = None,
+) -> mx.array:
     """H on every qubit: radix-4 Walsh passes (4 qubits each) plus a pair /
     single tail for n mod 4 leftover qubits."""
     global _walsh4_kernel, _u2_pair_kernel, _u2_single_kernel
@@ -241,6 +259,7 @@ def hadamard_layer_all(state: mx.array, n: int) -> mx.array:
             output_shapes=[state.shape],
             output_dtypes=[mx.complex64],
         )
+        _launch_observed(state, on_launch)
         shift -= 4
     # tail: 0-3 remaining qubits via the pair/single H kernels
     h = _h_flat()
@@ -261,6 +280,7 @@ def hadamard_layer_all(state: mx.array, n: int) -> mx.array:
             output_shapes=[state.shape],
             output_dtypes=[mx.complex64],
         )
+        _launch_observed(state, on_launch)
         shift -= 2
     if shift == 0:
         if _u2_single_kernel is None:
@@ -279,10 +299,17 @@ def hadamard_layer_all(state: mx.array, n: int) -> mx.array:
             output_shapes=[state.shape],
             output_dtypes=[mx.complex64],
         )
+        _launch_observed(state, on_launch)
     return state
 
 
-def s_phase_layer(state: mx.array, n: int, dagger: bool = False) -> mx.array:
+def s_phase_layer(
+    state: mx.array,
+    n: int,
+    dagger: bool = False,
+    *,
+    on_launch: _LaunchObserver = None,
+) -> mx.array:
     """S (or S-dagger) on every qubit: one diagonal pass, phase
     (+/-i)^popcount(index)."""
     global _phase_popcount_kernel
@@ -304,10 +331,17 @@ def s_phase_layer(state: mx.array, n: int, dagger: bool = False) -> mx.array:
         output_shapes=[state.shape],
         output_dtypes=[mx.complex64],
     )
+    _launch_observed(out, on_launch)
     return out
 
 
-def u2_layer_all(state: mx.array, n: int, u2x2: mx.array) -> mx.array:
+def u2_layer_all(
+    state: mx.array,
+    n: int,
+    u2x2: mx.array,
+    *,
+    on_launch: _LaunchObserver = None,
+) -> mx.array:
     """Apply the SAME 2x2 unitary to every qubit: floor(n/2) fused pair
     passes plus one single-qubit pass when n is odd. `u2x2` is a flat
     complex64 array [u00, u01, u10, u11]."""
@@ -330,6 +364,7 @@ def u2_layer_all(state: mx.array, n: int, u2x2: mx.array) -> mx.array:
             output_shapes=[state.shape],
             output_dtypes=[mx.complex64],
         )
+        _launch_observed(state, on_launch)
         shift -= 2
     if shift == 0:
         if _u2_single_kernel is None:
@@ -348,11 +383,18 @@ def u2_layer_all(state: mx.array, n: int, u2x2: mx.array) -> mx.array:
             output_shapes=[state.shape],
             output_dtypes=[mx.complex64],
         )
+        _launch_observed(state, on_launch)
     return state
 
 
-def u2_list_layer_all(state: mx.array, n: int, mats: mx.array,
-                      active=None) -> mx.array:
+def u2_list_layer_all(
+    state: mx.array,
+    n: int,
+    mats: mx.array,
+    active=None,
+    *,
+    on_launch: _LaunchObserver = None,
+) -> mx.array:
     """Apply a DIFFERENT 2x2 unitary to every qubit in floor(n/2) fused pair
     passes (+ one single pass for odd n). `mats` is an (n, 4) complex64 array;
     row q holds [u00, u01, u10, u11] for qubit q (identity rows are fine).
@@ -384,6 +426,7 @@ def u2_list_layer_all(state: mx.array, n: int, mats: mx.array,
             output_shapes=[state.shape],
             output_dtypes=[mx.complex64],
         )
+        _launch_observed(state, on_launch)
         shift -= 2
     if shift == 0 and (act is None or (n - 1) in act):
         if _u2_single_kernel is None:
@@ -402,10 +445,17 @@ def u2_list_layer_all(state: mx.array, n: int, mats: mx.array,
             output_shapes=[state.shape],
             output_dtypes=[mx.complex64],
         )
+        _launch_observed(state, on_launch)
     return state
 
 
-def rx_layer_all(state: mx.array, n: int, theta: float) -> mx.array:
+def rx_layer_all(
+    state: mx.array,
+    n: int,
+    theta: float,
+    *,
+    on_launch: _LaunchObserver = None,
+) -> mx.array:
     """RX(theta) on every qubit: floor(n/2) fused two-qubit passes plus one
     single-qubit pass when n is odd. RX gates on distinct qubits commute, so
     ordering is free."""
@@ -433,6 +483,7 @@ def rx_layer_all(state: mx.array, n: int, theta: float) -> mx.array:
             output_shapes=[state.shape],
             output_dtypes=[mx.complex64],
         )
+        _launch_observed(state, on_launch)
         shift -= 2
     if shift == 0:
         if _rx_single_kernel is None:
@@ -452,4 +503,5 @@ def rx_layer_all(state: mx.array, n: int, theta: float) -> mx.array:
             output_shapes=[state.shape],
             output_dtypes=[mx.complex64],
         )
+        _launch_observed(state, on_launch)
     return state
