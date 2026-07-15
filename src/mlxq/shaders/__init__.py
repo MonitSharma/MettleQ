@@ -17,9 +17,7 @@ each shader live in shaders/README.md.
 """
 from __future__ import annotations
 
-import os
-
-from ..execution import metal_runtime_status
+from ..execution import metal_runtime_enabled, metal_runtime_status
 
 from .zz import zz_chain_layer, zz_weighted_layer
 from .qft import qft_stage_all, qft_stage_sub
@@ -52,7 +50,4 @@ __all__ = [
 
 def metal_enabled(n_qubits=None, *, dtype: str = "complex64") -> bool:
     """Return true only when policy *and* runtime capabilities select Metal."""
-    raw = os.environ.get("MLXQ_METAL_KERNELS", "0").strip().lower()
-    if raw not in {"1", "true", "on", "yes", "enabled", "auto"}:
-        return False
-    return bool(metal_runtime_status(n_qubits, dtype=dtype)["enabled"])
+    return metal_runtime_enabled(n_qubits, dtype=dtype)

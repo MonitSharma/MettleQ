@@ -1,5 +1,81 @@
 # Apple GPU engineering log
 
+## 2026-07-15 — Step 1: remove repeated capability-probe overhead
+
+### Change
+
+Metal dispatch used to construct the full runtime-capability report every time
+the simulator asked whether a custom kernel was usable. Profiling isolated the
+largest part of that check to package metadata lookup (about 0.20 ms per call),
+even though the MLX version and physical Metal capabilities cannot change
+during a Python process.
+
+The dispatch path now caches only process-stable facts: platform identity,
+Metal availability, the custom-kernel API, MLX version, device identity, and
+device memory limits. Policy and safety decisions remain live on every call:
+`MLXQ_METAL_KERNELS`, the selected MLX device, backend, dtype,
+`MLXQ_DENSE_ONLY`, and requested qubit count. The full inspection report and
+the fast boolean selector share these rules. A public
+`clear_metal_capability_cache()` hook supports tests and deliberate re-probing.
+
+Two regression tests prove that static probes are reused and that changing
+policy, GPU/CPU selection, dense ablation, dtype, or circuit size still fails
+closed immediately. The complete suite passed: 294 tests, with three existing
+third-party deprecation warnings.
+
+### Controlled A/B result
+
+The A/B ran in one Python process on the same Apple M3 Pro with MLX 0.32.0 at
+20 qubits. Each workload had one warmup per arm and 15 measured repeats; arm
+order alternated each repeat. The legacy arm emulated the former behavior by
+clearing the static cache before every full capability report. Values below
+are medians. This isolates the dispatch-check change; it is not a replacement
+for a full commit-to-commit benchmark campaign.
+
+| Workload | Legacy uncached | Cached selector | Time saved | Speedup |
+| --- | ---: | ---: | ---: | ---: |
+| QFT | 5.987 ms | 5.672 ms | 0.315 ms | 1.056× |
+| QAOA | 9.515 ms | 9.098 ms | 0.417 ms | 1.046× |
+| TFIM Trotter (2nd) | 43.908 ms | 38.418 ms | 5.490 ms | 1.143× |
+| Phase estimation | 7.185 ms | 6.404 ms | 0.781 ms | 1.122× |
+| Grover | 6.120 ms | 5.693 ms | 0.427 ms | 1.075× |
+| GHZ | 2.966 ms | 2.549 ms | 0.418 ms | 1.164× |
+
+In a 5,000-call microbenchmark, median selector latency fell from 0.2139 ms to
+0.001583 ms, a 135× reduction. End-to-end improvement depends on how often a
+workload enters the selector; the measured six-workload range was 4.6%–16.4%.
+
+### Balanced upstream revision check
+
+The existing 29-workload sweep then compared upstream commit `2b99d30` with
+the current Step 1 working tree at 20 qubits. Four independent seven-repeat
+campaigns ran in current/upstream/upstream/current (A–B–B–A) order. Pure MLX
+and Metal arms were interleaved inside every repeat. To reduce the effect of
+session drift, the revision estimate is the geometric mean of the two
+per-campaign medians for that revision (14 observations per revision and
+workload).
+
+Across all 29 workloads, current Metal latency was lower in 28. The median
+change was 2.59% faster and the geometric-mean latency ratio was 0.9592
+(4.08% lower). Sixteen workloads were within ±3%. VQE was the only slower row,
+at 0.17%, and no workload was more than 5% slower.
+
+The six workloads used in the earlier focused revision check all recovered:
+
+| Workload | Upstream Metal | Step 1 Metal | Change |
+| --- | ---: | ---: | ---: |
+| QFT | 4.324 ms | 4.292 ms | 0.7% faster |
+| QAOA | 9.812 ms | 8.871 ms | 9.6% faster |
+| TFIM Trotter (2nd) | 42.296 ms | 40.811 ms | 3.5% faster |
+| Phase estimation | 6.559 ms | 6.431 ms | 1.9% faster |
+| Grover | 5.074 ms | 4.879 ms | 3.8% faster |
+| GHZ | 2.063 ms | 1.787 ms | 13.4% faster |
+
+This revision comparison verifies the overall working tree against upstream;
+it cannot attribute every difference to the cache because the fork also
+contains correctness and observability changes. The same-process legacy/cache
+A/B above is the attribution test.
+
 ## 2026-07-14 — Phase D inspection and profiling
 
 ### Scope and outcome

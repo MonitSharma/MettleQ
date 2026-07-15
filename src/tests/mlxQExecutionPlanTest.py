@@ -4,7 +4,20 @@ import math
 import pytest
 
 from mlxq.device import Device
-from mlxq.execution import metal_runtime_status, state_memory_estimate
+import mlxq.execution as execution
+from mlxq.execution import (
+    clear_metal_capability_cache,
+    metal_runtime_enabled,
+    metal_runtime_status,
+    state_memory_estimate,
+)
+
+
+@pytest.fixture(autouse=True)
+def _reset_metal_capability_cache():
+    clear_metal_capability_cache()
+    yield
+    clear_metal_capability_cache()
 
 
 def _qft_ops(n):
@@ -43,6 +56,64 @@ def test_capability_report_exposes_index_and_memory_limits(monkeypatch):
     memory = state_memory_estimate(10)
     assert memory["state_bytes"] == 8 * (1 << 10)
     assert memory["minimum_input_plus_output_bytes"] == 16 * (1 << 10)
+
+
+def test_static_capabilities_are_cached_but_policy_remains_dynamic(monkeypatch):
+    calls = {"version": 0, "device": 0, "metal": 0}
+
+    def package_version(name):
+        calls["version"] += 1
+        return "test-version"
+
+    def device_info():
+        calls["device"] += 1
+        return {
+            "device_name": "Test GPU",
+            "architecture": "test-arch",
+            "max_buffer_length": 1 << 34,
+            "max_recommended_working_set_size": 1 << 35,
+        }
+
+    def metal_available():
+        calls["metal"] += 1
+        return True
+
+    monkeypatch.setattr(execution, "_package_version", package_version)
+    monkeypatch.setattr(execution, "_device_info", device_info)
+    monkeypatch.setattr(execution, "_metal_available", metal_available)
+    monkeypatch.setenv("MLXQ_METAL_KERNELS", "1")
+
+    first = metal_runtime_status(20)
+    monkeypatch.setenv("MLXQ_METAL_KERNELS", "0")
+    second = metal_runtime_status(20)
+
+    assert calls == {"version": 1, "device": 1, "metal": 1}
+    assert first["policy"] == "enabled"
+    assert second["policy"] == "disabled"
+    assert first["capability_cache"]["info"]["misses"] == 1
+    assert second["capability_cache"]["info"]["hits"] >= 1
+
+    clear_metal_capability_cache()
+    metal_runtime_status(20)
+    assert calls == {"version": 2, "device": 2, "metal": 2}
+
+
+def test_fast_selector_keeps_selected_device_and_other_checks_live(monkeypatch):
+    monkeypatch.setenv("MLXQ_METAL_KERNELS", "1")
+    monkeypatch.setattr(execution, "_default_device", lambda: "Device(gpu, 0)")
+    report = metal_runtime_status(4)
+    assert metal_runtime_enabled(4) == report["enabled"]
+
+    monkeypatch.setattr(execution, "_default_device", lambda: "Device(cpu, 0)")
+    assert not metal_runtime_enabled(4)
+    assert not metal_runtime_status(4)["enabled"]
+
+    monkeypatch.setattr(execution, "_default_device", lambda: "Device(gpu, 0)")
+    monkeypatch.setenv("MLXQ_DENSE_ONLY", "1")
+    assert not metal_runtime_enabled(4)
+    monkeypatch.delenv("MLXQ_DENSE_ONLY")
+    assert not metal_runtime_enabled(4, dtype="complex128")
+    assert not metal_runtime_enabled(32)
 
 
 def test_disabled_plan_reports_fallback_without_claiming_dispatch(monkeypatch):

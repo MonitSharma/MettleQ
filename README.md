@@ -38,7 +38,7 @@ listed honestly as planned rather than presented as finished adapters.
 | Circuit inputs | Native Python operation dictionaries and strict unitary OpenQASM 2.0 |
 | Workloads | QFT, phase estimation, Grover, QAOA, VQE, QCBM, QNN, random circuits, and spin dynamics |
 | Trust model | Capability-gated dispatch, explicit execution plans, numerical parity tests, synchronized benchmarks, and safe fallbacks |
-| Current test suite | **292 tests** across the simulator, algorithms, MPS, QASM, Metal dispatch, and QuantumStudio backend |
+| Current test suite | **294 tests** across the simulator, algorithms, MPS, QASM, Metal dispatch, and QuantumStudio backend |
 | Desktop product | QuantumStudio orchestration, monitoring, plotting, and export |
 | SDK adapters | Native Qiskit backend and PennyLane device plugin are planned; `mlxq.qml` is currently an internal PennyLane-like wrapper |
 
@@ -248,11 +248,22 @@ workloads:
 | Grover | 4.815 ms | 5.367 ms | +11.5% slower | 12.69× → 11.29× |
 | GHZ | 1.628 ms | 2.293 ms | +40.8% slower | 5.96× → 4.06× |
 
-The correctness and observability work is valuable, but it did not improve raw
-Metal latency yet. One measured contributor is repeated runtime capability
-probing: about 0.21 ms per check. Temporarily caching the static portion saved
-0.47–5.00 ms (8–19%) in focused measurements. Caching immutable hardware facts
-while preserving per-run policy checks is the next measured optimization.
+The correctness and observability revision above did not improve raw Metal
+latency. The first follow-up optimization now caches process-stable hardware
+facts while preserving live policy, selected-device, backend, dtype, dense
+ablation, and circuit-size checks. In a same-process 20-qubit A/B with 15
+alternating repeats, selector latency fell from 0.2139 ms to 0.001583 ms
+(135×); the six sampled workloads improved by 4.6%–16.4%. These are focused
+hot-path measurements.
+
+A separate 29-workload, 20-qubit A–B–B–A revision check used two independent
+seven-repeat campaigns per revision. Against upstream `2b99d30`, the Step 1
+working tree was faster on 28 of 29 Metal workloads: median latency was 2.6%
+lower and geometric-mean latency was 4.1% lower. All six regressions in the
+historical table above recovered; VQE was the sole slower row at 0.17%. This
+validates the overall working tree but does not attribute every revision
+difference to the cache. The complete protocols and per-workload medians are
+in the [Apple GPU engineering log](docs/development/apple-gpu-plan.md).
 
 <details>
 <summary><strong>Show the original upstream four-backend M1 Max result</strong></summary>
@@ -309,9 +320,9 @@ auditable. This fork adds explicit evidence at each layer:
 | QPE energy estimation | 2 |
 | Benchmark protocol and plotting | 4 |
 | Custom Metal parity and dispatch | 19 |
-| Execution plans and capability reporting | 5 |
+| Execution plans and capability reporting | 7 |
 | QuantumStudio backend and MCP API | 18 |
-| **Total** | **292** |
+| **Total** | **294** |
 
 Run everything with:
 
@@ -331,8 +342,6 @@ Silicon runner labeled `macOS` and `ARM64`.
   classical control, mid-circuit measurement, opaque gates, arbitrary includes,
   and malformed declarations.
 - Native Qiskit and PennyLane plugin interfaces are not complete yet.
-- The runtime capability probe currently adds measurable host overhead and is
-  the next performance optimization target.
 - Cross-machine charts compare relative speedup only; absolute performance
   claims require the same machine and benchmark protocol.
 

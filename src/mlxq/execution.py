@@ -8,6 +8,7 @@ place so SDK adapters and benchmark tools can report the same facts.
 from __future__ import annotations
 
 from collections import Counter
+from functools import lru_cache
 from importlib import import_module, metadata as importlib_metadata
 import math
 import os
@@ -63,6 +64,100 @@ def _default_device() -> str:
         return "unavailable"
 
 
+@lru_cache(maxsize=1)
+def _static_metal_capabilities() -> Dict[str, Any]:
+    """Probe process-stable Metal facts once.
+
+    Package metadata lookup dominates the former per-dispatch capability cost.
+    Platform identity, Metal availability, the custom-kernel API, and physical
+    device limits cannot meaningfully change inside one Python process.  The
+    selected MLX device is deliberately excluded because callers may change it
+    at runtime with ``mx.set_default_device``.
+    """
+    system = platform.system()
+    machine = platform.machine().lower()
+    info = _device_info()
+    max_buffer = int(info.get("max_buffer_length", 0) or 0)
+    working_set = int(info.get("max_recommended_working_set_size", 0) or 0)
+    buffer_qubits = _max_qubits_for_bytes(max_buffer, STATE_BYTES_PER_AMPLITUDE)
+    working_set_qubits = _max_qubits_for_bytes(
+        working_set, 2 * STATE_BYTES_PER_AMPLITUDE
+    )
+    limits = [METAL_INDEX_QUBIT_LIMIT]
+    if buffer_qubits is not None:
+        limits.append(buffer_qubits)
+    if working_set_qubits is not None:
+        limits.append(working_set_qubits)
+    return {
+        "system": system,
+        "machine": machine,
+        "apple_silicon": (
+            system == "Darwin" and machine in {"arm64", "aarch64"}
+        ),
+        "metal_available": _metal_available(),
+        "custom_kernel_api": callable(
+            getattr(getattr(mx, "fast", None), "metal_kernel", None)
+        ),
+        "mlx_version": _package_version("mlx"),
+        "device_name": info.get("device_name", "unavailable"),
+        "device_architecture": info.get("architecture", "unavailable"),
+        "max_buffer_length": max_buffer or None,
+        "max_recommended_working_set_size": working_set or None,
+        "buffer_qubit_limit": buffer_qubits,
+        "two_state_working_set_qubit_limit": working_set_qubits,
+        "effective_qubit_limit": min(limits),
+    }
+
+
+def clear_metal_capability_cache() -> None:
+    """Clear cached static probes for tests or deliberate runtime re-probing."""
+    _static_metal_capabilities.cache_clear()
+
+
+def _metal_policy() -> tuple[Optional[str], str, bool, bool]:
+    raw = os.environ.get("MLXQ_METAL_KERNELS")
+    normalized = "" if raw is None else raw.strip().lower()
+    if raw is None:
+        return raw, "off_by_default", False, True
+    if normalized == "auto":
+        return raw, "auto", True, True
+    if normalized in _TRUE_VALUES:
+        return raw, "enabled", True, True
+    if normalized in _FALSE_VALUES:
+        return raw, "disabled", False, True
+    return raw, "invalid", False, False
+
+
+def metal_runtime_enabled(
+    n_qubits: Optional[int] = None,
+    *,
+    dtype: str = STATE_DTYPE,
+    backend: str = "sv",
+) -> bool:
+    """Fast boolean selector using cached static and live dynamic checks."""
+    _, _, requested, valid_policy = _metal_policy()
+    if not requested or not valid_policy:
+        return False
+    static = _static_metal_capabilities()
+    if not (
+        backend == "sv"
+        and static["apple_silicon"]
+        and static["metal_available"]
+        and "gpu" in _default_device().lower()
+        and static["custom_kernel_api"]
+        and dtype == STATE_DTYPE
+        and os.environ.get("MLXQ_DENSE_ONLY", "0") != "1"
+    ):
+        return False
+    if n_qubits is None:
+        return True
+    n = int(n_qubits)
+    return (
+        0 <= n <= METAL_INDEX_QUBIT_LIMIT
+        and n <= static["effective_qubit_limit"]
+    )
+
+
 def _max_qubits_for_bytes(limit: int, bytes_per_state: int) -> Optional[int]:
     if limit <= 0 or bytes_per_state <= 0:
         return None
@@ -116,63 +211,28 @@ def metal_runtime_status(
     when every hard capability check passes.  Explicit on is still safely
     refused when the platform or kernel constraints are unsupported.
     """
-    raw = os.environ.get("MLXQ_METAL_KERNELS")
-    normalized = "" if raw is None else raw.strip().lower()
-    if raw is None:
-        policy = "off_by_default"
-        requested = False
-        valid_policy = True
-    elif normalized == "auto":
-        policy = "auto"
-        requested = True
-        valid_policy = True
-    elif normalized in _TRUE_VALUES:
-        policy = "enabled"
-        requested = True
-        valid_policy = True
-    elif normalized in _FALSE_VALUES:
-        policy = "disabled"
-        requested = False
-        valid_policy = True
-    else:
-        policy = "invalid"
-        requested = False
-        valid_policy = False
-
-    system = platform.system()
-    machine = platform.machine().lower()
-    apple_silicon = system == "Darwin" and machine in {"arm64", "aarch64"}
-    metal_available = _metal_available()
+    raw, policy, requested, valid_policy = _metal_policy()
+    static = _static_metal_capabilities()
+    cache_info = _static_metal_capabilities.cache_info()
     default_device = _default_device()
     gpu_selected = "gpu" in default_device.lower()
-    custom_api = callable(getattr(getattr(mx, "fast", None), "metal_kernel", None))
-    info = _device_info()
-    max_buffer = int(info.get("max_buffer_length", 0) or 0)
-    working_set = int(info.get("max_recommended_working_set_size", 0) or 0)
-    buffer_qubits = _max_qubits_for_bytes(max_buffer, STATE_BYTES_PER_AMPLITUDE)
-    working_set_qubits = _max_qubits_for_bytes(
-        working_set, 2 * STATE_BYTES_PER_AMPLITUDE)
-    limits = [METAL_INDEX_QUBIT_LIMIT]
-    if buffer_qubits is not None:
-        limits.append(buffer_qubits)
-    if working_set_qubits is not None:
-        limits.append(working_set_qubits)
-    effective_qubit_limit = min(limits)
 
     checks: Dict[str, bool] = {
         "valid_policy": valid_policy,
         "statevector_backend": backend == "sv",
-        "apple_silicon": apple_silicon,
-        "metal_available": metal_available,
+        "apple_silicon": static["apple_silicon"],
+        "metal_available": static["metal_available"],
         "gpu_device_selected": gpu_selected,
-        "custom_kernel_api": custom_api,
+        "custom_kernel_api": static["custom_kernel_api"],
         "dtype_complex64": dtype == STATE_DTYPE,
         "dense_ablation_disabled": os.environ.get("MLXQ_DENSE_ONLY", "0") != "1",
     }
     if n_qubits is not None:
         checks["non_negative_qubits"] = int(n_qubits) >= 0
         checks["index_width"] = 0 <= int(n_qubits) <= METAL_INDEX_QUBIT_LIMIT
-        checks["device_memory_limit"] = 0 <= int(n_qubits) <= effective_qubit_limit
+        checks["device_memory_limit"] = (
+            0 <= int(n_qubits) <= static["effective_qubit_limit"]
+        )
 
     capable = all(checks.values())
     enabled = requested and capable
@@ -196,31 +256,61 @@ def metal_runtime_status(
         "reason": reason,
         "checks": checks,
         "failed_checks": failed,
-        "platform": {"system": system, "machine": machine},
+        "platform": {
+            "system": static["system"],
+            "machine": static["machine"],
+        },
         "mlx": {
-            "version": _package_version("mlx"),
+            "version": static["mlx_version"],
             "declared_requirement": "mlx>=0.6.0",
             "compatibility_policy": (
                 "capability-probed; mx.fast.metal_kernel is required and no "
                 "untested upper version bound is assumed"
             ),
             "default_device": default_device,
-            "metal_available": metal_available,
+            "metal_available": static["metal_available"],
         },
         "device": {
-            "name": info.get("device_name", "unavailable"),
-            "architecture": info.get("architecture", "unavailable"),
-            "max_buffer_length": max_buffer or None,
-            "max_recommended_working_set_size": working_set or None,
+            "name": static["device_name"],
+            "architecture": static["device_architecture"],
+            "max_buffer_length": static["max_buffer_length"],
+            "max_recommended_working_set_size": static[
+                "max_recommended_working_set_size"
+            ],
+        },
+        "capability_cache": {
+            "scope": "process",
+            "static_facts": [
+                "platform",
+                "metal_available",
+                "custom_kernel_api",
+                "mlx_version",
+                "device_limits",
+            ],
+            "dynamic_facts": [
+                "environment_policy",
+                "selected_device",
+                "backend",
+                "dtype",
+                "dense_ablation",
+                "requested_qubits",
+            ],
+            "info": {
+                "hits": cache_info.hits,
+                "misses": cache_info.misses,
+                "current_size": cache_info.currsize,
+            },
         },
         "kernel_constraints": {
             "backend": "statevector only",
             "dtype": STATE_DTYPE,
             "index_bits": METAL_INDEX_BITS,
             "index_qubit_limit": METAL_INDEX_QUBIT_LIMIT,
-            "buffer_qubit_limit": buffer_qubits,
-            "two_state_working_set_qubit_limit": working_set_qubits,
-            "effective_qubit_limit": effective_qubit_limit,
+            "buffer_qubit_limit": static["buffer_qubit_limit"],
+            "two_state_working_set_qubit_limit": static[
+                "two_state_working_set_qubit_limit"
+            ],
+            "effective_qubit_limit": static["effective_qubit_limit"],
             "requested_qubits": n_qubits,
         },
     }
@@ -477,10 +567,12 @@ __all__ = [
     "METAL_INDEX_QUBIT_LIMIT",
     "STATE_DTYPE",
     "build_execution_plan",
+    "clear_metal_capability_cache",
     "kernel_cache_snapshot",
     "mark_graph_built",
     "mark_synchronized",
     "metal_memory_snapshot",
+    "metal_runtime_enabled",
     "metal_runtime_status",
     "record_custom_dispatch",
     "state_memory_estimate",
