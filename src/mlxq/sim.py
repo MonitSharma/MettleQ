@@ -380,9 +380,19 @@ class StateVectorSimulator:
             new_state_list = [v * inv for v in new_state_list]
         self.state = mx.array(new_state_list, mx.complex64)
 
-    def sample(self, shots: int, wires: Optional[List[int]] = None) -> List[List[int]]:
-        import random
-        probs = self.probabilities()
+    def sample_array(
+        self,
+        shots: int,
+        wires: Optional[List[int]] = None,
+        *,
+        rng=None,
+    ):
+        """Sample on the selected MLX device and read back only shot bits."""
+        import numpy as np
+
+        shots = int(shots)
+        if shots < 0:
+            raise ValueError("shots must be non-negative")
         n = self.n
         if wires is None:
             wires = list(range(n))
@@ -392,24 +402,24 @@ class StateVectorSimulator:
                 raise ValueError("Duplicate qubit indices")
             for wire in wires:
                 canonical_axis_index(wire, n)
-        out = []
-        for _ in range(int(shots)):
-            # sample index by cumulative probabilities
-            r = random.random()
-            s = 0.0
-            idx = 0
-            for i, p in enumerate(probs):
-                s += p
-                if r <= s:
-                    idx = i
-                    break
-            # extract bits for requested wires (MSB first by our convention)
-            bits = []
-            for w in wires:
-                bit = (idx >> (n - 1 - w)) & 1
-                bits.append(bit)
-            out.append(bits)
-        return out
+        probabilities = self.probabilities_array(wires)
+        logits = mx.log(mx.maximum(probabilities, 1e-30))
+        rng = np.random.default_rng() if rng is None else rng
+        seed = int(rng.integers(0, np.iinfo(np.uint32).max, dtype=np.uint32))
+        indices = mx.random.categorical(
+            logits,
+            num_samples=shots,
+            key=mx.random.key(seed),
+        )
+        shifts = mx.array(
+            list(range(len(wires) - 1, -1, -1)), dtype=mx.uint32
+        )
+        bits = (indices[:, None] >> shifts) & 1
+        mx.eval(bits)
+        return np.asarray(bits, dtype=np.int64)
+
+    def sample(self, shots: int, wires: Optional[List[int]] = None) -> List[List[int]]:
+        return self.sample_array(shots, wires).tolist()
 
     def sample_counts(self, shots: int, wires: Optional[List[int]] = None):
         counts: dict[str,int] = {}

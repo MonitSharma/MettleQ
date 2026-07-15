@@ -70,31 +70,48 @@ class Device:
         *,
         metal_checkpoint_budget_bytes: Optional[int] = None,
         allow_unsafe_statevector: Optional[bool] = None,
+        execution_device: Optional[str] = None,
     ):
         self.wires = int(wires)
         self.shots = int(shots)
+        self._allow_unsafe_statevector = allow_unsafe_statevector
+        if execution_device is None:
+            self._mx_device = mx.default_device()
+        else:
+            normalized_device = str(execution_device).strip().lower()
+            if normalized_device not in ("cpu", "gpu"):
+                raise ValueError("execution_device must be 'cpu', 'gpu', or None")
+            if normalized_device == "gpu" and not mx.metal.is_available():
+                raise RuntimeError(
+                    "Apple GPU execution was requested but Metal is unavailable"
+                )
+            self._mx_device = mx.cpu if normalized_device == "cpu" else mx.gpu
+        self.execution_device = (
+            "cpu" if self._mx_device == mx.cpu else "gpu"
+        )
         if backend is None:
             backend = _os.environ.get('MLXQ_BACKEND', 'sv').lower()
-        if backend == 'mps':
-            self.backend = 'mps'
-            # Read MPS options from env if not provided
-            if mps_opts is None:
-                try:
-                    dmax = int(_os.environ.get('MLXQ_MPS_DMAX', '64'))
-                except Exception:
-                    dmax = 64
-                try:
-                    eps = float(_os.environ.get('MLXQ_MPS_EPS', '1e-10'))
-                except Exception:
-                    eps = 1e-10
-                mps_opts = MPSOptions(dmax=dmax, eps=eps)
-            self.sim = MPSState(self.wires, mps_opts)
-        else:
-            self.backend = 'sv'
-            self.sim = StateVectorSimulator(
-                self.wires,
-                allow_unsafe_statevector=allow_unsafe_statevector,
-            )
+        with mx.stream(self._mx_device):
+            if backend == 'mps':
+                self.backend = 'mps'
+                # Read MPS options from env if not provided
+                if mps_opts is None:
+                    try:
+                        dmax = int(_os.environ.get('MLXQ_MPS_DMAX', '64'))
+                    except Exception:
+                        dmax = 64
+                    try:
+                        eps = float(_os.environ.get('MLXQ_MPS_EPS', '1e-10'))
+                    except Exception:
+                        eps = 1e-10
+                    mps_opts = MPSOptions(dmax=dmax, eps=eps)
+                self.sim = MPSState(self.wires, mps_opts)
+            else:
+                self.backend = 'sv'
+                self.sim = StateVectorSimulator(
+                    self.wires,
+                    allow_unsafe_statevector=allow_unsafe_statevector,
+                )
         self.statevector_preflight = getattr(self.sim, "preflight", None)
         if metal_checkpoint_budget_bytes is not None:
             metal_checkpoint_policy(metal_checkpoint_budget_bytes)
@@ -104,11 +121,16 @@ class Device:
         self.last_execution_plan: Optional[Dict[str, Any]] = None
 
     def reset(self):
-        self.sim.reset()
+        with mx.stream(self._mx_device):
+            self.sim.reset()
         self._pending_custom_passes = 0
         self._pending_custom_io_bytes = 0
 
     def execute(self, operations: List[Dict[str, Any]], *, report: Optional[bool] = None):
+        with mx.stream(self._mx_device):
+            return self._execute(operations, report=report)
+
+    def _execute(self, operations: List[Dict[str, Any]], *, report: Optional[bool] = None):
         # Optional ASCII dump for any executed circuit (controlled via env)
         try:
             import os as _os
@@ -411,6 +433,10 @@ class Device:
 
     def explain(self, operations: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Build an execution report without applying any gates."""
+        with mx.stream(self._mx_device):
+            return self._explain(operations)
+
+    def _explain(self, operations: List[Dict[str, Any]]) -> Dict[str, Any]:
         checkpoint_policy_data = metal_checkpoint_policy(
             self._metal_checkpoint_budget_bytes
         )
@@ -428,13 +454,14 @@ class Device:
 
     def synchronize(self):
         """Evaluate pending MLX work and mark dispatch evidence complete."""
-        state = getattr(self.sim, 'state', None)
-        if state is not None:
-            mx.eval(state)
-        else:
-            tensors = getattr(self.sim, 'tensors', None)
-            if tensors:
-                mx.eval(*tensors)
+        with mx.stream(self._mx_device):
+            state = getattr(self.sim, 'state', None)
+            if state is not None:
+                mx.eval(state)
+            else:
+                tensors = getattr(self.sim, 'tensors', None)
+                if tensors:
+                    mx.eval(*tensors)
         self._pending_custom_passes = 0
         self._pending_custom_io_bytes = 0
         mark_synchronized(self.last_execution_plan)
@@ -759,11 +786,13 @@ class Device:
 
     def sample(self, shots: int = None, wires: Optional[List[int]] = None):
         shots = self.shots if shots is None else int(shots)
-        return self.sim.sample(shots, wires)
+        with mx.stream(self._mx_device):
+            return self.sim.sample(shots, wires)
 
     def counts(self, shots: int = None, wires: Optional[List[int]] = None):
         shots = self.shots if shots is None else int(shots)
-        return self.sim.sample_counts(shots, wires)
+        with mx.stream(self._mx_device):
+            return self.sim.sample_counts(shots, wires)
 
     def _dense_gate_for(self, name: str, params: List[float]) -> mx.array:
         """Dense matrix for a named op (ablation path; mirrors pre-dispatch behavior)."""

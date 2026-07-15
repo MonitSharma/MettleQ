@@ -6,9 +6,14 @@ import pytest
 from qiskit import QuantumCircuit, transpile
 from qiskit.exceptions import QiskitError
 from qiskit.quantum_info import Statevector
+from qiskit.quantum_info import SparsePauliOp
 
 from mlxq.integrations.pennylane import QupertinoDevice
-from mlxq.integrations.qiskit import QupertinoBackend
+from mlxq.integrations.qiskit import (
+    QupertinoBackend,
+    QupertinoEstimatorV2,
+    QupertinoSamplerV2,
+)
 
 
 def test_qiskit_statevector_ordering_and_gate_parity():
@@ -143,3 +148,127 @@ def test_pennylane_wide_pauli_sentence_avoids_dense_observable():
     assert abs(circuit() - 0.75) < 2e-6
     assert device.statevector_preflight["decision"].startswith("allowed")
     assert device.last_execution_plan["execution_status"] == "evaluated"
+
+
+def test_qiskit_mps_method_counts_statevector_and_diagnostics():
+    circuit = QuantumCircuit(3, 3)
+    circuit.h(0)
+    circuit.cx(0, 1)
+    circuit.cx(1, 2)
+    circuit.measure(range(3), range(3))
+    backend = QupertinoBackend(
+        method="matrix_product_state",
+        device="cpu",
+        mps_max_bond_dimension=16,
+    )
+    result = backend.run(
+        circuit,
+        shots=64,
+        seed_simulator=11,
+        return_statevector=True,
+        execution_report=True,
+    ).result()
+
+    assert set(result.get_counts()) <= {"000", "111"}
+    assert np.allclose(
+        np.abs(np.asarray(result.data(0)["statevector"])) ** 2,
+        [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5],
+        atol=2e-6,
+    )
+    selection = result.data(0)["qupertino_execution_selection"]
+    diagnostics = result.data(0)["qupertino_mps_diagnostics"]
+    assert selection["selected_method"] == "matrix_product_state"
+    assert selection["selected_device"] == "cpu"
+    assert diagnostics["tensor_device"] == "cpu"
+    assert diagnostics["svd_device"] == "cpu"
+
+
+def test_qiskit_sampler_v2_and_estimator_v2_native_contracts():
+    circuit = QuantumCircuit(2)
+    circuit.h(0)
+    circuit.cx(0, 1)
+
+    estimator_result = QupertinoEstimatorV2(device="cpu").run(
+        [(circuit, [SparsePauliOp("ZZ"), SparsePauliOp("XX")])]
+    ).result()[0]
+    assert estimator_result.data.evs.shape == (2,)
+    assert np.allclose(estimator_result.data.evs, [1.0, 1.0], atol=2e-6)
+    assert np.all(estimator_result.data.stds == 0.0)
+
+    measured = circuit.measure_all(inplace=False)
+    sampler_result = QupertinoSamplerV2(device="cpu").run(
+        [measured], shots=64
+    ).result()[0]
+    counts = sampler_result.data.meas.get_counts()
+    assert sum(counts.values()) == 64
+    assert set(counts) <= {"00", "11"}
+
+
+def test_qiskit_backend_batch_reuses_one_same_width_device(monkeypatch):
+    import mlxq.integrations._common as common
+
+    original = common.Device
+    constructed = []
+
+    def recording_device(*args, **kwargs):
+        constructed.append((args, kwargs))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(common, "Device", recording_device)
+    first = QuantumCircuit(2, 2)
+    first.h(0)
+    first.measure_all()
+    second = QuantumCircuit(2, 2)
+    second.x(1)
+    second.measure_all()
+    QupertinoBackend(device="cpu").run(
+        [first, second], shots=8, seed_simulator=3
+    ).result()
+    assert len(constructed) == 1
+
+
+def test_pennylane_mps_analytic_finite_shots_gradient_and_tracking():
+    device = QupertinoDevice(
+        wires=2,
+        method="matrix_product_state",
+        device="cpu",
+        seed=5,
+    )
+
+    @qml.qnode(device, diff_method="parameter-shift")
+    def analytic(theta):
+        qml.RY(theta, 0)
+        qml.CNOT([0, 1])
+        return qml.expval(qml.Z(0) @ qml.Z(1))
+
+    theta = qml.numpy.array(0.3, requires_grad=True)
+    with device.tracker:
+        value = analytic(theta)
+    gradient = qml.grad(analytic)(theta)
+    assert abs(float(value) - 1.0) < 2e-6
+    assert abs(float(gradient)) < 2e-6
+    assert device.tracker.totals["executions"] >= 1
+    assert device.last_execution_selection["selected_method"] == (
+        "matrix_product_state"
+    )
+    assert device.last_mps_diagnostics["svd_device"] == "cpu"
+
+    @qml.set_shots(50)
+    @qml.qnode(device)
+    def sampled():
+        qml.Hadamard(0)
+        qml.CNOT([0, 1])
+        return qml.counts(wires=[0, 1])
+
+    counts = sampled()
+    assert sum(counts.values()) == 50
+    assert set(counts) <= {"00", "11"}
+
+
+def test_pennylane_capabilities_declare_supported_contract():
+    capabilities = QupertinoDevice.capabilities
+    assert "CNOT" in capabilities.operations
+    assert "Hamiltonian" in capabilities.observables
+    assert "StateMP" in capabilities.measurement_processes
+    assert capabilities.dynamic_qubit_management is False
+    assert capabilities.qjit_compatible is False

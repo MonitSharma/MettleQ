@@ -58,3 +58,6 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["mlxq*"]
+
+[tool.setuptools.package-data]
+"mlxq.integrations" = ["pennylane_capabilities.toml"]

@@ -1,5 +1,48 @@
 # Apple GPU engineering log
 
+## 2026-07-15 — Step 6: Qiskit/PennyLane method and device architecture
+
+### Product boundary and execution contract
+
+The active integration scope is now deliberately limited to Qiskit and
+PennyLane. Qiskit exposes `BackendV2`, SamplerV2, and a native exact
+EstimatorV2; PennyLane exposes a capability-declared, tracker-compatible
+device. Both translate into the same validated operation stream and use one
+method/device planner. The planner reports the requested and selected method,
+the selected CPU or GPU, its reason, statevector preflight, and conservative
+MPS-compatibility findings.
+
+Every circuit uses one numerical execution device. Automatic statevector uses
+CPU below a measured crossover and Apple GPU above it. CPU and GPU benchmark
+times are independent and are never summed into an acceleration claim.
+Automatic MPS remains on CPU over the current measured range because MLX 0.32
+SVD is CPU-only; callers can explicitly select GPU tensor operations, and the
+result reports both tensor and SVD devices.
+
+### Statevector and MPS SDK behavior
+
+Statevector measurement now samples with MLX categorical selection and returns
+only requested shot bits to the host. The MPS path implements tensor-network
+marginals, local dense expectations, Pauli-product expectations, sequential
+conditional sampling, explicit dense materialization, and truncation
+diagnostics without requiring a full statevector for ordinary measurements.
+Dense materialization from MPS passes through the same allocation preflight as
+the exact statevector constructor.
+
+Batch execution reuses an allocated same-width simulator. Qiskit Estimator
+groups broadcast observables by bound circuit so every parameter point is
+simulated once while retaining at most one exponential state. The PennyLane
+device declares operations, observables, measurements, and unsupported dynamic
+features in a capability TOML and uses the official tracking and single-tape
+modifiers.
+
+Thirteen new tests cover planner decisions, CPU/GPU parity, 24-qubit compact
+MPS measurement, approximation telemetry, dense-state preflight, Qiskit V2
+primitives, Qiskit batch reuse, and PennyLane MPS gradients/tracking. The full
+suite passes 329 tests. `tools/benchmark_execution_policy.py` calibrates CPU/GPU
+crossovers independently, and `tools/benchmark_sdk_method_matrix.py` compares
+the four method/device paths through both public SDKs.
+
 ## 2026-07-15 — Step 5: native Qiskit and PennyLane execution
 
 ### Shared compatibility boundary

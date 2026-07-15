@@ -9,6 +9,21 @@ import mlx.core as mx
 import numpy as np
 
 from ..device import Device
+from ..execution import require_statevector_preflight
+from ..mps_state import MPSOptions
+from ..planning import select_execution
+from ..planning import (
+    DEFAULT_AUTOMATIC_MPS_MIN_QUBITS,
+    DEFAULT_MPS_GPU_MIN_QUBITS,
+    DEFAULT_STATEVECTOR_GPU_MIN_QUBITS,
+)
+
+
+_PAULI_MATRICES = {
+    "X": np.array([[0, 1], [1, 0]], dtype=np.complex64),
+    "Y": np.array([[0, -1j], [1j, 0]], dtype=np.complex64),
+    "Z": np.array([[1, 0], [0, -1]], dtype=np.complex64),
+}
 
 
 _ARITIES = {
@@ -108,37 +123,106 @@ def execute_operations(
     report: bool = False,
     metal_checkpoint_budget_bytes: Optional[int] = None,
     allow_unsafe_statevector: Optional[bool] = None,
+    method: str = "automatic",
+    execution_device: str = "auto",
+    allow_approximation: bool = False,
+    mps_max_bond_dimension: int = 64,
+    mps_truncation_threshold: float = 1e-10,
+    statevector_gpu_min_qubits: int = DEFAULT_STATEVECTOR_GPU_MIN_QUBITS,
+    mps_gpu_min_qubits: Optional[int] = DEFAULT_MPS_GPU_MIN_QUBITS,
+    automatic_mps_min_qubits: int = DEFAULT_AUTOMATIC_MPS_MIN_QUBITS,
+    execution_cache: Optional[dict] = None,
 ) -> Device:
     """Execute canonical operations through the validated core device."""
-    device = Device(
+    selection = select_execution(
         n_qubits,
-        shots=shots,
-        metal_checkpoint_budget_bytes=metal_checkpoint_budget_bytes,
+        operations,
+        method=method,
+        device=execution_device,
+        allow_approximation=allow_approximation,
         allow_unsafe_statevector=allow_unsafe_statevector,
+        statevector_gpu_min_qubits=statevector_gpu_min_qubits,
+        mps_gpu_min_qubits=mps_gpu_min_qubits,
+        automatic_mps_min_qubits=automatic_mps_min_qubits,
     )
+    backend = (
+        "sv" if selection.selected_method == "statevector" else "mps"
+    )
+    mps_options = (
+        MPSOptions(
+            dmax=int(mps_max_bond_dimension),
+            eps=float(mps_truncation_threshold),
+        )
+        if backend == "mps"
+        else None
+    )
+    cache_key = (
+        int(n_qubits),
+        backend,
+        selection.selected_device,
+        int(mps_max_bond_dimension) if backend == "mps" else None,
+        float(mps_truncation_threshold) if backend == "mps" else None,
+    )
+    device = (
+        execution_cache.get(cache_key)
+        if execution_cache is not None
+        else None
+    )
+    if device is None:
+        device = Device(
+            n_qubits,
+            shots=shots,
+            backend=backend,
+            mps_opts=mps_options,
+            metal_checkpoint_budget_bytes=metal_checkpoint_budget_bytes,
+            allow_unsafe_statevector=allow_unsafe_statevector,
+            execution_device=selection.selected_device,
+        )
+        if execution_cache is not None:
+            execution_cache[cache_key] = device
+    else:
+        device.shots = int(shots)
+        device.reset()
     device.execute(list(operations), report=report)
+    device.execution_selection = selection.to_dict()
+    if device.last_execution_plan is not None:
+        device.last_execution_plan["sdk_execution_selection"] = (
+            device.execution_selection
+        )
     return device
 
 
 def apply_global_phase(device: Device, phase: float) -> None:
     """Apply an SDK circuit's global phase without a host state readback."""
     if phase:
-        device.sim.state = device.sim.state * complex(
-            np.cos(float(phase)), np.sin(float(phase))
-        )
+        factor = complex(np.cos(float(phase)), np.sin(float(phase)))
+        if hasattr(device.sim, "state"):
+            device.sim.state = device.sim.state * factor
+        else:
+            device.sim.A[0] = device.sim.A[0] * factor
 
 
 def statevector_numpy(device: Device) -> np.ndarray:
     """Synchronize and materialize the state only when an SDK requests it."""
     state = device.synchronize()
-    return np.asarray(state, dtype=np.complex64)
+    if state is not None:
+        return np.asarray(state, dtype=np.complex64)
+    # MPS execution itself is compact, but converting it to an SDK statevector
+    # still allocates 2**n amplitudes. Apply the same safety gate as the exact
+    # statevector constructor before that dense materialization.
+    require_statevector_preflight(
+        device.wires,
+        allow_unsafe=device._allow_unsafe_statevector,
+    )
+    return device.sim.to_statevector()
 
 
 def marginal_probabilities(device: Device, wires: Sequence[int]) -> np.ndarray:
     """Read back only the requested marginal probability vector."""
     device.synchronize()
     probabilities = device.sim.probabilities_array(list(wires))
-    mx.eval(probabilities)
+    if isinstance(probabilities, mx.array):
+        mx.eval(probabilities)
     result = np.asarray(probabilities, dtype=np.float64)
     total = float(result.sum())
     if total <= 0.0:
@@ -152,10 +236,16 @@ def sample_bits(
     wires: Sequence[int],
     rng: np.random.Generator,
 ) -> np.ndarray:
-    """Sample requested wires in MSB-first order from their GPU marginal."""
+    """Sample requested wires without a full probability-vector readback."""
     wires = list(wires)
     if not wires:
         return np.empty((int(shots), 0), dtype=np.int64)
+    device.synchronize()
+    if hasattr(device.sim, "sample_array"):
+        return np.asarray(
+            device.sim.sample_array(int(shots), wires, rng=rng),
+            dtype=np.int64,
+        )
     probabilities = marginal_probabilities(device, wires)
     indices = rng.choice(len(probabilities), size=int(shots), p=probabilities)
     shifts = np.arange(len(wires) - 1, -1, -1, dtype=np.int64)
@@ -214,7 +304,42 @@ def local_expectation(
 ) -> complex:
     """Evaluate a local observable while keeping the full state on-device."""
     device.synchronize()
+    if device.backend == "mps":
+        return device.sim.expectation_dense(list(wires), matrix)
     acted = _apply_local_matrix(device.sim.state, device.wires, wires, matrix)
+    value = mx.sum(mx.conj(device.sim.state) * acted)
+    mx.eval(value)
+    return complex(value.item())
+
+
+def pauli_product_expectation(
+    device: Device,
+    paulis: dict[int, str],
+) -> complex:
+    """Evaluate one Pauli word without constructing a dense register matrix."""
+    normalized = {
+        int(wire): str(pauli).upper()
+        for wire, pauli in paulis.items()
+        if str(pauli).upper() != "I"
+    }
+    if any(pauli not in _PAULI_MATRICES for pauli in normalized.values()):
+        raise ValueError("Pauli products support only I, X, Y, and Z")
+    device.synchronize()
+    if device.backend == "mps":
+        operators = {
+            wire: _PAULI_MATRICES[pauli]
+            for wire, pauli in normalized.items()
+        }
+        return device.sim.expectation_product(operators)
+
+    acted = device.sim.state
+    for wire, pauli in normalized.items():
+        acted = _apply_local_matrix(
+            acted,
+            device.wires,
+            [wire],
+            _PAULI_MATRICES[pauli],
+        )
     value = mx.sum(mx.conj(device.sim.state) * acted)
     mx.eval(value)
     return complex(value.item())
@@ -231,6 +356,21 @@ def observable_samples(
     eigenvalues, eigenvectors = np.linalg.eigh(
         np.asarray(matrix, dtype=np.complex128)
     )
+    if device.backend == "mps":
+        probabilities = []
+        for eigenvector in eigenvectors.T:
+            projector = np.outer(eigenvector, eigenvector.conj())
+            probabilities.append(
+                device.sim.expectation_dense(list(wires), projector).real
+            )
+        host_probabilities = np.clip(
+            np.asarray(probabilities, dtype=np.float64), 0.0, None
+        )
+        host_probabilities /= host_probabilities.sum()
+        indices = rng.choice(
+            len(eigenvalues), size=int(shots), p=host_probabilities
+        )
+        return np.real_if_close(eigenvalues[indices])
     rotated = _apply_local_matrix(
         device.sim.state,
         device.wires,

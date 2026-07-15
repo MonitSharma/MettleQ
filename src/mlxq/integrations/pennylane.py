@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Sequence
+from dataclasses import replace
+from os import path
 from typing import Optional
 
-import mlx.core as mx
 import numpy as np
 
 try:
     import pennylane as qml
     from pennylane.devices import Device as PennyLaneDevice
     from pennylane.devices import ExecutionConfig
+    from pennylane.devices.modifiers import simulator_tracking, single_tape_support
     from pennylane.devices.preprocess import (
         decompose,
         validate_device_wires,
@@ -37,15 +38,23 @@ except ImportError as exc:  # pragma: no cover - exercised without the extra
     ) from exc
 
 from ._common import (
-    _apply_local_matrix,
+    apply_global_phase,
     bit_counts,
     core_operation,
     execute_operations,
     local_expectation,
     marginal_probabilities,
     observable_samples,
+    pauli_product_expectation,
     sample_bits,
     statevector_numpy,
+)
+from ..planning import (
+    DEFAULT_AUTOMATIC_MPS_MIN_QUBITS,
+    DEFAULT_MPS_GPU_MIN_QUBITS,
+    DEFAULT_STATEVECTOR_GPU_MIN_QUBITS,
+    normalize_device,
+    normalize_method,
 )
 
 
@@ -77,25 +86,18 @@ _PENNYLANE_TO_CORE = {
     "IsingZZ": "ZZPHASE",
 }
 
-_PAULI_MATRICES = {
-    "X": np.array([[0, 1], [1, 0]], dtype=np.complex64),
-    "Y": np.array([[0, -1j], [1j, 0]], dtype=np.complex64),
-    "Z": np.array([[1, 0], [0, -1]], dtype=np.complex64),
-}
-
 _ANALYTIC_MEASUREMENTS = (StateMP, ProbabilityMP, ExpectationMP, VarianceMP)
 _SHOT_MEASUREMENTS = (ProbabilityMP, SampleMP, CountsMP, ExpectationMP, VarianceMP)
 
 
-def _supports_operation(operation) -> bool:
-    return operation.name in _PENNYLANE_TO_CORE or operation.name in {
-        "Identity",
-        "GlobalPhase",
-    }
-
-
+@simulator_tracking
+@single_tape_support
 class QupertinoDevice(PennyLaneDevice):
-    """PennyLane device using Qupertino's validated statevector engine."""
+    """PennyLane device using Qupertino's Apple-native simulation methods."""
+
+    config_filepath = path.join(
+        path.dirname(__file__), "pennylane_capabilities.toml"
+    )
 
     def __init__(
         self,
@@ -103,6 +105,14 @@ class QupertinoDevice(PennyLaneDevice):
         shots=None,
         *,
         seed=None,
+        method: str = "automatic",
+        device: str = "auto",
+        allow_approximation: bool = False,
+        mps_max_bond_dimension: int = 64,
+        mps_truncation_threshold: float = 1e-10,
+        statevector_gpu_min_qubits: int = DEFAULT_STATEVECTOR_GPU_MIN_QUBITS,
+        mps_gpu_min_qubits: Optional[int] = DEFAULT_MPS_GPU_MIN_QUBITS,
+        automatic_mps_min_qubits: int = DEFAULT_AUTOMATIC_MPS_MIN_QUBITS,
         execution_report: bool = False,
         metal_checkpoint_budget_bytes: Optional[int] = None,
         allow_unsafe_statevector: Optional[bool] = None,
@@ -113,24 +123,80 @@ class QupertinoDevice(PennyLaneDevice):
         if self.wires is None or len(self.wires) <= 0:
             raise DeviceError("QupertinoDevice requires at least one wire")
         self._rng = np.random.default_rng(seed)
+        self._method = normalize_method(method)
+        self._device = normalize_device(device)
+        self._allow_approximation = bool(allow_approximation)
+        self._mps_max_bond_dimension = int(mps_max_bond_dimension)
+        self._mps_truncation_threshold = float(mps_truncation_threshold)
+        self._statevector_gpu_min_qubits = int(statevector_gpu_min_qubits)
+        self._mps_gpu_min_qubits = (
+            None
+            if mps_gpu_min_qubits is None
+            else int(mps_gpu_min_qubits)
+        )
+        self._automatic_mps_min_qubits = int(automatic_mps_min_qubits)
         self._execution_report = bool(execution_report)
         self._metal_checkpoint_budget_bytes = metal_checkpoint_budget_bytes
         self._allow_unsafe_statevector = allow_unsafe_statevector
         self.last_execution_plan = None
         self.statevector_preflight = None
+        self.last_execution_selection = None
+        self.last_mps_diagnostics = None
 
     @property
     def name(self) -> str:
         return "qupertino"
 
+    def setup_execution_config(
+        self,
+        config: Optional[ExecutionConfig] = None,
+        circuit=None,
+    ) -> ExecutionConfig:
+        config = ExecutionConfig() if config is None else config
+        options = {
+            "method": self._method,
+            "device": self._device,
+            "allow_approximation": self._allow_approximation,
+            "mps_max_bond_dimension": self._mps_max_bond_dimension,
+            "mps_truncation_threshold": self._mps_truncation_threshold,
+            "statevector_gpu_min_qubits": self._statevector_gpu_min_qubits,
+            "mps_gpu_min_qubits": self._mps_gpu_min_qubits,
+            "automatic_mps_min_qubits": self._automatic_mps_min_qubits,
+            **config.device_options,
+        }
+        return replace(
+            config,
+            device_options=options,
+            convert_to_numpy=True,
+            use_device_gradient=False,
+            use_device_jacobian_product=False,
+            grad_on_execution=False,
+        )
+
+    def _supports_operation(self, operation, *, method=None) -> bool:
+        method = self._method if method is None else method
+        if (
+            method == "matrix_product_state"
+            and operation.name in {"Toffoli", "CSWAP"}
+        ):
+            return False
+        return operation.name in _PENNYLANE_TO_CORE or operation.name in {
+            "Identity",
+            "GlobalPhase",
+        }
+
     def preprocess_transforms(
         self, execution_config: Optional[ExecutionConfig] = None
     ) -> CompilePipeline:
+        config = self.setup_execution_config(execution_config)
+        method = normalize_method(config.device_options["method"])
         program = CompilePipeline()
         program.add_transform(convert_to_numpy_parameters)
         program.add_transform(
             decompose,
-            stopping_condition=_supports_operation,
+            stopping_condition=lambda operation: self._supports_operation(
+                operation, method=method
+            ),
             device_wires=self.wires,
             name=self.name,
         )
@@ -154,12 +220,20 @@ class QupertinoDevice(PennyLaneDevice):
         return program
 
     def execute(self, circuits, execution_config=None):
-        single_circuit = not isinstance(circuits, Sequence)
-        batch = [circuits] if single_circuit else list(circuits)
-        results = tuple(self._execute_circuit(circuit) for circuit in batch)
-        return results[0] if single_circuit else results
+        config = self.setup_execution_config(execution_config)
+        execution_cache = {}
+        return tuple(
+            self._execute_circuit(
+                circuit,
+                config.device_options,
+                execution_cache=execution_cache,
+            )
+            for circuit in circuits
+        )
 
-    def _execute_circuit(self, circuit):
+    def _execute_circuit(
+        self, circuit, execution_options, *, execution_cache=None
+    ):
         operations = []
         global_phase = 0.0
         for operation in circuit.operations:
@@ -202,13 +276,39 @@ class QupertinoDevice(PennyLaneDevice):
             report=self._execution_report,
             metal_checkpoint_budget_bytes=self._metal_checkpoint_budget_bytes,
             allow_unsafe_statevector=self._allow_unsafe_statevector,
+            method=execution_options["method"],
+            execution_device=execution_options["device"],
+            allow_approximation=bool(
+                execution_options["allow_approximation"]
+            ),
+            mps_max_bond_dimension=int(
+                execution_options["mps_max_bond_dimension"]
+            ),
+            mps_truncation_threshold=float(
+                execution_options["mps_truncation_threshold"]
+            ),
+            statevector_gpu_min_qubits=int(
+                execution_options["statevector_gpu_min_qubits"]
+            ),
+            mps_gpu_min_qubits=(
+                None
+                if execution_options["mps_gpu_min_qubits"] is None
+                else int(execution_options["mps_gpu_min_qubits"])
+            ),
+            automatic_mps_min_qubits=int(
+                execution_options["automatic_mps_min_qubits"]
+            ),
+            execution_cache=execution_cache,
         )
-        if global_phase:
-            device.sim.state = device.sim.state * complex(
-                np.cos(global_phase), np.sin(global_phase)
-            )
+        apply_global_phase(device, global_phase)
         self.last_execution_plan = device.last_execution_plan
         self.statevector_preflight = device.statevector_preflight
+        self.last_execution_selection = device.execution_selection
+        self.last_mps_diagnostics = (
+            device.sim.truncation_diagnostics()
+            if device.backend == "mps"
+            else None
+        )
 
         if effective_shots.has_partitioned_shots:
             return tuple(
@@ -310,27 +410,18 @@ class QupertinoDevice(PennyLaneDevice):
     def _observable_moments(self, device, observable):
         sentence = self._pauli_sentence(observable)
         if sentence is not None:
-            acted = mx.zeros_like(device.sim.state)
-            for word, coefficient in sentence.items():
-                term = device.sim.state
-                for wire, pauli in word.items():
-                    term = _apply_local_matrix(
-                        term,
-                        len(self.wires),
-                        [self.wires.index(wire)],
-                        _PAULI_MATRICES[pauli],
-                    )
-                acted = acted + complex(coefficient) * term
-            expectation = mx.sum(mx.conj(device.sim.state) * acted)
-            second_moment = mx.sum(mx.conj(acted) * acted)
-            mx.eval(expectation, second_moment)
-            return complex(expectation.item()), complex(second_moment.item())
+            expectation = self._sentence_expectation(device, sentence)
+            second_moment = self._sentence_expectation(
+                device, sentence @ sentence
+            )
+            return expectation, second_moment
 
         wires = [self.wires.index(wire) for wire in observable.wires]
-        if len(wires) > 8:
+        dense_limit = 4 if device.backend == "mps" else 8
+        if len(wires) > dense_limit:
             raise DeviceError(
-                "Non-Pauli observables spanning more than 8 wires would "
-                "require an unsafe dense observable matrix"
+                f"Non-Pauli observables spanning more than {dense_limit} "
+                "wires would require an unsafe dense observable matrix"
             )
         matrix = np.asarray(qml.matrix(observable, wire_order=observable.wires))
         expectation = local_expectation(device, wires, matrix)
@@ -343,17 +434,14 @@ class QupertinoDevice(PennyLaneDevice):
             word, coefficient = next(iter(sentence.items()))
             if not word:
                 return np.full(int(shots), np.real_if_close(coefficient))
-            acted = device.sim.state
-            for wire, pauli in word.items():
-                acted = _apply_local_matrix(
-                    acted,
-                    len(self.wires),
-                    [self.wires.index(wire)],
-                    _PAULI_MATRICES[pauli],
-                )
-            expectation = mx.sum(mx.conj(device.sim.state) * acted)
-            mx.eval(expectation)
-            expectation = float(np.clip(expectation.item().real, -1.0, 1.0))
+            expectation = pauli_product_expectation(
+                device,
+                {
+                    self.wires.index(wire): pauli
+                    for wire, pauli in word.items()
+                },
+            )
+            expectation = float(np.clip(expectation.real, -1.0, 1.0))
             signs = self._rng.choice(
                 np.array([-1.0, 1.0]),
                 size=int(shots),
@@ -362,15 +450,28 @@ class QupertinoDevice(PennyLaneDevice):
             return np.real_if_close(complex(coefficient) * signs)
 
         wires = [self.wires.index(wire) for wire in observable.wires]
-        if len(wires) > 8:
+        dense_limit = 4 if device.backend == "mps" else 8
+        if len(wires) > dense_limit:
             raise DeviceError(
                 "Finite-shot sampling of a non-Pauli observable spanning more "
-                "than 8 wires is not supported"
+                f"than {dense_limit} wires is not supported"
             )
         matrix = np.asarray(qml.matrix(observable, wire_order=observable.wires))
         return observable_samples(
             device, wires, matrix, int(shots), self._rng
         )
+
+    def _sentence_expectation(self, device, sentence) -> complex:
+        value = 0.0 + 0.0j
+        for word, coefficient in sentence.items():
+            value += complex(coefficient) * pauli_product_expectation(
+                device,
+                {
+                    self.wires.index(wire): pauli
+                    for wire, pauli in word.items()
+                },
+            )
+        return value
 
     @staticmethod
     def _pauli_sentence(observable):

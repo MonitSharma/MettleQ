@@ -1,0 +1,180 @@
+import numpy as np
+import pytest
+
+import mlxq.planning as planning
+from mlxq.device import Device
+from mlxq.gates import CNOT, H
+from mlxq.integrations import _common
+from mlxq.mps_state import MPSOptions
+
+
+def _local_chain(n_qubits):
+    return [
+        {"name": "CNOT", "wires": [wire, wire + 1], "parameters": []}
+        for wire in range(n_qubits - 1)
+    ]
+
+
+def test_automatic_planner_uses_cpu_below_and_gpu_above_crossover(monkeypatch):
+    monkeypatch.setattr(planning, "_gpu_available", lambda: True)
+    small = planning.select_execution(
+        5, [], statevector_gpu_min_qubits=8
+    )
+    large = planning.select_execution(
+        8, [], statevector_gpu_min_qubits=8
+    )
+
+    assert small.selected_method == "statevector"
+    assert small.selected_device == "cpu"
+    assert large.selected_device == "gpu"
+    assert "not combined into a speed claim" in large.cpu_gpu_policy
+
+
+def test_automatic_mps_requires_opt_in_and_conservative_compatibility(monkeypatch):
+    monkeypatch.setattr(planning, "_gpu_available", lambda: False)
+    compatible = planning.select_execution(
+        12,
+        _local_chain(12),
+        allow_approximation=True,
+        automatic_mps_min_qubits=12,
+    )
+    exact = planning.select_execution(
+        12,
+        _local_chain(12),
+        allow_approximation=False,
+        automatic_mps_min_qubits=12,
+    )
+    nonlocal_circuit = planning.select_execution(
+        12,
+        [{"name": "CNOT", "wires": [0, 11], "parameters": []}],
+        allow_approximation=True,
+        automatic_mps_min_qubits=12,
+    )
+
+    assert compatible.selected_method == "matrix_product_state"
+    assert compatible.mps_svd_device == "cpu"
+    assert exact.selected_method == "statevector"
+    assert nonlocal_circuit.selected_method == "statevector"
+    assert "contains_non_adjacent_two_qubit_operation" in (
+        nonlocal_circuit.mps_compatibility_reasons
+    )
+
+
+def test_explicit_method_and_device_alias_validation(monkeypatch):
+    monkeypatch.setattr(planning, "_gpu_available", lambda: False)
+    selection = planning.select_execution(
+        4, [], method="mps", device="cpu"
+    )
+    assert selection.selected_method == "matrix_product_state"
+    assert selection.selected_device == "cpu"
+    with pytest.raises(ValueError, match="method must be"):
+        planning.select_execution(4, [], method="hybrid")
+    with pytest.raises(ValueError, match="device must be"):
+        planning.select_execution(4, [], device="neural-engine")
+
+
+def test_statevector_cpu_and_gpu_have_numerical_parity():
+    if not planning._gpu_available():
+        pytest.skip("Apple Metal GPU is unavailable")
+    operations = [
+        {"name": "H", "wires": [0], "parameters": []},
+        {"name": "CNOT", "wires": [0, 1], "parameters": []},
+        {"name": "RY", "wires": [2], "parameters": [0.37]},
+    ]
+    cpu = _common.execute_operations(
+        3, operations, method="statevector", execution_device="cpu"
+    )
+    gpu = _common.execute_operations(
+        3, operations, method="statevector", execution_device="gpu"
+    )
+    assert np.allclose(
+        _common.statevector_numpy(cpu),
+        _common.statevector_numpy(gpu),
+        rtol=0.0,
+        atol=2e-6,
+    )
+
+
+def test_mps_cpu_and_gpu_tensor_paths_have_numerical_parity():
+    if not planning._gpu_available():
+        pytest.skip("Apple Metal GPU is unavailable")
+    operations = [
+        {"name": "H", "wires": [0], "parameters": []},
+        {"name": "CNOT", "wires": [0, 1], "parameters": []},
+        {"name": "RZ", "wires": [1], "parameters": [-0.21]},
+    ]
+    cpu = _common.execute_operations(
+        3,
+        operations,
+        method="matrix_product_state",
+        execution_device="cpu",
+        mps_max_bond_dimension=32,
+    )
+    gpu = _common.execute_operations(
+        3,
+        operations,
+        method="matrix_product_state",
+        execution_device="gpu",
+        mps_max_bond_dimension=32,
+    )
+    assert np.allclose(
+        cpu.sim.to_statevector(),
+        gpu.sim.to_statevector(),
+        rtol=0.0,
+        atol=3e-6,
+    )
+    assert cpu.sim.truncation_diagnostics()["tensor_device"] == "cpu"
+    assert gpu.sim.truncation_diagnostics()["tensor_device"] == "gpu"
+    assert gpu.sim.truncation_diagnostics()["svd_device"] == "cpu"
+
+
+def test_mps_sampling_and_marginals_do_not_materialize_dense_state(monkeypatch):
+    simulator = Device(
+        24,
+        backend="mps",
+        execution_device="cpu",
+        mps_opts=MPSOptions(dmax=8, eps=1e-12),
+    ).sim
+    simulator.apply_single(H(), 0)
+    for wire in range(23):
+        simulator.apply_two(CNOT(), wire, wire + 1)
+    monkeypatch.setattr(
+        simulator,
+        "to_statevector",
+        lambda: (_ for _ in ()).throw(AssertionError("dense state requested")),
+    )
+
+    probabilities = simulator.probabilities_array([0, 23])
+    samples = simulator.sample_array(
+        64, [0, 23], rng=np.random.default_rng(7)
+    )
+    assert np.allclose(probabilities, [0.5, 0.0, 0.0, 0.5], atol=2e-6)
+    assert samples.shape == (64, 2)
+    assert np.all(samples[:, 0] == samples[:, 1])
+
+
+def test_mps_truncation_diagnostics_make_approximation_visible():
+    simulator = Device(
+        2,
+        backend="mps",
+        execution_device="cpu",
+        mps_opts=MPSOptions(dmax=1, eps=0.0),
+    ).sim
+    simulator.apply_single(H(), 0)
+    simulator.apply_two(CNOT(), 0, 1)
+    diagnostics = simulator.truncation_diagnostics()
+
+    assert diagnostics["events"] == 1
+    assert diagnostics["local_discarded_weight_sum"] > 0.0
+    assert diagnostics["approximation_warning"] is not None
+
+
+def test_mps_dense_state_request_applies_statevector_preflight(monkeypatch):
+    device = Device(2, backend="mps", execution_device="cpu")
+
+    def refuse(*args, **kwargs):
+        raise MemoryError("preflight sentinel")
+
+    monkeypatch.setattr(_common, "require_statevector_preflight", refuse)
+    with pytest.raises(MemoryError, match="preflight sentinel"):
+        _common.statevector_numpy(device)

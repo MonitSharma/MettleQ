@@ -22,16 +22,19 @@ class MPSOptions:
 
 def _svd_truncate(M: mx.array, dmax: int, eps: float):
     # M shape: (a*2, 2*b) for two-site tensor; perform SVD and truncate
-    # MLX SVD has limited complex/GPU support; use NumPy for robustness.
+    # MLX currently exposes SVD on CPU. Apple unified memory lets a GPU tensor
+    # be consumed by the CPU stream without first materializing a Python list;
+    # keep this fallback visible in diagnostics rather than calling it GPU SVD.
     try:
-        Mn = np.asarray(M.tolist(), dtype=np.complex128)
+        U, S, Vh = mx.linalg.svd(M, stream=mx.cpu)
+        mx.eval(S)
+    except Exception:
+        # Last-resort compatibility path for older MLX releases.
+        Mn = np.asarray(M, dtype=np.complex128)
         U_np, S_np, Vh_np = np.linalg.svd(Mn, full_matrices=False)
         U = mx.array(U_np.astype(np.complex64), mx.complex64)
         S = mx.array(S_np.astype(np.float32))
         Vh = mx.array(Vh_np.astype(np.complex64), mx.complex64)
-    except Exception:
-        # Fallback: attempt MLX SVD on CPU if available
-        U, S, Vh = mx.linalg.svd(M, stream=mx.cpu)
     # Determine truncation rank
     s_vals = mx.reshape(S, (-1,))
     # Move to host to decide rank
@@ -82,6 +85,10 @@ class MPSState:
         # Truncation diagnostics
         self.truncated_any: bool = False
         self.trunc_events: int = 0
+        self.tensor_device = (
+            "cpu" if mx.default_device() == mx.Device(mx.cpu) else "gpu"
+        )
+        self.svd_device = "cpu"
         self.reset()
 
     def reset(self):
@@ -293,6 +300,13 @@ class MPSState:
             "last_event": (
                 dict(self.last_truncation) if self.last_truncation is not None else None
             ),
+            "tensor_device": self.tensor_device,
+            "svd_device": self.svd_device,
+            "state_norm": self.norm(),
+            "approximation_warning": (
+                "local discarded weights are telemetry, not a global fidelity bound"
+                if self.truncated_any else None
+            ),
         }
 
     # -------------- convenience MPO sweeps for XX/YY via basis transforms --------------
@@ -325,33 +339,225 @@ class MPSState:
             self.apply_two(gate, qs[0], qs[1]); return
         raise ValueError("MPSState.apply_dense_gate only supports 1q/2q gates")
 
-    def probabilities(self) -> List[float]:
-        # Convert to dense vector when small; otherwise approximate by contracting
-        n = self.n
-        if n <= 18:
-            # assemble dense by contracting all bonds
-            psi = self.A[0]
-            for i in range(1, n):
-                psi = mx.tensordot(psi, self.A[i], axes=([psi.ndim - 1],[0]))  # contract on current right bond
-            psi_vec = mx.reshape(psi, (1 << n,))
-            amp2 = mx.abs(psi_vec) ** 2
-            mx.eval(amp2)
-            return [float(v) for v in amp2.tolist()]
-        # Fallback: return empty list to signal unsupported in large-n (not used in benches)
-        return []
+    @property
+    def tensors(self):
+        return self.A
 
-    # sampling APIs not strictly needed for current benches
+    def _numpy_tensors(self) -> List[np.ndarray]:
+        mx.eval(*self.A)
+        return [np.asarray(tensor, dtype=np.complex128) for tensor in self.A]
+
+    @staticmethod
+    def _transfer(
+        environment: np.ndarray,
+        tensor: np.ndarray,
+        operator: np.ndarray,
+    ) -> np.ndarray:
+        # environment is indexed (ket-left, bra-left); operator is (bra, ket)
+        return np.einsum(
+            "ab,atr,st,bsq->rq",
+            environment,
+            tensor,
+            operator,
+            tensor.conj(),
+            optimize=True,
+        )
+
+    def norm(self) -> float:
+        tensors = self._numpy_tensors()
+        environment = np.ones((1, 1), dtype=np.complex128)
+        identity = np.eye(2, dtype=np.complex128)
+        for tensor in tensors:
+            environment = self._transfer(environment, tensor, identity)
+        return float(max(0.0, environment.reshape(-1)[0].real) ** 0.5)
+
+    def normalize(self) -> float:
+        norm = self.norm()
+        if norm <= 0.0:
+            raise RuntimeError("Cannot normalize a zero MPS state")
+        self.A[0] = self.A[0] / norm
+        return norm
+
+    def expectation_product(self, operators: dict[int, np.ndarray]) -> complex:
+        """Expectation of a tensor product of local 2x2 operators."""
+        tensors = self._numpy_tensors()
+        environment = np.ones((1, 1), dtype=np.complex128)
+        identity = np.eye(2, dtype=np.complex128)
+        for wire, tensor in enumerate(tensors):
+            operator = np.asarray(
+                operators.get(wire, identity), dtype=np.complex128
+            )
+            if operator.shape != (2, 2):
+                raise ValueError("MPS product operators must be 2x2")
+            environment = self._transfer(environment, tensor, operator)
+        numerator = complex(environment.reshape(-1)[0])
+        norm = self.norm()
+        return numerator / (norm * norm)
+
+    def expectation_dense(
+        self,
+        wires: List[int],
+        matrix: np.ndarray,
+    ) -> complex:
+        """Expectation of a small dense observable via product expansion."""
+        wires = list(wires)
+        if len(wires) > 4:
+            raise ValueError(
+                "Dense MPS observables are limited to 4 wires; use Pauli sums "
+                "for wider observables"
+            )
+        dimension = 1 << len(wires)
+        matrix = np.asarray(matrix, dtype=np.complex128)
+        if matrix.shape != (dimension, dimension):
+            raise ValueError("Dense observable dimension does not match wires")
+        value = 0.0 + 0.0j
+        for bra in range(dimension):
+            for ket in range(dimension):
+                coefficient = matrix[bra, ket]
+                if abs(coefficient) == 0.0:
+                    continue
+                operators = {}
+                for index, wire in enumerate(wires):
+                    bra_bit = (bra >> (len(wires) - 1 - index)) & 1
+                    ket_bit = (ket >> (len(wires) - 1 - index)) & 1
+                    local = np.zeros((2, 2), dtype=np.complex128)
+                    local[bra_bit, ket_bit] = 1.0
+                    operators[wire] = local
+                value += coefficient * self.expectation_product(operators)
+        return value
+
+    def _projected_probability(
+        self,
+        tensors: List[np.ndarray],
+        fixed_bits: dict[int, int],
+        norm_squared: float,
+    ) -> float:
+        environment = np.ones((1, 1), dtype=np.complex128)
+        identity = np.eye(2, dtype=np.complex128)
+        for wire, tensor in enumerate(tensors):
+            if wire in fixed_bits:
+                bit = int(fixed_bits[wire])
+                operator = np.zeros((2, 2), dtype=np.complex128)
+                operator[bit, bit] = 1.0
+            else:
+                operator = identity
+            environment = self._transfer(environment, tensor, operator)
+        value = float(environment.reshape(-1)[0].real / norm_squared)
+        return max(0.0, value)
+
+    def probabilities_array(
+        self, wires: Optional[List[int]] = None
+    ) -> np.ndarray:
+        selected = list(range(self.n)) if wires is None else list(wires)
+        if len(set(selected)) != len(selected):
+            raise ValueError("Duplicate qubit indices")
+        if any(wire < 0 or wire >= self.n for wire in selected):
+            raise ValueError("Qubit index out of range")
+        tensors = self._numpy_tensors()
+        norm = self.norm()
+        norm_squared = norm * norm
+        result = np.empty(1 << len(selected), dtype=np.float64)
+        for outcome in range(len(result)):
+            fixed = {
+                wire: (outcome >> (len(selected) - 1 - index)) & 1
+                for index, wire in enumerate(selected)
+            }
+            result[outcome] = self._projected_probability(
+                tensors, fixed, norm_squared
+            )
+        total = float(result.sum())
+        if total <= 0.0:
+            raise RuntimeError("MPS marginal has zero total probability")
+        return result / total
+
+    def probabilities(self, wires: Optional[List[int]] = None) -> List[float]:
+        return self.probabilities_array(wires).tolist()
+
+    def to_statevector(self) -> np.ndarray:
+        """Materialize a dense state only when the caller explicitly asks."""
+        psi = self.A[0]
+        for index in range(1, self.n):
+            psi = mx.tensordot(
+                psi, self.A[index], axes=([psi.ndim - 1], [0])
+            )
+        psi = mx.reshape(psi, (1 << self.n,))
+        mx.eval(psi)
+        result = np.asarray(psi, dtype=np.complex64)
+        norm = np.sqrt(
+            np.sum(np.abs(result.astype(np.complex128)) ** 2, dtype=np.float64)
+        )
+        if norm <= 0.0:
+            raise RuntimeError("MPS produced a zero statevector")
+        return result / norm
+
+    def sample_array(
+        self,
+        shots: int,
+        wires: Optional[List[int]] = None,
+        *,
+        rng: Optional[np.random.Generator] = None,
+    ) -> np.ndarray:
+        """Sample an arbitrary-size MPS without constructing 2**n amplitudes."""
+        shots = int(shots)
+        if shots < 0:
+            raise ValueError("shots must be non-negative")
+        selected = list(range(self.n)) if wires is None else list(wires)
+        if len(set(selected)) != len(selected):
+            raise ValueError("Duplicate qubit indices")
+        if any(wire < 0 or wire >= self.n for wire in selected):
+            raise ValueError("Qubit index out of range")
+        rng = np.random.default_rng() if rng is None else rng
+        tensors = self._numpy_tensors()
+
+        right = [None] * (self.n + 1)
+        right[self.n] = np.ones((1, 1), dtype=np.complex128)
+        for wire in range(self.n - 1, -1, -1):
+            tensor = tensors[wire]
+            right[wire] = np.einsum(
+                "asr,bsq,rq->ab",
+                tensor,
+                tensor.conj(),
+                right[wire + 1],
+                optimize=True,
+            )
+
+        all_samples = np.empty((shots, self.n), dtype=np.int64)
+        for shot in range(shots):
+            left = np.ones((1, 1), dtype=np.complex128)
+            for wire, tensor in enumerate(tensors):
+                weights = []
+                updates = []
+                for bit in (0, 1):
+                    selected_tensor = tensor[:, bit, :]
+                    update = np.einsum(
+                        "ab,ar,bq->rq",
+                        left,
+                        selected_tensor,
+                        selected_tensor.conj(),
+                        optimize=True,
+                    )
+                    weight = float(
+                        np.einsum(
+                            "rq,rq->",
+                            update,
+                            right[wire + 1],
+                            optimize=True,
+                        ).real
+                    )
+                    weights.append(max(0.0, weight))
+                    updates.append(update)
+                total = weights[0] + weights[1]
+                if total <= 0.0:
+                    raise RuntimeError("MPS conditional probability is zero")
+                probability_one = weights[1] / total
+                bit = int(rng.random() < probability_one)
+                all_samples[shot, wire] = bit
+                chosen_weight = weights[bit]
+                left = updates[bit] / max(chosen_weight, np.finfo(float).tiny)
+        return all_samples[:, selected]
+
     def sample(self, shots: int, wires: Optional[List[int]] = None):
-        from .sim import StateVectorSimulator
-        if self.n <= 16:
-            sim = StateVectorSimulator(self.n)
-            # rebuild dense from MPS
-            psi = self.A[0]
-            for i in range(1, self.n):
-                psi = mx.tensordot(psi, self.A[i], axes=([psi.ndim - 1],[0]))
-            sim.state = mx.reshape(psi, (1 << self.n,))
-            return sim.sample(shots, wires)
-        raise NotImplementedError("MPS.sample not available for large n")
+        return self.sample_array(shots, wires).tolist()
 
     def sample_counts(self, shots: int, wires: Optional[List[int]] = None):
         counts: dict[str,int] = {}

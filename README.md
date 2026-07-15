@@ -2,7 +2,7 @@
   <img src="quantumstudio/assets/app_icon_source.png" alt="Qupertino logo" width="150"/>
   <h1>Qupertino</h1>
   <p><strong>Fast, inspectable local quantum-circuit simulation for Apple Silicon.</strong></p>
-  <p>Pure MLX execution, hand-tuned Metal kernels, statevector and MPS backends, strict OpenQASM, reproducible benchmarks, and a desktop studio.</p>
+  <p>Qiskit and PennyLane integration, exact statevector and MPS methods, MLX/Metal execution, and reproducible evidence.</p>
   <p>
     <a href="https://github.com/MonitSharma/Qupertino/actions/workflows/ci.yml"><img src="https://github.com/MonitSharma/Qupertino/actions/workflows/ci.yml/badge.svg" alt="CI status"/></a>
     <img src="https://img.shields.io/badge/platform-Apple%20Silicon-111111" alt="Apple Silicon"/>
@@ -22,14 +22,15 @@
 ![QuantumStudio dashboard](quantumstudio/assets/screenshots/screen003.png)
 
 > **Project goal:** build the fastest trustworthy local quantum-simulation
-> engine for Apple Silicon, with adapters that let Qiskit, PennyLane, and other
-> quantum SDK users transparently benefit from Apple GPUs.
+> engine for Apple Silicon, with native Qiskit and PennyLane paths that choose
+> the Mac CPU for small work and the integrated GPU only when measured overhead
+> is amortized.
 
-Qupertino now exposes the same validated Apple-GPU execution path through a
-native Qiskit `BackendV2` and a registered PennyLane device. These are initial
-exact-statevector integrations with explicit limits, native result objects,
-deterministic sampling, and the same memory preflight and execution evidence as
-the direct API.
+Qupertino exposes exact statevector and bounded matrix-product-state (MPS)
+simulation through a Qiskit `BackendV2`, Qiskit SamplerV2/EstimatorV2, and a
+registered PennyLane device. Every execution selects one numerical device. It
+does not add CPU and GPU timings together or market them as cooperative
+acceleration.
 
 ## At a glance
 
@@ -40,7 +41,7 @@ the direct API.
 | Circuit inputs | Native Python operations, strict unitary OpenQASM 2.0, Qiskit circuits, and PennyLane QNodes |
 | Workloads | QFT, phase estimation, Grover, QAOA, VQE, QCBM, QNN, random circuits, and spin dynamics |
 | Trust model | Pre-allocation statevector checks, capability-gated dispatch, explicit cost/execution plans, numerical parity tests, synchronized benchmarks, and safe fallbacks |
-| Current test suite | **316 tests** across the simulator, SDK adapters, algorithms, MPS, QASM, Metal dispatch, campaign analysis, and QuantumStudio backend |
+| Current test suite | **329 tests** across the simulator, SDK adapters, planner, algorithms, MPS, QASM, Metal dispatch, campaign analysis, and QuantumStudio backend |
 | Desktop product | QuantumStudio orchestration, monitoring, plotting, and export |
 | SDK adapters | Native Qiskit backend and registered PennyLane device, plus the original internal `mlxq.qml` teaching wrapper |
 
@@ -96,9 +97,13 @@ python -m pip install -e '.[sdk]'
 
 ```python
 from qiskit import QuantumCircuit, transpile
-from mlxq.integrations.qiskit import QupertinoBackend
+from mlxq.integrations.qiskit import (
+    QupertinoBackend,
+    QupertinoEstimatorV2,
+    QupertinoSamplerV2,
+)
 
-backend = QupertinoBackend()
+backend = QupertinoBackend(method="automatic", device="auto")
 circuit = QuantumCircuit(3, 3)
 circuit.h(0)
 circuit.cx(0, 1)
@@ -108,6 +113,10 @@ circuit.measure(range(3), range(3))
 compiled = transpile(circuit, backend)
 result = backend.run(compiled, shots=4096, seed_simulator=7).result()
 print(result.get_counts())
+
+# Native Qiskit V2 primitives use the same planner and execution engine.
+sampler = QupertinoSamplerV2(backend=backend)
+estimator = QupertinoEstimatorV2(backend=backend)
 ```
 
 Pass `return_statevector=True` only when the caller needs a full state readback.
@@ -119,7 +128,12 @@ the native Qiskit result data.
 ```python
 import pennylane as qml
 
-device = qml.device("qupertino", wires=3)
+device = qml.device(
+    "qupertino",
+    wires=3,
+    method="automatic",
+    device="auto",
+)
 
 @qml.qnode(device, diff_method="parameter-shift")
 def circuit(theta):
@@ -130,6 +144,38 @@ def circuit(theta):
 
 print(circuit(0.3))
 ```
+
+### Choose a simulation method and device
+
+Qiskit and PennyLane accept the same policy vocabulary:
+
+| Option | Meaning |
+| --- | --- |
+| `method="automatic"` | Preserve exact statevector semantics unless approximation is explicitly allowed and the circuit passes conservative MPS checks |
+| `method="statevector"` | Exact dense statevector with the allocation preflight enforced |
+| `method="matrix_product_state"` | Bounded MPS using `mps_max_bond_dimension` and `mps_truncation_threshold` |
+| `device="auto"` | Select one measured path: CPU below crossover, GPU above it |
+| `device="cpu"` / `"gpu"` | Force one numerical path for testing or a calibrated deployment |
+
+Approximate automatic fallback is opt-in:
+
+```python
+backend = QupertinoBackend(
+    method="automatic",
+    device="auto",
+    allow_approximation=True,
+    mps_max_bond_dimension=64,
+    mps_truncation_threshold=1e-10,
+)
+```
+
+The current M3 Pro calibration selects statevector GPU execution from 14
+qubits. MPS tensor operations can be forced onto CPU or GPU, but MLX 0.32 SVD
+runs on CPU and no end-to-end MPS GPU crossover was observed through 32
+qubits. Therefore automatic MPS currently stays on CPU unless the caller
+supplies a measured `mps_gpu_min_qubits` value. MPS diagnostics expose the
+tensor device, SVD device, bond growth, truncation events, discarded-weight
+telemetry, and state norm.
 
 Launch the Python process with `MLXQ_METAL_KERNELS=auto` to request custom
 Metal kernels when all capability checks pass. Without it, both SDK adapters
@@ -211,26 +257,33 @@ is opt-in; unset preserves fully lazy execution.
 ## How execution works
 
 ```mermaid
-flowchart LR
-    QASM["OpenQASM 2.0<br/>current"] --> IR["Validated operation stream"]
-    PY["Native Python API<br/>current"] --> IR
-    QISKIT["Qiskit BackendV2<br/>current"] --> IR
-    PL["PennyLane device<br/>current"] --> IR
-    IR --> PLAN["Fusion + capability planner"]
-    PLAN --> MLX["Pure MLX structured kernels"]
-    PLAN --> METAL["Custom Metal kernels<br/>statevector, opt-in"]
-    PLAN --> MPS["MPS / TEBD backend"]
-    MLX --> RESULT["State, probabilities, samples, expectations"]
-    METAL --> RESULT
-    MPS --> RESULT
-    PLAN --> REPORT["Execution plan, dispatch evidence, memory estimates"]
+flowchart TB
+    QISKIT["Qiskit circuits and PUBs"] --> QAPI["BackendV2 · SamplerV2 · EstimatorV2"]
+    PL["PennyLane QNodes and tapes"] --> PAPI["PennyLane qupertino device"]
+    QAPI --> IR["Validated canonical circuit IR"]
+    PAPI --> IR
+    IR --> PLAN["Inspectable method and device planner"]
+
+    PLAN --> SVCPU["Exact statevector · CPU<br/>small circuits"]
+    PLAN --> SVGPU["Exact statevector · Apple GPU<br/>MLX + capability-gated Metal"]
+    PLAN --> MPSCPU["Bounded MPS · CPU<br/>automatic default today"]
+    PLAN --> MPSGPU["Bounded MPS · GPU tensors<br/>explicit; CPU SVD is reported"]
+    PLAN -. future .-> STAB["Stabilizer · CPU<br/>not implemented"]
+
+    SVCPU --> MEASURE["Native probabilities, sampling, counts, expectations"]
+    SVGPU --> MEASURE
+    MPSCPU --> MEASURE
+    MPSGPU --> MEASURE
+    MEASURE --> RESULTS["Qiskit Result/DataBin/BitArray or PennyLane results"]
+    PLAN --> EVIDENCE["Selection reason · memory preflight · dispatch plan · MPS diagnostics"]
 ```
 
-The pure-MLX tier specializes common gate classes using array operations. The
-Metal tier recognizes compatible layer structure and dispatches custom kernels
-for phase/ZZ layers, affine permutations, uniform and per-wire single-qubit
-layers, QFT stages, and XX/YY evolution. Both tiers consume the same validated
-operation stream.
+The product surface is deliberately limited to Qiskit and PennyLane for this
+phase. Both adapters translate once into the same validated IR, then reuse the
+same planner, memory gate, simulator, measurement implementation, and evidence.
+Statevector sampling remains on the selected MLX device until shot bits are
+returned. MPS marginals, local expectations, and sequential samples contract
+the tensor network without constructing a dense `2**n` state.
 
 ## Performance
 
@@ -509,6 +562,8 @@ auditable. This fork adds explicit evidence at each layer:
 
 - **Safe Metal selection:** platform, device, API, dtype, backend, qubit-index,
   memory, and ablation-policy checks must all pass.
+- **Explicit method/device selection:** SDK results record the requested and
+  selected method, selected CPU or GPU, and the reason for that decision.
 - **Inspectable plans:** `Device.explain()` reports recognized patterns,
   selected kernels, fallbacks, expected dispatches, and memory estimates without
   executing the circuit.
@@ -527,7 +582,6 @@ auditable. This fork adds explicit evidence at each layer:
 ### Test inventory
 
 | Category | Tests |
-| --- | ---: |
 | Core simulator and gate algebra | 149 |
 | Quantum-computing examples and algorithms | 41 |
 | Internal consistency and measurement parity | 21 |
@@ -537,10 +591,10 @@ auditable. This fork adds explicit evidence at each layer:
 | QPE energy estimation | 2 |
 | Benchmark protocol and plotting | 4 |
 | Custom Metal parity and dispatch | 19 |
-| Execution plans, memory policy, and capability reporting | 21 |
-| Native Qiskit and PennyLane integrations | 8 |
+| Execution plans, memory policy, planner, and capability reporting | 29 |
+| Native Qiskit and PennyLane integrations | 13 |
 | QuantumStudio backend and MCP API | 18 |
-| **Total** | **316** |
+| **Total** | **329** |
 
 Run everything with:
 
@@ -554,15 +608,19 @@ Silicon runner labeled `macOS` and `ARM64`.
 
 ### Known limits
 
-- Custom Metal kernels currently accelerate the exact statevector backend, not
-  the MPS backend.
+- Hand-written Metal kernels currently accelerate exact statevector patterns,
+  not MPS. MPS tensors support explicit CPU/GPU MLX execution, while MLX 0.32
+  SVD runs on CPU; the split is visible in diagnostics.
+- MPS is bounded and may be approximate. Local discarded singular-value weight
+  is telemetry, not a global fidelity bound. Automatic MPS requires
+  `allow_approximation=True` and conservative locality/depth checks.
 - The bundled strict importer accepts 33 of 42 OpenQASM files. It rejects reset,
   classical control, mid-circuit measurement, opaque gates, arbitrary includes,
   and malformed declarations.
-- The native SDK adapters currently expose the exact statevector backend. The
-  Qiskit backend accepts unitary circuits with final measurements; reset,
+- The Qiskit backend and V2 primitives support statevector and MPS execution.
+  The backend accepts unitary circuits with final measurements; reset,
   mid-circuit measurement, classical control, and noise are rejected. The
-  PennyLane device supports common decomposable unitary gates, state,
+  PennyLane device supports both methods, common decomposable unitary gates, state,
   probabilities, samples, counts, expectations, variances, shot vectors, and
   framework-managed parameter-shift gradients; dynamic wires, mid-circuit
   measurement, backpropagation, and device adjoint gradients are not yet
@@ -581,9 +639,10 @@ Silicon runner labeled `macOS` and `ARM64`.
 | Native `mlxq` Python operations | Available | Execute validated operation dictionaries directly |
 | OpenQASM 2.0 | Available, strict unitary subset | Import supported circuits with explicit rejection of dynamic semantics |
 | `mlxq.qml` | Available, internal wrapper | PennyLane-like tapes, measurements, templates, and parameter-shift gradients |
-| Qiskit `BackendV2` | Available, initial exact-statevector scope | Transpile and run ordinary unitary circuits; receive native `Result`, counts, memory, optional statevector, and optional execution evidence |
-| PennyLane `qupertino` device | Available, initial exact-statevector scope | Use `qml.device("qupertino", wires=...)` in a normal QNode with analytic or finite-shot measurements |
-| Other SDKs | Planned on the shared adapter layer | Normalize SDK circuits once, then reuse the same planner and execution evidence |
+| Qiskit `BackendV2` | Available: statevector + MPS | Transpile and run unitary circuits; receive native `Result`, device-sampled counts/memory, optional statevector, and execution evidence |
+| Qiskit SamplerV2 / EstimatorV2 | Available | Use PUB batching, native `BitArray` samples, and exact device-resident Pauli expectations |
+| PennyLane `qupertino` device | Available: statevector + MPS | Use a normal QNode with analytic or finite-shot measurements, tracking, capability declarations, and framework-managed parameter-shift gradients |
+| Other SDKs | Out of scope for the current phase | Qiskit and PennyLane are the only active integration targets |
 
 Both adapters translate through one tested canonical operation layer. Qiskit's
 little-endian state and classical-bit conventions and PennyLane's declared wire
@@ -606,6 +665,32 @@ MLXQ_METAL_KERNELS=1 ./bench.sh \
 ```bash
 ./bench_with_logging.sh
 ```
+
+### Calibrate CPU/GPU selection
+
+```bash
+MLXQ_METAL_KERNELS=auto PYTHONPATH=src .venv/bin/python \
+  tools/benchmark_execution_policy.py \
+  --outdir bench/runs/execution-policy \
+  --warmups 1 --repeats 7
+```
+
+This paired rotating sweep reports a sustained crossover only when GPU is at
+least 1.10× faster for two consecutive measured sizes. A `null` MPS crossover
+means automatic MPS should remain on CPU over the tested range.
+
+### Benchmark Qiskit and PennyLane method/device paths
+
+```bash
+MLXQ_METAL_KERNELS=auto PYTHONPATH=src .venv/bin/python \
+  tools/benchmark_sdk_method_matrix.py \
+  --outdir bench/runs/sdk-method-matrix \
+  --qubits 20 --steps 2 --warmups 1 --repeats 7
+```
+
+The SDK matrix uses the same analytic local `Z` expectation contract in both
+frameworks. Qiskit rows compare with `StatevectorEstimator`; PennyLane rows
+compare with `default.qubit`.
 
 ### Statevector or MPS backend
 

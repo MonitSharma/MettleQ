@@ -1,0 +1,59 @@
+schema = 3
+
+[operators.gates]
+Identity = { properties = ["invertible"] }
+GlobalPhase = { properties = ["invertible"] }
+Hadamard = { properties = ["invertible"] }
+PauliX = { properties = ["invertible"] }
+PauliY = { properties = ["invertible"] }
+PauliZ = { properties = ["invertible"] }
+S = { properties = ["invertible"] }
+T = { properties = ["invertible"] }
+SX = { properties = ["invertible"] }
+RX = { properties = ["invertible"] }
+RY = { properties = ["invertible"] }
+RZ = { properties = ["invertible"] }
+PhaseShift = { properties = ["invertible"] }
+CNOT = { properties = ["invertible"] }
+CH = { properties = ["invertible"] }
+CZ = { properties = ["invertible"] }
+ControlledPhaseShift = { properties = ["invertible"] }
+CRX = { properties = ["invertible"] }
+CRY = { properties = ["invertible"] }
+CRZ = { properties = ["invertible"] }
+SWAP = { properties = ["invertible"] }
+ISWAP = { properties = ["invertible"] }
+Toffoli = { properties = ["invertible"] }
+CSWAP = { properties = ["invertible"] }
+IsingXX = { properties = ["invertible"] }
+IsingYY = { properties = ["invertible"] }
+IsingZZ = { properties = ["invertible"] }
+
+[operators.observables]
+Identity = { }
+PauliX = { }
+PauliY = { }
+PauliZ = { }
+Hadamard = { }
+Hermitian = { }
+Hamiltonian = { }
+Sum = { }
+SProd = { }
+Prod = { }
+
+[measurement_processes]
+ExpectationMP = { }
+VarianceMP = { }
+ProbabilityMP = { }
+SampleMP = { conditions = ["finiteshots"] }
+CountsMP = { conditions = ["finiteshots"] }
+StateMP = { conditions = ["analytic"] }
+
+[compilation]
+qjit_compatible = false
+runtime_code_generation = false
+dynamic_qubit_management = false
+overlapping_observables = true
+non_commuting_observables = true
+initial_state_prep = false
+supported_mcm_methods = [ ]

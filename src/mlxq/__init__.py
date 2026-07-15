@@ -48,6 +48,7 @@ if _HAS_MLX:
             state_memory_estimate,
             statevector_preflight,
         )
+        from .planning import ExecutionSelection, select_execution
         from .observables import is_hermitian, commutator
 
         __all__ += [
@@ -58,6 +59,7 @@ if _HAS_MLX:
             "StateVectorSimulator", "qft", "iqft", "Device",
             "metal_runtime_status", "state_memory_estimate",
             "statevector_preflight", "StatevectorMemoryError",
+            "ExecutionSelection", "select_execution",
             "is_hermitian", "commutator",
         ]
     except Exception:
