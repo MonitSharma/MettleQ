@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mlxq"
-version = "0.0.1"
-description = "Minimal MLX-based quantum simulator (pure Python)"
+version = "0.1.0"
+description = "Trustworthy Apple Silicon quantum simulation with MLX and Metal"
 requires-python = ">=3.9"
 dependencies = [
   "mlx>=0.6.0",
@@ -28,15 +28,29 @@ backend = [
   "httpx>=0.27.0",
 ]
 tests = [
-  "pennylane",
+  "pennylane>=0.45,<0.46",
+  "qiskit>=2.0,<3",
   "pytest>=8.0.0,<10.0.0",
   "pytest-cov>=5.0.0",
 ]
-baselines = [
-  "pennylane",
-  "qiskit",
-  "qiskit-aer",
+qiskit = [
+  "qiskit>=2.0,<3",
 ]
+pennylane = [
+  "pennylane>=0.45,<0.46",
+]
+sdk = [
+  "pennylane>=0.45,<0.46",
+  "qiskit>=2.0,<3",
+]
+baselines = [
+  "pennylane>=0.45,<0.46",
+  "qiskit>=2.0,<3",
+  "qiskit-aer>=0.17,<0.18",
+]
+
+[project.entry-points."pennylane.plugins"]
+qupertino = "mlxq.integrations.pennylane:QupertinoDevice"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

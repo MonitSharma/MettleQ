@@ -44,7 +44,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - name: Install simulator test dependencies
+      - name: Install simulator and SDK integration test dependencies
         run: python -m pip install -e '.[plot,tests,backend]'
       - name: Verify Apple GPU availability
         run: |

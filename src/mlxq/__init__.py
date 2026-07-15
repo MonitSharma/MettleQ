@@ -5,12 +5,20 @@ When MLX isn't available, drawing utilities (ASCII/Matplotlib/Quantikz) remain
 importable so notebooks can be used for visualization without MLX.
 """
 
+try:
+    from importlib.metadata import version as _package_version
+
+    __version__ = _package_version("mlxq")
+except Exception:  # source tree without installed package metadata
+    __version__ = "0+unknown"
+
 from .pretty import info, success, warn, error, table
 from .draw import circuit_ascii, circuit_mpl, schedule_columns, random_circuit
 from .quantikz import circuit_to_quantikz, write_quantikz_tex
 
 __all__ = [
     # Always available utilities
+    "__version__",
     "info", "success", "warn", "error", "table",
     "circuit_ascii", "circuit_mpl", "schedule_columns", "random_circuit",
     "circuit_to_quantikz", "write_quantikz_tex",

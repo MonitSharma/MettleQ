@@ -4,7 +4,7 @@ import os as _os
 import time as _time
 from .sim import StateVectorSimulator
 from .mps_state import MPSState, MPSOptions
-from .gates import H, X, Y, Z, S, SDG, T, TDG, SX, RX, RY, RZ, U1, U2, U3, SWAP, iSWAP, CNOT, CZ, CPHASE, CRX, CRY, CRZ, Toffoli, Fredkin, CH
+from .gates import I, H, X, Y, Z, S, SDG, T, TDG, SX, RX, RY, RZ, U1, U2, U3, SWAP, iSWAP, CNOT, CZ, CPHASE, CRX, CRY, CRZ, Toffoli, Fredkin, CH
 import math as _math
 import mlx.core as mx
 
@@ -17,7 +17,7 @@ from .execution import (build_execution_plan, mark_graph_built,
 
 # Constant (parameterless) gate matrices built once at import; read-only thereafter
 _CONST_GATES = {
-    "H": H(), "X": X(), "Y": Y(), "Z": Z(), "S": S(), "SDG": SDG(),
+    "I": I(), "H": H(), "X": X(), "Y": Y(), "Z": Z(), "S": S(), "SDG": SDG(),
     "T": T(), "TDG": TDG(), "SX": SX(),
     "CNOT": CNOT(), "CH": CH(), "CZ": CZ(), "SWAP": SWAP(), "ISWAP": iSWAP(),
     "TOFFOLI": Toffoli(), "FREDKIN": Fredkin(),
