@@ -153,6 +153,14 @@ class Device:
             self._metal_checkpoint_budget_bytes
         )
         optimized_operations = self._fuse_zz_layers(operations)
+        if self.backend == "mps" and hasattr(self.sim, "prepare_routing"):
+            self.sim.prepare_routing(
+                [
+                    tuple(operation.get("wires", []))
+                    for operation in optimized_operations
+                    if len(operation.get("wires", [])) == 2
+                ]
+            )
         if report is None:
             report = _os.environ.get("MLXQ_EXECUTION_REPORT", "0") == "1"
         if report:

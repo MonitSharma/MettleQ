@@ -203,6 +203,10 @@ class MPSState:
         self.routing_swaps = 0
         self.routing_naive_restore_swaps = 0
         self.routing_final_restore_swaps = 0
+        self.routing_effective_strategy = self.opts.routing_strategy
+        self.routing_selection_reason = "configured_strategy"
+        self.routing_planned_lookahead_swaps = None
+        self.routing_planned_restore_swaps = None
 
     def _replace_tensor(self, index: int, value: np.ndarray) -> None:
         self.A[index] = mx.array(
@@ -477,6 +481,71 @@ class MPSState:
         if final_restore:
             self.routing_final_restore_swaps += 1
 
+    def prepare_routing(self, pairs: List[tuple[int, int]]) -> dict:
+        """Select persistent routing only when whole-circuit swaps do not grow."""
+        pairs = [(int(first), int(second)) for first, second in pairs]
+        naive = sum(
+            2 * max(0, abs(first - second) - 1)
+            for first, second in pairs
+        )
+        order = list(range(self.n))
+        routed_swaps = 0
+        for index, (first, second) in enumerate(pairs):
+            positions = {
+                logical: site for site, logical in enumerate(order)
+            }
+            first_site = positions[first]
+            second_site = positions[second]
+            first_swaps = self._candidate_route_swaps(
+                first_site, second_site, True
+            )
+            second_swaps = self._candidate_route_swaps(
+                first_site, second_site, False
+            )
+            first_order = self._simulate_layout_swaps(order, first_swaps)
+            second_order = self._simulate_layout_swaps(order, second_swaps)
+            lookahead = pairs[
+                index + 1:index + 1 + self.opts.routing_lookahead
+            ]
+            if self._lookahead_layout_cost(
+                first_order, lookahead
+            ) <= self._lookahead_layout_cost(second_order, lookahead):
+                selected_swaps = first_swaps
+                order = first_order
+            else:
+                selected_swaps = second_swaps
+                order = second_order
+            routed_swaps += len(selected_swaps)
+        final_restore = sum(
+            1
+            for first in range(self.n)
+            for second in range(first + 1, self.n)
+            if order[first] > order[second]
+        )
+        routed_swaps += final_restore
+        self.routing_planned_lookahead_swaps = routed_swaps
+        self.routing_planned_restore_swaps = naive
+        if self.opts.routing_strategy == "restore":
+            self.routing_effective_strategy = "restore"
+            self.routing_selection_reason = "explicit_restore_request"
+        elif routed_swaps <= naive:
+            self.routing_effective_strategy = "lookahead"
+            self.routing_selection_reason = (
+                "whole_circuit_lookahead_not_more_swaps_than_restore"
+            )
+        else:
+            self.routing_effective_strategy = "restore"
+            self.routing_selection_reason = (
+                "whole_circuit_lookahead_would_increase_swaps"
+            )
+        return {
+            "configured_strategy": self.opts.routing_strategy,
+            "effective_strategy": self.routing_effective_strategy,
+            "selection_reason": self.routing_selection_reason,
+            "planned_lookahead_swaps": routed_swaps,
+            "planned_restore_swaps": naive,
+        }
+
     def apply_logical_two(
         self,
         U4: mx.array,
@@ -497,7 +566,7 @@ class MPSState:
         self.routing_logical_gates += 1
         naive_swaps = 2 * max(0, abs(first - second) - 1)
         self.routing_naive_restore_swaps += naive_swaps
-        if self.opts.routing_strategy == "restore":
+        if self.routing_effective_strategy == "restore":
             self.apply_two(U4, first_site, second_site)
             self.routing_swaps += naive_swaps
             return
@@ -641,6 +710,14 @@ class MPSState:
                 self.last_pre_normalization_norm
             ),
             "routing_strategy": self.opts.routing_strategy,
+            "routing_effective_strategy": self.routing_effective_strategy,
+            "routing_selection_reason": self.routing_selection_reason,
+            "routing_planned_lookahead_swaps": (
+                self.routing_planned_lookahead_swaps
+            ),
+            "routing_planned_restore_swaps": (
+                self.routing_planned_restore_swaps
+            ),
             "routing_lookahead": int(self.opts.routing_lookahead),
             "routing_logical_two_qubit_gates": int(
                 self.routing_logical_gates

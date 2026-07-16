@@ -224,6 +224,47 @@ def test_lookahead_routing_reduces_nonlocal_swaps_and_preserves_state():
     assert routed_diagnostics["svd_calls"] < restored_diagnostics["svd_calls"]
 
 
+def test_routing_preflight_refuses_a_swap_increase_for_grid_order():
+    side = 6
+    operations = []
+    for row in range(side):
+        for column in range(side - 1):
+            first = row * side + column
+            operations.append(
+                {
+                    "name": "ZZPHASE",
+                    "wires": [first, first + 1],
+                    "parameters": [0.19],
+                }
+            )
+    for row in range(side - 1):
+        for column in range(side):
+            first = row * side + column
+            operations.append(
+                {
+                    "name": "ZZPHASE",
+                    "wires": [first, first + side],
+                    "parameters": [0.2],
+                }
+            )
+    device = _common.execute_operations(
+        side * side,
+        operations,
+        method="matrix_product_state",
+        execution_device="cpu",
+        mps_max_bond_dimension=8,
+        mps_routing_strategy="lookahead",
+    )
+    diagnostics = device.sim.truncation_diagnostics()
+    assert diagnostics["routing_effective_strategy"] == "restore"
+    assert diagnostics["routing_planned_lookahead_swaps"] > (
+        diagnostics["routing_planned_restore_swaps"]
+    )
+    assert diagnostics["routing_swaps"] == (
+        diagnostics["routing_naive_restore_swaps"]
+    )
+
+
 def test_mps_accuracy_error_policy_rejects_excessive_local_loss():
     operations = [
         {"name": "H", "wires": [0], "parameters": []},
