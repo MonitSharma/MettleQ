@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import List, Optional
 import math
 import time
@@ -33,6 +34,33 @@ _SVD_DRIVERS = {"auto", "gesdd", "gesvd", "numpy"}
 _ROUTING_STRATEGIES = {"lookahead", "restore"}
 
 
+@lru_cache(maxsize=4)
+def _scipy_lapack_driver(driver: str):
+    """Resolve the complex64 LAPACK function once per process."""
+    from scipy.linalg.lapack import get_lapack_funcs
+
+    probe = np.empty((1, 1), dtype=np.complex64, order="F")
+    return get_lapack_funcs(driver, (probe,))
+
+
+def _scipy_lapack_svd(matrix: np.ndarray, driver: str):
+    """Call LAPACK directly, avoiding repeated high-level SVD dispatch."""
+    lapack_svd = _scipy_lapack_driver(driver)
+    U, S, Vh, info = lapack_svd(
+        matrix,
+        compute_uv=1,
+        full_matrices=0,
+        overwrite_a=1,
+    )
+    if info < 0:
+        raise ValueError(f"LAPACK {driver} received invalid argument {-info}")
+    if info > 0:
+        raise np.linalg.LinAlgError(
+            f"LAPACK {driver} did not converge (info={info})"
+        )
+    return U, S, Vh
+
+
 def _safe_cpu_svd(matrix: np.ndarray, driver: str):
     """Run a catchable CPU SVD with a deterministic fallback ladder.
 
@@ -42,30 +70,42 @@ def _safe_cpu_svd(matrix: np.ndarray, driver: str):
     losing the whole process.
     """
     array = np.asarray(matrix, dtype=np.complex64)
-    if not np.all(np.isfinite(array)):
-        raise MPSNumericalError("MPS SVD input contains NaN or infinity")
     scale = float(np.max(np.abs(array))) if array.size else 0.0
-    if not np.isfinite(scale) or scale <= 0.0:
+    if not np.isfinite(scale):
+        raise MPSNumericalError("MPS SVD input contains NaN or infinity")
+    if scale <= 0.0:
         raise MPSNumericalError("MPS SVD input has zero or invalid scale")
-    scaled = array / scale
+    # MPS canonicalization normally keeps entries near unit scale. Avoid an
+    # extra full-matrix division in that common case, while preserving the
+    # defensive rescaling needed for extreme intermediate values. The only
+    # mandatory copy is the Fortran-order scratch array handed to LAPACK.
+    rescale = scale < 2.0**-32 or scale > 2.0**32
+    scaled = array / scale if rescale else array
+    output_scale = scale if rescale else 1.0
     attempts = []
     if driver in ("auto", "gesdd", "gesvd"):
         try:
-            from scipy import linalg as scipy_linalg
-
             scipy_drivers = (
                 ("gesdd", "gesvd") if driver == "auto" else (driver,)
             )
             for scipy_driver in scipy_drivers:
                 try:
-                    U, S, Vh = scipy_linalg.svd(
-                        scaled,
-                        full_matrices=False,
-                        overwrite_a=True,
-                        check_finite=False,
-                        lapack_driver=scipy_driver,
+                    U, S, Vh = _scipy_lapack_svd(
+                        np.array(
+                            scaled,
+                            dtype=np.complex64,
+                            order="F",
+                            copy=True,
+                        ),
+                        scipy_driver,
                     )
-                    return U, S * scale, Vh, f"scipy_{scipy_driver}", attempts
+                    return (
+                        U,
+                        S * output_scale,
+                        Vh,
+                        f"scipy_{scipy_driver}",
+                        attempts,
+                    )
                 except Exception as error:
                     attempts.append(f"scipy_{scipy_driver}: {error}")
         except ImportError as error:
@@ -76,26 +116,30 @@ def _safe_cpu_svd(matrix: np.ndarray, driver: str):
                 U, S, Vh = np.linalg.svd(
                     scaled.astype(dtype, copy=False), full_matrices=False
                 )
-                return U, S * scale, Vh, f"numpy_{dtype.__name__}", attempts
+                return (
+                    U,
+                    S * output_scale,
+                    Vh,
+                    f"numpy_{dtype.__name__}",
+                    attempts,
+                )
             except Exception as error:
                 attempts.append(f"numpy_{dtype.__name__}: {error}")
     detail = "; ".join(attempts) or "no SVD driver was attempted"
     raise MPSNumericalError(f"All recoverable MPS SVD drivers failed: {detail}")
 
 
-def _svd_truncate(
-    M: mx.array,
+def _svd_truncate_numpy(
+    matrix: np.ndarray,
     dmax: int,
     eps: float,
     *,
     driver: str = "auto",
     renormalize: bool = True,
 ):
-    # M shape: (a*2, 2*b) for two-site tensor; perform SVD and truncate
     start = time.perf_counter_ns()
-    mx.eval(M)
     U_np, S_np, Vh_np, used_driver, failed_attempts = _safe_cpu_svd(
-        np.asarray(M, dtype=np.complex64), driver
+        np.asarray(matrix, dtype=np.complex64), driver
     )
     elapsed_ms = (time.perf_counter_ns() - start) / 1e6
     s_list = [float(value) for value in np.asarray(S_np).reshape(-1)]
@@ -115,6 +159,8 @@ def _svd_truncate(
         )
     normalization_factor = kept_weight ** 0.5 if renormalize else 1.0
     metadata = {
+        "matrix_shape": [int(matrix.shape[0]), int(matrix.shape[1])],
+        "matrix_elements": int(matrix.size),
         "rank_before": r,
         "rank_kept": r_keep,
         "local_discarded_weight": discarded_weight,
@@ -129,12 +175,37 @@ def _svd_truncate(
         "pre_normalization_norm": kept_weight ** 0.5,
         "renormalized": bool(renormalize),
     }
-    U_t = mx.array(U_np[:, :r_keep].astype(np.complex64), mx.complex64)
-    S_t = mx.array(
-        (S_np[:r_keep] / normalization_factor).astype(np.float32)
+    U_out = U_np[:, :r_keep].astype(np.complex64, copy=False)
+    S_out = (S_np[:r_keep] / normalization_factor).astype(
+        np.float32, copy=False
     )
-    Vh_t = mx.array(Vh_np[:r_keep, :].astype(np.complex64), mx.complex64)
-    return U_t, S_t, Vh_t, metadata
+    Vh_out = Vh_np[:r_keep, :].astype(np.complex64, copy=False)
+    return U_out, S_out, Vh_out, metadata
+
+
+def _svd_truncate(
+    M: mx.array,
+    dmax: int,
+    eps: float,
+    *,
+    driver: str = "auto",
+    renormalize: bool = True,
+):
+    # M shape: (a*2, 2*b) for two-site tensor; perform SVD and truncate.
+    mx.eval(M)
+    U_np, S_np, Vh_np, metadata = _svd_truncate_numpy(
+        np.asarray(M, dtype=np.complex64),
+        dmax,
+        eps,
+        driver=driver,
+        renormalize=renormalize,
+    )
+    return (
+        mx.array(U_np, mx.complex64),
+        mx.array(S_np),
+        mx.array(Vh_np, mx.complex64),
+        metadata,
+    )
 
 
 class MPSState:
@@ -197,6 +268,11 @@ class MPSState:
         self.svd_total_ms = 0.0
         self.svd_fallback_count = 0
         self.svd_drivers_used: dict[str, int] = {}
+        self.two_site_calls = 0
+        self.two_site_contraction_total_ms = 0.0
+        self.two_site_split_total_ms = 0.0
+        self.two_site_matrix_shape_calls: dict[str, int] = {}
+        self.two_site_max_matrix_elements = 0
         self.site_to_logical = list(range(self.n))
         self.logical_to_site = list(range(self.n))
         self.routing_logical_gates = 0
@@ -297,19 +373,36 @@ class MPSState:
             driver=self.opts.svd_driver,
             renormalize=self.opts.renormalize_splits,
         )
+        self._record_split(bond, metadata)
+        r = int(U.shape[1])
+        # reshape back
+        Aleft = mx.reshape(U, (Dl, d1, r))
+        SVh = mx.reshape(S, (r,1)) * Vh  # (r, d2*Dr2)
+        Aright = mx.reshape(SVh, (r, d2, Dr2))
+        return Aleft, Aright
+
+    def _record_split(self, bond: int, metadata: dict) -> None:
         self.svd_calls += 1
         self.svd_total_ms += float(metadata["svd_elapsed_ms"])
         self.svd_fallback_count += len(metadata["svd_failed_attempts"])
         driver = str(metadata["svd_driver"])
         self.svd_drivers_used[driver] = self.svd_drivers_used.get(driver, 0) + 1
+        shape = tuple(int(value) for value in metadata["matrix_shape"])
+        shape_key = f"{shape[0]}x{shape[1]}"
+        self.two_site_matrix_shape_calls[shape_key] = (
+            self.two_site_matrix_shape_calls.get(shape_key, 0) + 1
+        )
+        self.two_site_max_matrix_elements = max(
+            self.two_site_max_matrix_elements,
+            int(metadata["matrix_elements"]),
+        )
         if metadata["renormalized"]:
             self.renormalization_count += 1
             self.last_pre_normalization_norm = float(
                 metadata["pre_normalization_norm"]
             )
-        r = int(U.shape[1])
         # Truncation detection (due to dmax or eps)
-        if r < metadata["rank_before"]:
+        if metadata["rank_kept"] < metadata["rank_before"]:
             self.truncated_any = True
             self.trunc_events += 1
             discarded = float(metadata["local_discarded_weight"])
@@ -323,11 +416,41 @@ class MPSState:
                 self.relative_discarded_weight_max, relative
             )
             self.last_truncation = {"bond": int(bond), **metadata}
-        # reshape back
-        Aleft = mx.reshape(U, (Dl, d1, r))
-        SVh = mx.reshape(S, (r,1)) * Vh  # (r, d2*Dr2)
-        Aright = mx.reshape(SVh, (r, d2, Dr2))
-        return Aleft, Aright
+
+    def _split_two_site_numpy(
+        self, T: np.ndarray, bond: int
+    ) -> tuple[np.ndarray, np.ndarray]:
+        Dl, d1, d2, Dr2 = T.shape
+        matrix = T.reshape(Dl * d1, d2 * Dr2)
+        split_started = time.perf_counter_ns()
+        U, S, Vh, metadata = _svd_truncate_numpy(
+            matrix,
+            self.opts.dmax,
+            self.opts.eps,
+            driver=self.opts.svd_driver,
+            renormalize=self.opts.renormalize_splits,
+        )
+        self.two_site_split_total_ms += (
+            time.perf_counter_ns() - split_started
+        ) / 1e6
+        self._record_split(bond, metadata)
+        rank = int(U.shape[1])
+        left = U.reshape(Dl, d1, rank)
+        right = (S.reshape(rank, 1) * Vh).reshape(rank, d2, Dr2)
+        return left, right
+
+    def _install_two_site(self, left, right, bond: int) -> None:
+        self.A[bond] = (
+            left if isinstance(left, mx.array) else mx.array(left, mx.complex64)
+        )
+        self.A[bond + 1] = (
+            right if isinstance(right, mx.array) else mx.array(right, mx.complex64)
+        )
+        rank = int(self.A[bond].shape[2])
+        if 0 <= bond < len(self.bonds):
+            self.bonds[bond] = rank
+        self.max_bond_ever = max(self.max_bond_ever, rank)
+        self.canonical_center = bond + 1
 
     # -------------- gate application --------------
     def apply_single(self, U: mx.array, q: int):
@@ -343,6 +466,28 @@ class MPSState:
 
     def _apply_two_adjacent(self, U4: mx.array, i: int):
         self._move_center(i)
+        self.two_site_calls += 1
+        if self.tensor_device == "cpu":
+            contraction_started = time.perf_counter_ns()
+            left = np.asarray(self.A[i], dtype=np.complex64)
+            right = np.asarray(self.A[i + 1], dtype=np.complex64)
+            gate = np.asarray(U4, dtype=np.complex64).reshape(4, 4)
+            Dl, _, bond = left.shape
+            if int(right.shape[0]) != int(bond):
+                raise ValueError("MPS bond mismatch")
+            Dr2 = int(right.shape[2])
+            tensor = np.tensordot(left, right, axes=([2], [0]))
+            merged = tensor.reshape(Dl, 4, Dr2)
+            transformed = np.tensordot(
+                gate, merged, axes=([1], [1])
+            ).transpose(1, 0, 2)
+            tensor = transformed.reshape(Dl, 2, 2, Dr2)
+            self.two_site_contraction_total_ms += (
+                time.perf_counter_ns() - contraction_started
+            ) / 1e6
+            left_out, right_out = self._split_two_site_numpy(tensor, i)
+            self._install_two_site(left_out, right_out, i)
+            return
         T = self._two_site_tensor(i)  # (Dl,2,2,Dr2)
         Dl, _, _, Dr2 = T.shape
         # merge physical legs (2,2)->4 and apply U
@@ -354,22 +499,37 @@ class MPSState:
         Tm2 = mx.tensordot(Um, Tm, axes=([1],[1]))  # (4, Dl, Dr2)
         Tm2 = mx.transpose(Tm2, (1, 0, 2))          # (Dl, 4, Dr2)
         T2 = mx.reshape(Tm2, (Dl, 2, 2, Dr2))
+        split_started = time.perf_counter_ns()
         Aleft, Aright = self._split_two_site(T2, i)
-        self.A[i] = Aleft
-        self.A[i+1] = Aright
-        # Update bond diagnostics (bond between i and i+1 equals rank r)
-        r = int(Aleft.shape[2])
-        if 0 <= i < len(self.bonds):
-            self.bonds[i] = r
-        if r > self.max_bond_ever:
-            self.max_bond_ever = r
-        self.canonical_center = i + 1
+        self.two_site_split_total_ms += (
+            time.perf_counter_ns() - split_started
+        ) / 1e6
+        self._install_two_site(Aleft, Aright, i)
 
     def _apply_two_adjacent_zz(self, theta: float, i: int):
         """Apply ``exp(-i theta Z⊗Z)`` by broadcasting four phases."""
         self._move_center(i)
+        self.two_site_calls += 1
+        if self.tensor_device == "cpu":
+            contraction_started = time.perf_counter_ns()
+            left = np.asarray(self.A[i], dtype=np.complex64)
+            right = np.asarray(self.A[i + 1], dtype=np.complex64)
+            if int(left.shape[2]) != int(right.shape[0]):
+                raise ValueError("MPS bond mismatch")
+            tensor = np.tensordot(left, right, axes=([2], [0]))
+            even = complex(math.cos(theta), -math.sin(theta))
+            odd = complex(math.cos(theta), math.sin(theta))
+            phases = np.array(
+                [even, odd, odd, even], dtype=np.complex64
+            ).reshape(1, 2, 2, 1)
+            tensor *= phases
+            self.two_site_contraction_total_ms += (
+                time.perf_counter_ns() - contraction_started
+            ) / 1e6
+            left_out, right_out = self._split_two_site_numpy(tensor, i)
+            self._install_two_site(left_out, right_out, i)
+            return
         T = self._two_site_tensor(i)
-        import math
         even = complex(math.cos(theta), -math.sin(theta))
         odd = complex(math.cos(theta), math.sin(theta))
         phases = mx.reshape(
@@ -377,15 +537,12 @@ class MPSState:
             (1, 2, 2, 1),
         )
         T2 = T * phases
+        split_started = time.perf_counter_ns()
         Aleft, Aright = self._split_two_site(T2, i)
-        self.A[i] = Aleft
-        self.A[i+1] = Aright
-        r = int(Aleft.shape[2])
-        if 0 <= i < len(self.bonds):
-            self.bonds[i] = r
-        if r > self.max_bond_ever:
-            self.max_bond_ever = r
-        self.canonical_center = i + 1
+        self.two_site_split_total_ms += (
+            time.perf_counter_ns() - split_started
+        ) / 1e6
+        self._install_two_site(Aleft, Aright, i)
 
     def _swap_adjacent(self, i: int):
         # Swap sites i and i+1 by applying SWAP gate U_swap to two-site tensor
@@ -769,6 +926,17 @@ class MPSState:
             "svd_calls": int(self.svd_calls),
             "svd_total_ms": float(self.svd_total_ms),
             "svd_fallback_count": int(self.svd_fallback_count),
+            "two_site_calls": int(self.two_site_calls),
+            "two_site_contraction_total_ms": float(
+                self.two_site_contraction_total_ms
+            ),
+            "two_site_split_total_ms": float(self.two_site_split_total_ms),
+            "two_site_matrix_shape_calls": dict(
+                self.two_site_matrix_shape_calls
+            ),
+            "two_site_max_matrix_elements": int(
+                self.two_site_max_matrix_elements
+            ),
             "configured_max_bond_dimension": int(self.opts.dmax),
             "configured_truncation_threshold": float(self.opts.eps),
             "current_bond_dimension_max": int(current_bond_max),

@@ -152,11 +152,11 @@ def test_truncation_reports_local_discarded_weight():
 
 
 def test_recoverable_svd_ladder_falls_back_without_losing_process(monkeypatch):
-    from scipy import linalg as scipy_linalg
+    import mettleq.mps_state as mps_state
 
     monkeypatch.setattr(
-        scipy_linalg,
-        "svd",
+        mps_state,
+        "_scipy_lapack_svd",
         lambda *args, **kwargs: (_ for _ in ()).throw(
             np.linalg.LinAlgError("forced LAPACK failure")
         ),

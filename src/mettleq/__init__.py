@@ -15,6 +15,14 @@ except Exception:  # source tree without installed package metadata
 from .pretty import info, success, warn, error, table
 from .draw import circuit_ascii, circuit_mpl, schedule_columns, random_circuit
 from .quantikz import circuit_to_quantikz, write_quantikz_tex
+from .midpoint_mpo import (
+    MidpointMPODependencyError,
+    MidpointMPOError,
+    MidpointMPOOptions,
+    MidpointMPOResult,
+    MidpointMPOSimulator,
+    build_convergence_report as build_midpoint_mpo_convergence_report,
+)
 
 __all__ = [
     # Always available utilities
@@ -22,6 +30,9 @@ __all__ = [
     "info", "success", "warn", "error", "table",
     "circuit_ascii", "circuit_mpl", "schedule_columns", "random_circuit",
     "circuit_to_quantikz", "write_quantikz_tex",
+    "MidpointMPODependencyError", "MidpointMPOError",
+    "MidpointMPOOptions", "MidpointMPOResult", "MidpointMPOSimulator",
+    "build_midpoint_mpo_convergence_report",
 ]
 
 # Detect MLX safely without importing it (to avoid side effects in non-MLX envs)

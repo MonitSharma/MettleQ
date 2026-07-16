@@ -15,6 +15,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+tensor-network = [
+  "cotengra>=0.7.5,<0.9",
+  "numba>=0.65,<0.67",
+  "qiskit>=2.0,<3",
+  "qiskit-quimb>=0.0.10,<0.1",
+  "quimb>=1.11.2,<2",
+]
 plot = [
   "matplotlib>=3.7.0",
 ]
@@ -50,6 +57,9 @@ baselines = [
   "qiskit-aer>=0.17,<0.18",
 ]
 
+[project.scripts]
+mettleq-mpo = "mettleq.midpoint_mpo:main"
+
 [project.entry-points."pennylane.plugins"]
 mettleq = "mettleq.integrations.pennylane:MettleQDevice"
 qupertino = "mettleq.integrations.pennylane:MettleQDevice"
@@ -64,3 +74,4 @@ include = ["mettleq*", "mlxq*"]
 [tool.setuptools.package-data]
 "mettleq.integrations" = ["pennylane_capabilities.toml"]
 "mettleq" = ["datasets/*.qasm", "datasets/*.md", "datasets/*.txt"]
+"mettleq._vendor.peaked_mpo" = ["*.md", "*.txt"]
