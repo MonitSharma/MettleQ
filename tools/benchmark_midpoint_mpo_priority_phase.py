@@ -186,7 +186,7 @@ def _run_published(
         value
         for value in (
             str(source_root),
-            str(published_repo),
+            str(published_repo / "src"),
             env.get("PYTHONPATH"),
         )
         if value

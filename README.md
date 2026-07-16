@@ -1254,7 +1254,7 @@ git clone https://github.com/alexgalda-m/peaked-mpo-solver \
 git -C /tmp/peaked-mpo-solver-reference checkout \
   3bcdc1e5bfd6abb9425f71bd43e560d2b27f45c1
 
-PYTHONPATH=src:/tmp/peaked-mpo-solver-reference \
+PYTHONPATH=src:/tmp/peaked-mpo-solver-reference/src \
   caffeinate -i .venv-mpo/bin/python \
   tools/run_published_peaked_solver_direct.py \
   --qasm src/mettleq/datasets/peaked_circuit_P9_Hqap_56x1917.qasm \
