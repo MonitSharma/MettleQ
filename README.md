@@ -41,7 +41,7 @@ acceleration.
 | Circuit inputs | Native Python operations, strict unitary OpenQASM 2.0, Qiskit circuits, and PennyLane QNodes |
 | Workloads | QFT, phase estimation, Grover, QAOA, VQE, QCBM, QNN, random circuits, and spin dynamics |
 | Trust model | Pre-allocation statevector checks, capability-gated dispatch, recoverable SVDs, MPS accuracy thresholds and convergence reports, explicit plans, numerical parity tests, synchronized benchmarks, and safe fallbacks |
-| Current test suite | **359 tests** across the simulator, SDK adapters, planner, algorithms, MPS/MPO, peaked circuits, QASM, Metal dispatch, campaign analysis, and MettleQ Studio backend |
+| Current test suite | **363 tests** across the simulator, SDK adapters, planner, algorithms, MPS/MPO, peaked circuits, QASM, Metal dispatch, campaign analysis, and MettleQ Studio backend |
 | Desktop product | MettleQ Studio orchestration, monitoring, plotting, and export |
 | SDK adapters | Native Qiskit backend and registered PennyLane device, plus the original internal `mettleq.qml` teaching wrapper |
 
@@ -68,6 +68,7 @@ account and does not open pull requests against upstream.
 | **Step 8 reliable/routed MPS engine revision** | Fork commit `0691674` |
 | **MettleQ 0.2 rename, peaked benchmark, and batched sampling** | Fork commit `be67897` |
 | **Midpoint-MPO/TNO, CPU MPS optimization, and GPU phase gate** | Fork commit `72582c7` |
+| **Qiskit 2 isolated MPO worker and recoverable native-SVD boundary** | Fork commit `a2b99fc` |
 
 Original authorship, licensing, and citation information are retained at the
 end of this README.
@@ -123,9 +124,8 @@ The explicit midpoint-MPO method has optional tensor-network dependencies:
 python -m pip install -e '.[tensor-network]'
 ```
 
-The full published 56-qubit P9 result is currently qualified only in its
-isolated, pinned Python 3.10 environment. Keep this separate from the normal
-Qiskit 2.x SDK environment:
+The full published 56-qubit P9 implementation uses an isolated, pinned Python
+3.10 worker. Keep it separate from the normal Qiskit 2.x SDK environment:
 
 ```bash
 uv venv --python 3.10 .venv-mpo
@@ -133,9 +133,12 @@ uv pip install --python .venv-mpo/bin/python \
   -r tools/requirements-midpoint-mpo-p9.txt
 ```
 
-Qiskit 2.x circuit input works for the method API, but the Qiskit 2.5 / Quimb
-1.14 P9 compression trajectory was not competitive in this phase. MettleQ
-does not silently downgrade or replace the user's main SDK environment.
+`IsolatedMidpointMPOSimulator` accepts a `QuantumCircuit` from the normal
+Qiskit 2.x environment, validates that it is a bound unitary circuit, exports
+OpenQASM 2, and runs the tensor-network algorithm in that worker. Set
+`METTLEQ_MPO_PYTHON` or pass `worker_python=` when the environment is not named
+`.venv-mpo`. MettleQ never downgrades or replaces the user's main SDK
+environment.
 
 Version 0.2 makes `mettleq` and the PennyLane device name `mettleq` canonical.
 The former `mlxq` import namespace, `qupertino` PennyLane entry point, and
@@ -177,26 +180,31 @@ the separate MPO/TNO method instead of selecting ordinary forward MPS:
 
 ```python
 from qiskit import QuantumCircuit
-from mettleq.midpoint_mpo import MidpointMPOOptions, MidpointMPOSimulator
+from mettleq.midpoint_mpo import (
+    IsolatedMidpointMPOSimulator,
+    MidpointMPOOptions,
+)
 
 circuit = QuantumCircuit(8)
 circuit.h(0)
 for qubit in range(7):
     circuit.cx(qubit, qubit + 1)
 
-simulator = MidpointMPOSimulator(
-    MidpointMPOOptions(max_bond=512, cutoff=6e-4, seed=123)
+simulator = IsolatedMidpointMPOSimulator(
+    MidpointMPOOptions(max_bond=512, cutoff=6e-4, seed=123),
+    worker_python=".venv-mpo/bin/python",
 )
-result = simulator.run(circuit, shots=1000)
+result = simulator.run(circuit, shots=1000, output_dir="bench/runs/my-mpo-run")
 print(result.counts)
 print(result.diagnostics)
 ```
 
-This API accepts a Qiskit `QuantumCircuit`, but it is deliberately not hidden
-behind `method="matrix_product_state"`: midpoint MPO has different routing,
-approximation, runtime, and trust controls. PennyLane exposure is not included
-yet because the method's current contract is finite-shot, whole-circuit
-sampling rather than general differentiable observables.
+The isolated API keeps normal Qiskit 2.x code on the caller side while the
+pinned worker owns Quimb and the long-running compression. It is deliberately
+not hidden behind `method="matrix_product_state"`: midpoint MPO has different
+routing, approximation, runtime, and trust controls. PennyLane exposure is not
+included yet because the method's current contract is finite-shot,
+whole-circuit sampling rather than general differentiable observables.
 
 ### Use MettleQ from PennyLane
 
@@ -236,7 +244,7 @@ Qiskit and PennyLane accept the same policy vocabulary:
 | `mps_accuracy_policy="report"` | Attach threshold evidence; use `"warn"` or `"error"` for stricter enforcement |
 | `mps_convergence_bond_dimensions=(32, 64, 128)` | Rerun analytic SDK results and report successive-`Dmax` agreement |
 
-`MidpointMPOSimulator` is an additional explicit method with its own
+`IsolatedMidpointMPOSimulator` is the recommended explicit method and has its own
 `max_bond`, `cutoff`, unswapping, seeded-sampling, and expected-peak evidence;
 it is not an `automatic` planner target.
 
@@ -374,7 +382,7 @@ is opt-in; unset preserves fully lazy execution.
 ```mermaid
 flowchart TB
     QISKIT["Qiskit circuits and PUBs"] --> QAPI["BackendV2 · SamplerV2 · EstimatorV2"]
-    QISKIT --> MPOAPI["Explicit MidpointMPOSimulator<br/>whole-circuit finite-shot method"]
+    QISKIT --> MPOAPI["Isolated midpoint-MPO worker<br/>Qiskit 2 caller · pinned tensor environment"]
     PL["PennyLane QNodes and tapes"] --> PAPI["PennyLane mettleq device"]
     QAPI --> IR["Validated canonical circuit IR"]
     PAPI --> IR
@@ -415,7 +423,9 @@ the tensor network without constructing a dense `2**n` state. CPU and GPU are
 alternative numerical paths, not additive acceleration; the planner keeps MPS
 on CPU until matched evidence establishes a real GPU crossover. Midpoint MPO
 is a separate opt-in Qiskit-circuit method and does not pass through the
-statevector/forward-MPS automatic dispatcher.
+statevector/forward-MPS automatic dispatcher. Its QASM process boundary lets a
+normal Qiskit 2 caller use the pinned, independently reproducible
+tensor-network environment.
 
 ## Performance
 
@@ -1006,6 +1016,9 @@ auditable. This fork adds explicit evidence at each layer:
 - **Recoverable MPS numerics:** a scaled SciPy/NumPy SVD ladder reports failed
   attempts instead of allowing MLX `sgesvdx` to terminate the process; explicit
   canonicalization and renormalization guard finite norm.
+- **Recoverable midpoint-MPO numerics:** the isolated worker bypasses Quimb's
+  process-killing native/`gesvd` path, tries unscaled NumPy first to preserve
+  its numerical trajectory, and reports every scaled or eigensolver fallback.
 - **MPS trust policy:** both SDKs attach local discarded-weight and norm
   classifications, can warn or raise on configured thresholds, and can rerun
   analytic results across requested bond dimensions.
@@ -1031,7 +1044,7 @@ auditable. This fork adds explicit evidence at each layer:
 | Quantum-computing examples and algorithms | 41 |
 | Internal consistency and measurement parity | 21 |
 | MPS backend and correctness | 22 |
-| Midpoint-MPO API, exact smoke test, and convergence policy | 3 |
+| Midpoint-MPO API, isolated worker, safe SVD, and convergence policy | 7 |
 | QML wrapper, QFT, and subset semantics | 10 |
 | Strict OpenQASM and silent-risk checks | 7 |
 | QPE energy estimation | 2 |
@@ -1041,7 +1054,7 @@ auditable. This fork adds explicit evidence at each layer:
 | Execution plans, memory policy, planner, and capability reporting | 33 |
 | Native Qiskit and PennyLane integrations and rebrand compatibility | 18 |
 | MettleQ Studio backend and MCP API | 18 |
-| **Total** | **359** |
+| **Total** | **363** |
 
 Run everything with:
 
@@ -1072,10 +1085,10 @@ Silicon runner labeled `macOS` and `ARM64`.
   contraction was slower than NumPy CPU contraction at every tested bond from
   8 through 128, with no resident or GPU-to-CPU round-trip crossover. GPU MPS
   should be revisited only after SVD/truncation can remain resident on GPU.
-- Full P9 midpoint-MPO support is qualified in the isolated pinned Python 3.10
-  environment in `tools/requirements-midpoint-mpo-p9.txt`. The normal Qiskit
-  2.x API accepts the method, but the measured Qiskit 2.5 / Quimb 1.14 P9
-  trajectory was not competitive and is not the basis of the published result.
+- Full P9 midpoint-MPO support uses the isolated pinned Python 3.10 environment
+  in `tools/requirements-midpoint-mpo-p9.txt`. A normal Qiskit 2.x caller can
+  invoke it through `IsolatedMidpointMPOSimulator`; in-process execution still
+  requires compatible tensor-network dependencies.
 - The midpoint-MPO API currently targets whole-circuit finite-shot Qiskit
   inputs. It is not yet exposed as a Qiskit `BackendV2`, Estimator, or PennyLane
   differentiable device method.
@@ -1106,7 +1119,7 @@ Silicon runner labeled `macOS` and `ARM64`.
 | `mettleq.qml` | Available, internal wrapper | PennyLane-like tapes, measurements, templates, and parameter-shift gradients |
 | Qiskit `BackendV2` | Available: statevector + MPS | Transpile and run unitary circuits; receive native `Result`, device-sampled counts/memory, optional statevector, accuracy classification, and execution evidence |
 | Qiskit SamplerV2 / EstimatorV2 | Available | Use PUB batching, native `BitArray` samples, device-resident Pauli expectations, and optional analytic `Dmax` convergence reports |
-| Qiskit `MidpointMPOSimulator` | Available, explicit finite-shot method | Pass a `QuantumCircuit`; receive seeded counts/samples plus routing, cutoff, bond, tensor-footprint, and expected-peak evidence |
+| Qiskit `IsolatedMidpointMPOSimulator` | Available, explicit finite-shot method | Pass a normal Qiskit 2 `QuantumCircuit`; run in the pinned tensor worker and receive seeded counts/samples plus routing, cutoff, bond, tensor-footprint, SVD, and expected-peak evidence |
 | PennyLane `mettleq` device | Available: statevector + MPS | Use a normal QNode with analytic or finite-shot measurements, threshold policy, analytic `Dmax` convergence, tracking, and parameter-shift gradients |
 | Other SDKs | Out of scope for the current phase | Qiskit and PennyLane are the only active integration targets |
 
@@ -1196,7 +1209,22 @@ case starts in a fresh process.
 
 ### Run the full midpoint-MPO P9 protocol
 
-Create the isolated environment shown in [Install](#install), then run:
+Create the isolated environment shown in [Install](#install). The supported
+Qiskit 2 caller-to-worker campaign, including reversed-order repeats and the
+fixed-D512 cutoff sweep, is:
+
+```bash
+METTLEQ_MPO_PYTHON=.venv-mpo/bin/python \
+PYTHONPATH=src caffeinate -i .venv/bin/python \
+  tools/benchmark_midpoint_mpo_priority_phase.py \
+  --output-dir bench/runs/midpoint-mpo-priorities \
+  --worker-python .venv-mpo/bin/python \
+  --published-repo /tmp/peaked-mpo-solver-reference \
+  --repeats 2 --cutoff-repeats 2 \
+  --shots 1000 --seed 123 --timeout-seconds 3600 --phase all
+```
+
+For one direct run entirely inside the pinned environment:
 
 ```bash
 PYTHONPATH=src caffeinate -i .venv-mpo/bin/python -m mettleq.midpoint_mpo \
@@ -1211,8 +1239,9 @@ PYTHONPATH=src caffeinate -i .venv-mpo/bin/python -m mettleq.midpoint_mpo \
 This is a long CPU run. It writes `summary.json`, `stats.json`, and
 `samples.tsv`; success requires `termination_reason="completed"`, all 1,885
 consolidated work gates consumed, and the expected bitstring recovered as the
-sample mode. Use `tools/benchmark_midpoint_mpo.py` and
-`tools/summarize_midpoint_mpo_phase.py` for multi-point evidence campaigns.
+sample mode. Use `tools/summarize_midpoint_mpo_priority_phase.py` to freeze a
+completed campaign with compressed raw statistics, per-run ordering, recovery
+telemetry, and plots.
 
 To reproduce the same-Mac published-core arm, check out the recorded upstream
 solver revision and keep the same pinned environment and sampling contract:

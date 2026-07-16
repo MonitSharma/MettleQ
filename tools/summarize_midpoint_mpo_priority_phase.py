@@ -235,6 +235,8 @@ def main() -> int:
 
     run_dir = args.run_dir.resolve()
     output_dir = args.output_dir.resolve()
+    source_git_commit = _git("rev-parse", "HEAD")
+    source_git_dirty = bool(_git("status", "--porcelain"))
     output_dir.mkdir(parents=True, exist_ok=True)
     campaign_manifest = _json(run_dir / "manifest.json")
     campaign_summary = _json(run_dir / "summary.json")
@@ -290,9 +292,13 @@ def main() -> int:
         output_dir / "p9-qiskit2-export.qasm",
     )
 
-    failures = _copy_failures(
-        args.failures_dir.resolve() if args.failures_dir else Path(),
-        output_dir / "recovery-evidence",
+    failures = (
+        _copy_failures(
+            args.failures_dir.resolve(),
+            output_dir / "recovery-evidence",
+        )
+        if args.failures_dir
+        else {}
     )
     safe_svd = _safe_svd_rows(records)
     _write_csv(output_dir / "safe_svd_telemetry.csv", safe_svd)
@@ -315,8 +321,8 @@ def main() -> int:
     evidence_manifest = {
         "benchmark": "mettleq_midpoint_mpo_priority_phase12_frozen",
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "git_commit": _git("rev-parse", "HEAD"),
-        "git_dirty": bool(_git("status", "--porcelain")),
+        "git_commit": source_git_commit,
+        "git_dirty": source_git_dirty,
         "platform": platform.platform(),
         "source_campaign": str(run_dir),
         "campaign_manifest_sha256": _sha256(run_dir / "manifest.json"),
