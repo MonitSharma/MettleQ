@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# QuantumStudio - Installation Script
+# MettleQ Studio - Installation Script
 # =============================================================================
 # Sets up Python venv, installs dependencies, and prepares Flutter app
 #
@@ -29,7 +29,7 @@ error() { echo -e "${RED}✗ $*${NC}"; }
 
 echo ""
 echo -e "${CYAN}==============================================================================${NC}"
-echo -e "${CYAN}  QuantumStudio Installation${NC}"
+echo -e "${CYAN}  MettleQ Studio Installation${NC}"
 echo -e "${CYAN}==============================================================================${NC}"
 echo ""
 

@@ -19,7 +19,7 @@ import numpy as np
 from qiskit.primitives import StatevectorEstimator
 from qiskit.quantum_info import SparsePauliOp
 
-from mlxq.integrations.qiskit import QupertinoEstimatorV2
+from mettleq.integrations.qiskit import MettleQEstimatorV2
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,9 +30,9 @@ from tools.benchmark_mps_limits import build_circuit, parse_case
 
 
 IMPLEMENTATIONS = (
-    "qupertino_cpu_routed",
-    "qupertino_cpu_restore",
-    "qupertino_gpu_routed",
+    "mettleq_cpu_routed",
+    "mettleq_cpu_restore",
+    "mettleq_gpu_routed",
     "qiskit_aer_cpu_mps",
 )
 STANDARD_CASES = (
@@ -82,7 +82,7 @@ def _make_estimator(implementation: str, args):
         )
     device = "gpu" if "gpu" in implementation else "cpu"
     routing = "restore" if implementation.endswith("restore") else "lookahead"
-    return QupertinoEstimatorV2(
+    return MettleQEstimatorV2(
         method="matrix_product_state",
         device=device,
         mps_max_bond_dimension=args.dmax,
@@ -157,7 +157,7 @@ def _worker(args) -> int:
                     time.perf_counter_ns() - start
                 ) / 1e6
                 row["expectation_z0"] = float(np.asarray(result.data.evs))
-                if implementation.startswith("qupertino"):
+                if implementation.startswith("mettleq"):
                     diagnostics = estimator.last_mps_diagnostics[0]
                     accuracy = estimator.last_mps_accuracy_reports[0]
                     for field in (
@@ -219,14 +219,14 @@ def _summaries(rows: list[dict], cases) -> list[dict]:
             implementation: _median(selected, implementation)
             for implementation in IMPLEMENTATIONS
         }
-        routed = medians["qupertino_cpu_routed"]
-        restore = medians["qupertino_cpu_restore"]
-        gpu = medians["qupertino_gpu_routed"]
+        routed = medians["mettleq_cpu_routed"]
+        restore = medians["mettleq_cpu_restore"]
+        gpu = medians["mettleq_gpu_routed"]
         aer = medians["qiskit_aer_cpu_mps"]
         routed_rows = [
             row
             for row in selected
-            if row["implementation"] == "qupertino_cpu_routed"
+            if row["implementation"] == "mettleq_cpu_routed"
             and not row["warmup"]
             and row["status"] == "completed"
         ]
@@ -240,8 +240,8 @@ def _summaries(rows: list[dict], cases) -> list[dict]:
                     restore / routed if routed and restore else None
                 ),
                 "cpu_over_gpu_speedup": gpu / routed if routed and gpu else None,
-                "qupertino_over_aer_speedup": aer / routed if routed and aer else None,
-                "maximum_qupertino_exact_error": max(
+                "mettleq_over_aer_speedup": aer / routed if routed and aer else None,
+                "maximum_mettleq_exact_error": max(
                     (
                         float(row["exact_absolute_error"])
                         for row in routed_rows
@@ -270,6 +270,23 @@ def _summaries(rows: list[dict], cases) -> list[dict]:
 def _plot(summaries: list[dict], output: Path) -> None:
     import matplotlib.pyplot as plt
 
+    # Frozen pre-rename summaries retain their original schema. Plot them with
+    # the canonical MettleQ labels without rewriting the measured source data.
+    normalized = []
+    for source in summaries:
+        row = dict(source)
+        for old, new in (
+            ("qupertino_cpu_routed_median_ms", "mettleq_cpu_routed_median_ms"),
+            ("qupertino_cpu_restore_median_ms", "mettleq_cpu_restore_median_ms"),
+            ("qupertino_gpu_routed_median_ms", "mettleq_gpu_routed_median_ms"),
+            ("qupertino_over_aer_speedup", "mettleq_over_aer_speedup"),
+            ("maximum_qupertino_exact_error", "maximum_mettleq_exact_error"),
+        ):
+            if new not in row and old in row:
+                row[new] = row[old]
+        normalized.append(row)
+    summaries = normalized
+
     labels = [
         f"{row['family'].replace('_', ' ')}\n{row['qubits']}q d{row['depth']}"
         for row in summaries
@@ -277,9 +294,9 @@ def _plot(summaries: list[dict], output: Path) -> None:
     figure, axes = plt.subplots(1, 2, figsize=(14.5, 5.2))
     x = np.arange(len(labels))
     styles = (
-        ("qupertino_cpu_routed_median_ms", "Qupertino CPU routed", "#2563eb"),
-        ("qupertino_cpu_restore_median_ms", "Qupertino CPU restore", "#60a5fa"),
-        ("qupertino_gpu_routed_median_ms", "Qupertino GPU tensors", "#7c3aed"),
+        ("mettleq_cpu_routed_median_ms", "MettleQ CPU routed", "#2563eb"),
+        ("mettleq_cpu_restore_median_ms", "MettleQ CPU restore", "#60a5fa"),
+        ("mettleq_gpu_routed_median_ms", "MettleQ GPU tensors", "#7c3aed"),
         ("qiskit_aer_cpu_mps_median_ms", "Qiskit Aer CPU MPS", "#ea580c"),
     )
     width = 0.19
@@ -295,7 +312,7 @@ def _plot(summaries: list[dict], output: Path) -> None:
     comparisons = (
         ("routing_speedup", "routing vs restore", "#2563eb"),
         ("cpu_over_gpu_speedup", "CPU vs GPU tensors", "#7c3aed"),
-        ("qupertino_over_aer_speedup", "Qupertino vs Aer", "#ea580c"),
+        ("mettleq_over_aer_speedup", "MettleQ vs Aer", "#ea580c"),
     )
     for field, label, color in comparisons:
         axes[1].plot(
@@ -306,7 +323,7 @@ def _plot(summaries: list[dict], output: Path) -> None:
             color=color,
         )
     axes[1].axhline(1.0, color="#555555", linewidth=1, linestyle="--")
-    axes[1].set_ylabel("Speedup (>1 favors routed Qupertino CPU)")
+    axes[1].set_ylabel("Speedup (>1 favors routed MettleQ CPU)")
     axes[1].set_xticks(x, labels, rotation=20, ha="right")
     axes[1].grid(True, alpha=0.22)
     axes[1].legend(fontsize=8)

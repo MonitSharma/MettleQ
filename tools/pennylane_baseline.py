@@ -27,7 +27,7 @@ def _version(name: str) -> str | None:
 
 def _qft_qnode(device_name: str, n_qubits: int):
     """Explicit gate-identical QFT ladder (H + controlled-phase, no final SWAP
-    layer), matching the mlxq and Aer baseline circuits gate-for-gate. The
+    layer), matching the mettleq and Aer baseline circuits gate-for-gate. The
     qml.QFT template appends a swap layer and therefore differs in both gate
     count and output bit order."""
     import math
@@ -75,7 +75,7 @@ def _ghz_qnode(device_name: str, n_qubits: int):
 
 
 def _grover_proxy_qnode(device_name: str, n_qubits: int):
-    """Matches mlxq simulate_grover proxy: uniform init + one diffusion-like
+    """Matches mettleq simulate_grover proxy: uniform init + one diffusion-like
     step with pairwise CZ as the phase-oracle proxy."""
     dev = qml.device(device_name, wires=n_qubits)
 
@@ -97,7 +97,7 @@ def _grover_proxy_qnode(device_name: str, n_qubits: int):
 
 
 def _phase_estimation_qnode(device_name: str, n_qubits: int):
-    """Matches mlxq simulate_phase_estimation (base phase 0.4, target = n-1)."""
+    """Matches mettleq simulate_phase_estimation (base phase 0.4, target = n-1)."""
     import math
     dev = qml.device(device_name, wires=n_qubits)
 
@@ -120,7 +120,7 @@ def _phase_estimation_qnode(device_name: str, n_qubits: int):
 
 def _tfim_trotter_qnode(device_name: str, n_qubits: int, trotter_steps: int = 20,
                         time_total: float = 1.0, J: float = 1.0, h: float = 0.5):
-    """Matches mlxq simulate_hamiltonian dense schedule. PennyLane
+    """Matches mettleq simulate_hamiltonian dense schedule. PennyLane
     IsingZZ(phi) = exp(-i*phi/2*ZZ), so phi = -2*J*dt."""
     dev = qml.device(device_name, wires=n_qubits)
     dt = time_total / float(trotter_steps)

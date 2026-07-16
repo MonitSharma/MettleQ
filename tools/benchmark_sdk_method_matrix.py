@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Benchmark Qiskit and PennyLane expectation paths across Qupertino methods."""
+"""Benchmark Qiskit and PennyLane expectation paths across MettleQ methods."""
 
 from __future__ import annotations
 
@@ -22,8 +22,8 @@ from qiskit import QuantumCircuit
 from qiskit.primitives import StatevectorEstimator
 from qiskit.quantum_info import SparsePauliOp
 
-from mlxq.integrations.pennylane import QupertinoDevice
-from mlxq.integrations.qiskit import QupertinoEstimatorV2
+from mettleq.integrations.pennylane import MettleQDevice
+from mettleq.integrations.qiskit import MettleQEstimatorV2
 
 
 def _command_output(*command: str) -> str | None:
@@ -100,7 +100,12 @@ def _plot(summary_rows: list[dict], output: Path) -> None:
     figure, axes = plt.subplots(1, 2, figsize=(12, 5.2))
     for axis, sdk in zip(axes, ("qiskit", "pennylane")):
         rows = [row for row in summary_rows if row["sdk"] == sdk]
-        labels = [row["implementation"].replace("_", " ") for row in rows]
+        labels = [
+            row["implementation"]
+            .replace("qupertino", "mettleq")
+            .replace("_", " ")
+            for row in rows
+        ]
         values = [float(row["median_ms"]) for row in rows]
         colors = ["#6b7280" if row["is_reference"] else "#2563eb" for row in rows]
         axis.barh(labels, values, color=colors)
@@ -109,7 +114,7 @@ def _plot(summary_rows: list[dict], output: Path) -> None:
         axis.set_title(sdk.capitalize())
         axis.grid(True, axis="x", which="both", alpha=0.25)
         axis.invert_yaxis()
-    figure.suptitle("Qupertino SDK method/device matrix")
+    figure.suptitle("MettleQ SDK method/device matrix")
     figure.tight_layout()
     figure.savefig(output, dpi=180, bbox_inches="tight")
     plt.close(figure)
@@ -137,7 +142,7 @@ def main() -> int:
     observable = SparsePauliOp("I" * (args.qubits - 1) + "Z")
     qiskit_reference = StatevectorEstimator()
     qiskit_estimators = {
-        f"qupertino_{method_name}_{device}": QupertinoEstimatorV2(
+        f"mettleq_{method_name}_{device}": MettleQEstimatorV2(
             method=method,
             device=device,
             mps_max_bond_dimension=args.mps_dmax,
@@ -185,8 +190,8 @@ def main() -> int:
         ("mps", "matrix_product_state"),
     ):
         for device_name in ("cpu", "gpu"):
-            name = f"qupertino_{method_name}_{device_name}"
-            device = QupertinoDevice(
+            name = f"mettleq_{method_name}_{device_name}"
+            device = MettleQDevice(
                 wires=args.qubits,
                 method=method,
                 device=device_name,
@@ -318,7 +323,7 @@ def main() -> int:
         "qiskit": importlib.metadata.version("qiskit"),
         "pennylane": importlib.metadata.version("pennylane"),
         "metal_available": bool(mx.metal.is_available()),
-        "mlxq_metal_kernels": os.environ.get("MLXQ_METAL_KERNELS"),
+        "mettleq_metal_kernels": os.environ.get("METTLEQ_METAL_KERNELS"),
     }
     (args.outdir / "sdk_method_matrix_manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n"

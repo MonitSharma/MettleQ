@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# QuantumStudio - Diagnostic Script
+# MettleQ Studio - Diagnostic Script
 # =============================================================================
 # Collects system info, checks dependencies, tests API, for troubleshooting.
 #
@@ -49,7 +49,7 @@ run_cmd() {
 
 # Start report
 echo "" > "$LOG_FILE"
-log "${CYAN}QuantumStudio Diagnostic Report${NC}"
+log "${CYAN}MettleQ Studio Diagnostic Report${NC}"
 log "Generated: $(date)"
 log "Log file: $LOG_FILE"
 

@@ -4,9 +4,9 @@ import mlx.core as mx
 import numpy as np
 import pytest
 
-import mlxq.qasm as qasm
-from mlxq.information import ptrace
-from mlxq.qml import recipe_qpe_energy_single_qubit
+import mettleq.qasm as qasm
+from mettleq.information import ptrace
+from mettleq.qml import recipe_qpe_energy_single_qubit
 
 
 QASMParseError = getattr(qasm, "QASMParseError", ValueError)

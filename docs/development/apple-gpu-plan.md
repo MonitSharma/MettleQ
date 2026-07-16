@@ -48,15 +48,15 @@ small-reference rows, the worst errors were `4.619e-5`, `1.890e-6`, and
 
 ### Matched Aer comparison and decision
 
-The Qupertino-versus-Qiskit Aer comparison was run only after reliability,
+The MettleQ-versus-Qiskit Aer comparison was run only after reliability,
 routing, and CPU-path work completed. It used the same Qiskit circuit and
 analytic `Z0` EstimatorV2 contract, one warmup, three rotating repeats, a fresh
-process per case, and four implementations: Qupertino CPU routed, CPU restore,
+process per case, and four implementations: MettleQ CPU routed, CPU restore,
 GPU tensors, and Aer CPU MPS.
 
 Lookahead routing improved ring by 1.70x, rainbow by 1.25x, random long range by
 1.42x, and all to all by 5.52x; all-to-all swaps fell from 2,280 to 384. Aer was
-faster on six of seven schedules. Qupertino was 1.69x faster on the tested
+faster on six of seven schedules. MettleQ was 1.69x faster on the tested
 36-qubit grid. CPU beat GPU tensors on all seven cases, so automatic MPS remains
 on CPU. Native GPU MPS should be revisited only after new batched contraction or
 decomposition kernels can amortize the current transfer/orchestration overhead.
@@ -70,7 +70,7 @@ are frozen under
 ### What was measured
 
 `tools/benchmark_mps_limits.py` now runs every topology/qubit/depth cell in a
-fresh process through Qiskit `QupertinoEstimatorV2`. It records completion,
+fresh process through Qiskit `MettleQEstimatorV2`. It records completion,
 timeout, child-process errors, runtime, peak RSS, bond growth, truncation,
 discarded-weight telemetry, norm, and independent statevector error through 20
 qubits. The deterministic families are GHZ chain, line brickwork, ring
@@ -171,7 +171,7 @@ CPU SVD.
 
 The shared 20-qubit analytic `Z₀` SDK contract produced:
 
-| SDK path | Median | SDK reference / Qupertino | Absolute error |
+| SDK path | Median | SDK reference / MettleQ | Absolute error |
 | --- | ---: | ---: | ---: |
 | Qiskit statevector GPU | 18.11 ms | 36.54× | `4.42e-10` |
 | Qiskit MPS CPU | 7.80 ms | 84.81× | `6.22e-8` |
@@ -180,7 +180,7 @@ The shared 20-qubit analytic `Z₀` SDK contract produced:
 
 MPS recorded zero truncation events and zero discarded weight for this shallow
 local circuit. The result does not generalize to high-entanglement circuits.
-The unchanged Step 5 protocol was also rerun; Qupertino full-state Qiskit and
+The unchanged Step 5 protocol was also rerun; MettleQ full-state Qiskit and
 local-expectation PennyLane times were 8.98% and 17.12% slower than the prior
 session, respectively. That stability result is reported directly rather than
 using reference variation to imply an engine improvement.
@@ -193,8 +193,8 @@ and test evidence are frozen under
 
 ### Shared compatibility boundary
 
-Qupertino now exposes its exact statevector engine through a Qiskit
-`BackendV2` and a registered PennyLane `qupertino` device. Both adapters emit
+MettleQ now exposes its exact statevector engine through a Qiskit
+`BackendV2` and a registered PennyLane `mettleq` device. Both adapters emit
 the same validated operation dictionaries used by the direct API, so
 statevector preflight, capability-gated Metal dispatch, checkpoint policy, and
 execution-plan evidence stay inside the core engine.
@@ -207,7 +207,7 @@ returns a native synchronous job/result, and materializes the state only when
 `return_statevector=True`. Its initial scope is bound unitary circuits with
 final measurements; unsupported dynamic semantics raise `QiskitError`.
 
-The PennyLane adapter is discoverable through `qml.device("qupertino",
+The PennyLane adapter is discoverable through `qml.device("mettleq",
 wires=...)`. It preserves declared wire order, uses PennyLane preprocessing to
 decompose common gates, supports analytic and finite-shot native measurements,
 shot vectors, arbitrary wire labels, and framework-managed parameter-shift
@@ -228,7 +228,7 @@ Aer 0.17.2, and PennyLane 0.45.1. Each pair used one warmup and seven repeats,
 reversing implementation order on alternating repeats. Timing includes SDK
 translation, simulation, synchronization, and the requested result.
 
-| Native SDK contract | Qupertino median | CPU reference median | Speedup | Error |
+| Native SDK contract | MettleQ median | CPU reference median | Speedup | Error |
 | --- | ---: | ---: | ---: | ---: |
 | Qiskit full statevector | 10.10 ms | Aer 74.65 ms | 7.39× | `1.287e-8` max amplitude |
 | PennyLane local `⟨Z⟩` | 18.31 ms | `default.qubit` 708.70 ms | 38.70× | `4.657e-9` absolute expectation |
@@ -253,7 +253,7 @@ unverified decision instead of an invented guarantee.
 The check is deliberately one-sided: passing proves only that the reported
 lower bounds fit. Additional lazy intermediates, lookup buffers, allocator
 cache, and other processes are listed as unmodeled costs. A false-like default
-keeps the unsafe override disabled. `MLXQ_ALLOW_UNSAFE_STATEVECTOR=1` or the
+keeps the unsafe override disabled. `METTLEQ_ALLOW_UNSAFE_STATEVECTOR=1` or the
 boolean constructor argument can bypass a refusal, but the failure reasons,
 override source, and original device limits remain observable.
 
@@ -417,7 +417,7 @@ inside every repeat. Checkpointing and dense ablation were disabled. The result
 contains 290 raw rows.
 
 ```bash
-unset MLXQ_METAL_CHECKPOINT_BUDGET_MB MLXQ_DENSE_ONLY
+unset METTLEQ_METAL_CHECKPOINT_BUDGET_MB METTLEQ_DENSE_ONLY
 PYTHONPATH=src caffeinate -i .venv/bin/python tools/shader_suite_sweep.py \
   --outdir bench/runs/shader_sweep_20260715_m3pro_e5d9577_n25_r10 \
   --qubits 25 --repeats 10
@@ -480,7 +480,7 @@ alone exceeds the budget, evaluation occurs immediately after that operation.
 The controller never synchronizes inside a fused operation.
 
 The default remains fully lazy. Users can set a positive MiB value through
-`MLXQ_METAL_CHECKPOINT_BUDGET_MB` or pass an exact byte value through
+`METTLEQ_METAL_CHECKPOINT_BUDGET_MB` or pass an exact byte value through
 `Device(..., metal_checkpoint_budget_bytes=...)`. Zero, false-like, empty, or
 unset configuration disables checkpointing. Invalid, negative, non-finite, or
 sub-byte values raise an explicit error.
@@ -502,7 +502,7 @@ Command:
 
 ```bash
 PYTHONPATH=src .venv/bin/python tools/checkpoint_sweep.py \
-  --outdir /tmp/qupertino-step2-checkpoints \
+  --outdir /tmp/mettleq-step2-checkpoints \
   --qubits 20 --steps 6 --repeats 9 --warmups 1 \
   --budgets-mib 512 384 256 192 128
 ```
@@ -561,8 +561,8 @@ during a Python process.
 The dispatch path now caches only process-stable facts: platform identity,
 Metal availability, the custom-kernel API, MLX version, device identity, and
 device memory limits. Policy and safety decisions remain live on every call:
-`MLXQ_METAL_KERNELS`, the selected MLX device, backend, dtype,
-`MLXQ_DENSE_ONLY`, and requested qubit count. The full inspection report and
+`METTLEQ_METAL_KERNELS`, the selected MLX device, backend, dtype,
+`METTLEQ_DENSE_ONLY`, and requested qubit count. The full inspection report and
 the fast boolean selector share these rules. A public
 `clear_metal_capability_cache()` hook supports tests and deliberate re-probing.
 
@@ -636,7 +636,7 @@ expected low-level launches, observed dispatches, fallback reasons, process
 wrapper-cache state, 32-bit indexing limits, state-memory estimates, MLX
 allocator counters, and synchronized evaluation status.
 
-`MLXQ_METAL_KERNELS` accepts explicit on/off values and `auto`. Unset remains
+`METTLEQ_METAL_KERNELS` accepts explicit on/off values and `auto`. Unset remains
 off. A request fails closed when the process is not on Apple Silicon/Metal, the
 default device is not the GPU, `mx.fast.metal_kernel` is unavailable, the
 backend is not statevector, the dtype is not `complex64`, dense ablation is on,
@@ -656,14 +656,14 @@ Command:
 
 ```bash
 PYTHONPATH=src .venv/bin/python tools/profile_apple_gpu.py \
-  --qubits 20 --repeats 9 --output /tmp/qupertino_phase_d_n20_timing.json
+  --qubits 20 --repeats 9 --output /tmp/mettleq_phase_d_n20_timing.json
 ```
 
 Each arm used a fresh `Device`; state initialization and circuit construction
 were outside the timing window. `Device.execute` host graph construction was
 run with `report=True` and timed separately from `Device.synchronize`, which
 calls `mx.eval(final_state)`. Normal execution does not build a report unless
-`report=True` or `MLXQ_EXECUTION_REPORT=1` is set, so the inspection feature
+`report=True` or `METTLEQ_EXECUTION_REPORT=1` is set, so the inspection feature
 does not add this host work to the default fast path.
 The first execution in the process was recorded separately, followed by nine
 synchronized warm executions. Full-state `tolist` readback was timed after
@@ -699,14 +699,14 @@ MLX Metal capture requires the capture layer when Python starts:
 MTL_CAPTURE_ENABLED=1 PYTHONPATH=src .venv/bin/python \
   tools/profile_apple_gpu.py --qubits 20 --repeats 7 \
   --capture-workload qft \
-  --capture-output /tmp/qupertino_phase_d_qft_n20.gputrace \
-  --output /tmp/qupertino_phase_d_n20_capture.json
+  --capture-output /tmp/mettleq_phase_d_qft_n20.gputrace \
+  --output /tmp/mettleq_phase_d_n20_capture.json
 ```
 
 The resulting Xcode Instruments bundle recorded one captured frame. The
 capture-enabled process is deliberately separate from the timing evidence
 because inserting the capture layer changed first-process overhead. Its
-execution plan selected and synchronously evaluated `mlxq_qft_stage_gen` for
+execution plan selected and synchronously evaluated `mettleq_qft_stage_gen` for
 19 matched QFT stages.
 
 ### Top three measured bottlenecks

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# mlxQ test launcher (similar style to bench.sh)
+# MettleQ test launcher (similar style to bench.sh)
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PYTHONPATH="${ROOT_DIR}/src"
@@ -26,7 +26,7 @@ Options:
   --runner               Use custom runner (src/tests/run_core_tests.py)
   --pytest               Use pytest (default)
   -k PATTERN             Pytest -k pattern (e.g., -k mlxQQCExamplesTest)
-  --max N                Limit core test list (MLXQ_TEST_MAX)
+  --max N                Limit core test list (METTLEQ_TEST_MAX)
   --ascii                Print ASCII circuits for executed Device circuits
   --failfast             Pytest fail fast
   --verbose              Pytest verbose (-vv)
@@ -54,8 +54,8 @@ while [[ $# -gt 0 ]]; do
     --runner) MODE="runner"; shift ;;
     --pytest) MODE="pytest"; shift ;;
     -k) K_PATTERN="${2:-}"; shift 2 ;;
-    --max) export MLXQ_TEST_MAX="${2:-}"; shift 2 ;;
-    --ascii) export MLXQ_PRINT_ASCII=1; shift ;;
+    --max) export METTLEQ_TEST_MAX="${2:-}"; shift 2 ;;
+    --ascii) export METTLEQ_PRINT_ASCII=1; shift ;;
     --failfast) FAILFAST=1; shift ;;
     --verbose) VERBOSE=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -73,7 +73,7 @@ verify_collection() {
   local label="$2"
   local collect_log
   local collected
-  collect_log="$(mktemp "${TMPDIR:-/tmp}/mlxq-collect.XXXXXX")"
+  collect_log="$(mktemp "${TMPDIR:-/tmp}/mettleq-collect.XXXXXX")"
   if ! "${PYTHON_BIN}" -m pytest --collect-only -q "${suite}" >"${collect_log}" 2>&1; then
     cat "${collect_log}" >&2
     rm -f "${collect_log}"
@@ -95,7 +95,7 @@ verify_collection() {
 }
 
 verify_collection "${ROOT_DIR}/src/tests" "simulator"
-verify_collection "${ROOT_DIR}/quantumstudio/tests" "QuantumStudio backend"
+verify_collection "${ROOT_DIR}/quantumstudio/tests" "MettleQ Studio backend"
 
 ARGS=( )
 [[ -n "$K_PATTERN" ]] && ARGS+=( -k "$K_PATTERN" )

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate Benchpress-like summary figures and table from existing mlxQ bench outputs.
+Generate Benchpress-like summary figures and table from existing MettleQ bench outputs.
 
 Outputs under bench/:
   - benchpress_fig1.png   (Fourier/variational/synthetic overview)
@@ -141,4 +141,3 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
-

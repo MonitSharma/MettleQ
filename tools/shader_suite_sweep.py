@@ -2,7 +2,7 @@
 """Full-suite pure-MLX vs Metal-shader sweep at a fixed size.
 
 For every gate-based benchmark workload, runs pure-MLX and shader-tier
-(MLXQ_METAL_KERNELS=1) executions INTERLEAVED per repeat (pure, metal, pure,
+(METTLEQ_METAL_KERNELS=1) executions INTERLEAVED per repeat (pure, metal, pure,
 metal, ...) so session drift hits both arms equally, and reports paired
 per-repeat ratios. Excluded: steady_state (density-matrix Kraus path, no gate
 list) and qft_fft_primitive (primitive reference row, not a gate circuit).
@@ -25,7 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from mlxq import bench  # noqa: E402
+from mettleq import bench  # noqa: E402
 
 WORKLOADS = [
     "qft", "qft_entangled", "phase_estimation", "phase_estimation_inexact",
@@ -41,13 +41,13 @@ WORKLOADS = [
 
 def run_once(fn, n: int, metal: bool) -> float:
     if metal:
-        os.environ["MLXQ_METAL_KERNELS"] = "1"
+        os.environ["METTLEQ_METAL_KERNELS"] = "1"
     else:
-        os.environ.pop("MLXQ_METAL_KERNELS", None)
+        os.environ.pop("METTLEQ_METAL_KERNELS", None)
     try:
         out = fn(n)
     finally:
-        os.environ.pop("MLXQ_METAL_KERNELS", None)
+        os.environ.pop("METTLEQ_METAL_KERNELS", None)
     if "error" in out:
         raise RuntimeError(f"{fn.__name__}: {out['error']}")
     return float(out["wall_ms"])

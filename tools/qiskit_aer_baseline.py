@@ -110,7 +110,7 @@ def _ghz_circuit(QuantumCircuit, n: int):
 
 
 def _grover_proxy_circuit(QuantumCircuit, n: int):
-    """Matches mlxq simulate_grover: uniform init, one diffusion-like step
+    """Matches mettleq simulate_grover: uniform init, one diffusion-like step
     with pairwise CZ as the phase-oracle proxy."""
     qc = QuantumCircuit(n)
     for q in range(n):
@@ -128,7 +128,7 @@ def _grover_proxy_circuit(QuantumCircuit, n: int):
 
 
 def _phase_estimation_circuit(QuantumCircuit, n: int):
-    """Matches mlxq simulate_phase_estimation (base phase 0.4, target = n-1)."""
+    """Matches mettleq simulate_phase_estimation (base phase 0.4, target = n-1)."""
     qc = QuantumCircuit(n)
     target = n - 1
     for p in range(n - 1):
@@ -146,7 +146,7 @@ def _phase_estimation_circuit(QuantumCircuit, n: int):
 
 def _tfim_trotter_circuit(QuantumCircuit, n: int, trotter_steps: int = 20,
                           time_total: float = 1.0, J: float = 1.0, h: float = 0.5):
-    """Matches mlxq simulate_hamiltonian dense schedule: per step, ZZ phases
+    """Matches mettleq simulate_hamiltonian dense schedule: per step, ZZ phases
     exp(+i*J*dt*ZZ) on each open-boundary bond then RX(2*h*dt) on every site.
     Qiskit RZZ(theta) = exp(-i*theta/2*ZZ), so theta = -2*J*dt."""
     qc = QuantumCircuit(n)

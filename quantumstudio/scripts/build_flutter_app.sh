@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# QuantumStudio - Flutter macOS App Builder
+# MettleQ Studio - Flutter macOS App Builder
 # =============================================================================
 #
 # Usage:
@@ -14,7 +14,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 FLUTTER_DIR="$ROOT_DIR/flutter_app"
-APP_NAME="QuantumStudio"
+APP_NAME="MettleQ"
 
 MODE="release"
 DO_CLEAN=false

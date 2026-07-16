@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Job worker script for QuantumStudio benchmark execution.
+Job worker script for MettleQ Studio benchmark execution.
 
 This script is invoked as a subprocess by the main API server.
 It executes benchmarks and writes output to stdout (which is redirected to log file).
@@ -75,7 +75,7 @@ def _parse_qubits_spec(spec: str) -> List[int]:
 
 def _default_qubits_for(name: str, max_qubits: int) -> List[int]:
     """Get default qubit list for a benchmark."""
-    env_key = f"MLXQ_LIST_{name.upper()}"
+    env_key = f"METTLEQ_LIST_{name.upper()}"
     env_val = os.environ.get(env_key)
     if env_val:
         return [q for q in _parse_qubits_spec(env_val) if q <= max_qubits]
@@ -151,7 +151,7 @@ def _generate_ghz_distributions() -> None:
     """Generate GHZ distribution plots."""
     try:
         import matplotlib.pyplot as plt
-        from mlxq.mlxQdevice import Device
+        from mettleq.device import Device
     except Exception:
         print("GHZ plot generation unavailable (missing deps).")
         traceback.print_exc()
@@ -205,15 +205,15 @@ def run_job(payload: Dict[str, Any]) -> int:
     env_overrides = payload.get("env_overrides", {})
     run_env_overrides = {k: v for k, v in env_overrides.items() if str(v).strip()}
 
-    os.environ["MLXQ_SAVE_PLOTS"] = "1" if save_plots else "0"
-    os.environ["MLXQ_BENCH_WARMUPS"] = str(max(0, benchmark_warmups))
-    os.environ["MLXQ_BENCH_REPEATS"] = str(max(1, benchmark_repeats))
+    os.environ["METTLEQ_SAVE_PLOTS"] = "1" if save_plots else "0"
+    os.environ["METTLEQ_BENCH_WARMUPS"] = str(max(0, benchmark_warmups))
+    os.environ["METTLEQ_BENCH_REPEATS"] = str(max(1, benchmark_repeats))
     exit_code = 0
 
     try:
-        from mlxq import bench as mlxq_bench
+        from mettleq import bench as mettleq_bench
     except Exception:
-        print("Failed to import mlxq benchmarks.")
+        print("Failed to import mettleq benchmarks.")
         traceback.print_exc()
         return 1
 
@@ -235,9 +235,9 @@ def run_job(payload: Dict[str, Any]) -> int:
 
         env_for_run: Dict[str, Optional[str]] = {
             **run_env_overrides,
-            "MLXQ_BACKEND": backend or None,
-            "MLXQ_BENCH_WARMUPS": str(max(0, benchmark_warmups)),
-            "MLXQ_BENCH_REPEATS": str(max(1, benchmark_repeats)),
+            "METTLEQ_BACKEND": backend or None,
+            "METTLEQ_BENCH_WARMUPS": str(max(0, benchmark_warmups)),
+            "METTLEQ_BENCH_REPEATS": str(max(1, benchmark_repeats)),
         }
 
         print(f"\n=== Running {name} (qubits={qubits_spec}, backend={backend}) ===")
@@ -255,12 +255,12 @@ def run_job(payload: Dict[str, Any]) -> int:
                         "QASM_SIMULATE_LIMIT": str(payload.get("qasm_simulate_limit")) if payload.get("qasm_simulate_limit") else None,
                     }
                     with _temp_environ(qasm_env):
-                        mlxq_bench.run_qasm_suite(
+                        mettleq_bench.run_qasm_suite(
                             csv_out=str(BENCH_DIR / "qasm_MLX_python.csv"),
                             json_out=str(BENCH_DIR / "qasm_MLX_python.json"),
                         )
                 else:
-                    mlxq_bench.run_scaling_benchmark(
+                    mettleq_bench.run_scaling_benchmark(
                         name,
                         qubits,
                         simulate_cap=simulate_cap,

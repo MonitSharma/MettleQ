@@ -2,8 +2,8 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from mlxq.vendor import BENCH_KEYS, VENDOR_BENCHMARKS, ALGORITHM_BENCHMARKS
-from mlxq.mlxQpretty import table, info, success
+from mettleq.vendor import BENCH_KEYS, VENDOR_BENCHMARKS, ALGORITHM_BENCHMARKS
+from mettleq.mlxQpretty import table, info, success
 
 
 def test_bench_catalog_vendor_keys_subset():

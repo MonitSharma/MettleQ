@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from mlxq import qml  # noqa: E402
+from mettleq import qml  # noqa: E402
 
 
 def run_one(n: int, iters: int) -> dict:

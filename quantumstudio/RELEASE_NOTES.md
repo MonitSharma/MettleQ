@@ -1,8 +1,8 @@
-# Qupertino v1.0.2 Release Notes
+# MettleQ v1.0.2 Release Notes
 
 ## Overview
 
-Qupertino is an MLX-native quantum circuit simulator and benchmarking studio for Apple Silicon, packaged as a self-contained macOS desktop app (Flutter UI + bundled Python/FastAPI backend, no external install required).
+MettleQ is an MLX-native quantum circuit simulator and benchmarking studio for Apple Silicon, packaged as a self-contained macOS desktop app (Flutter UI + bundled Python/FastAPI backend, no external install required).
 
 It runs in **two measured performance tiers** on the same hardware:
 
@@ -13,7 +13,7 @@ It runs in **two measured performance tiers** on the same hardware:
 
 The Metal shader tier is **fastest in all 18 comparison cells** against Qiskit Aer CPU and PennyLane `lightning.qubit`:
 
-| Workload | Qupertino Metal | Aer CPU | PennyLane | Paired speedup |
+| Workload | MettleQ Metal | Aer CPU | PennyLane | Paired speedup |
 |---|---:|---:|---:|---|
 | QFT | 59 ms | 2.80 s | 5.61 s | 47× / 95× |
 | TFIM Trotter (20 steps) | 0.50 s | 17.79 s | 32.95 s | 36× / 67× |
@@ -39,8 +39,8 @@ Gate-stream QFT (59 ms) is faster than MLX's own `mx.fft` primitive. Across the 
 
 ## Installation
 
-1. Download `Qupertino-1.0.2-macos.dmg`
-2. Open the DMG and drag **Qupertino** to Applications
+1. Download `MettleQ-1.0.2-macos.dmg`
+2. Open the DMG and drag **MettleQ** to Applications
 3. On first launch, right-click the app and select "Open" (macOS Gatekeeper), or open `System Settings → Privacy & Security → Open Anyway`
 
 ## System requirements
@@ -62,5 +62,5 @@ MIT License (`LICENSE`). Source and binaries are free and open source.
 
 ---
 
-**Repository:** https://github.com/BoltzmannEntropy/Qupertino
-**Website:** https://boltzmannentropy.github.io/QupertinoWEB/
+**Repository:** https://github.com/MonitSharma/MettleQ
+**Original upstream:** https://github.com/BoltzmannEntropy/Qupertino

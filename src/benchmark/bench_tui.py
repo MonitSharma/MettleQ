@@ -88,7 +88,7 @@ import subprocess
 import shutil
 from runpy import run_path
 
-from mlxq.mlxQbench import run_scaling_benchmark, run_qasm_suite
+from mettleq.bench import run_scaling_benchmark, run_qasm_suite
 
 
 BENCHMARKS: List[str] = [

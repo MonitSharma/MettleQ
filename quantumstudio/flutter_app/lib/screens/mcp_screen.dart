@@ -104,9 +104,9 @@ class _McpScreenState extends State<McpScreen> {
   String _defaultLogDir() {
     final home = Platform.environment['HOME'];
     if (home != null && home.isNotEmpty) {
-      return path.join(home, 'Library', 'Logs', 'QuantumStudio');
+      return path.join(home, 'Library', 'Logs', 'MettleQ Studio');
     }
-    return path.join(Directory.systemTemp.path, 'QuantumStudio', 'logs');
+    return path.join(Directory.systemTemp.path, 'MettleQ Studio', 'logs');
   }
 
   String _suggestedScriptPath() {
@@ -367,7 +367,7 @@ class _McpScreenState extends State<McpScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Connect QuantumStudio to Claude Code via Model Context Protocol',
+                'Connect MettleQ Studio to Claude Code via Model Context Protocol',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),

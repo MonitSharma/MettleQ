@@ -2,7 +2,7 @@
 """Pure-MLX vs Metal-shader sweep over the local OpenQASM corpus.
 
 For every .qasm file in datasets/qasm/local: parse once, execute the SAME op
-stream through Device twice per repeat (pure, then MLXQ_METAL_KERNELS=1,
+stream through Device twice per repeat (pure, then METTLEQ_METAL_KERNELS=1,
 interleaved), record wall time, paired ratio, and state parity max|delta|.
 This exercises the QASM import path end to end: gate-name normalization
 (cx->CNOT, cu1/cp->CPHASE, u1/u2/u3, ccx), barrier skipping, and whether the
@@ -26,15 +26,15 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import mlx.core as mx  # noqa: E402
 
-from mlxq.device import Device  # noqa: E402
-from mlxq.qasm import parse_qasm_file  # noqa: E402
+from mettleq.device import Device  # noqa: E402
+from mettleq.qasm import parse_qasm_file  # noqa: E402
 
 
 def run_once(n: int, ops, metal: bool) -> tuple[float, mx.array]:
     if metal:
-        os.environ["MLXQ_METAL_KERNELS"] = "1"
+        os.environ["METTLEQ_METAL_KERNELS"] = "1"
     else:
-        os.environ.pop("MLXQ_METAL_KERNELS", None)
+        os.environ.pop("METTLEQ_METAL_KERNELS", None)
     try:
         dev = Device(n)
         t0 = time.perf_counter()
@@ -43,7 +43,7 @@ def run_once(n: int, ops, metal: bool) -> tuple[float, mx.array]:
         dt = (time.perf_counter() - t0) * 1000.0
         return dt, dev.sim.state
     finally:
-        os.environ.pop("MLXQ_METAL_KERNELS", None)
+        os.environ.pop("METTLEQ_METAL_KERNELS", None)
 
 
 def main() -> int:

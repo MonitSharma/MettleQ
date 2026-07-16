@@ -1134,7 +1134,7 @@ class _BenchmarksScreenState extends State<BenchmarksScreen> {
                 TextField(
                   decoration: const InputDecoration(
                     labelText: 'Env overrides (KEY=VALUE per line)',
-                    hintText: 'MLXQ_MPS_DMAX=64',
+                    hintText: 'METTLEQ_MPS_DMAX=64',
                   ),
                   controller: _envOverridesController,
                   maxLines: 4,

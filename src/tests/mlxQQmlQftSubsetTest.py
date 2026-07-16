@@ -3,7 +3,7 @@ import math
 import mlx.core as mx
 import numpy as np
 
-from mlxq.qml import (
+from mettleq.qml import (
     Device,
     H,
     IQFT,
@@ -17,7 +17,7 @@ from mlxq.qml import (
     sample,
     state,
 )
-from mlxq.sim import StateVectorSimulator, iqft, qft
+from mettleq.sim import StateVectorSimulator, iqft, qft
 
 
 def _numpy_state(state_array) -> np.ndarray:

@@ -17,29 +17,33 @@ def main() -> int:
     args = parser.parse_args()
     summary = json.loads(args.summary.read_text())
 
+    def renamed(section, field):
+        legacy = field.replace("mettleq", "qupertino")
+        return section[field] if field in section else section[legacy]
+
     panels = [
         (
             "Qiskit · full statevector",
-            summary["qiskit"]["qupertino_median_ms"],
+            renamed(summary["qiskit"], "mettleq_median_ms"),
             summary["qiskit"]["reference_median_ms"],
             "Aer CPU",
-            summary["qiskit"]["reference_over_qupertino_speedup"],
+            renamed(summary["qiskit"], "reference_over_mettleq_speedup"),
         ),
         (
             "PennyLane · local ⟨Z⟩",
-            summary["pennylane"]["qupertino_median_ms"],
+            renamed(summary["pennylane"], "mettleq_median_ms"),
             summary["pennylane"]["reference_median_ms"],
             "default.qubit",
-            summary["pennylane"]["reference_over_qupertino_speedup"],
+            renamed(summary["pennylane"], "reference_over_mettleq_speedup"),
         ),
     ]
     colors = ("#7C3AED", "#94A3B8")
     figure, axes = plt.subplots(1, 2, figsize=(10.5, 4.8))
-    for axis, (title, qupertino_ms, reference_ms, reference, speedup) in zip(
+    for axis, (title, mettleq_ms, reference_ms, reference, speedup) in zip(
         axes, panels
     ):
-        values = [qupertino_ms, reference_ms]
-        bars = axis.bar(["Qupertino", reference], values, color=colors, width=0.62)
+        values = [mettleq_ms, reference_ms]
+        bars = axis.bar(["MettleQ", reference], values, color=colors, width=0.62)
         axis.set_title(title, fontsize=12, fontweight="bold")
         axis.set_ylabel("Median end-to-end time (ms)")
         axis.grid(axis="y", alpha=0.22)

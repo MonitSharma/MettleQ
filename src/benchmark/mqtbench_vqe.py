@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Run a small MQTBench-like VQE subset using mlxQ's VQE benchmark.
+Run a small MQTBench-like VQE subset using MettleQ's VQE benchmark.
 
 Outputs under bench/mqtbench/ as vqe_data.csv and vqe_scaling.png
 """
@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from mlxq.mlxQbench import run_scaling_benchmark
+from mettleq.bench import run_scaling_benchmark
 
 
 def main() -> None:
@@ -38,4 +38,3 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
-

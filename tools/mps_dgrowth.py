@@ -23,9 +23,9 @@ from typing import List
 
 import mlx.core as mx  # type: ignore
 
-from mlxq.mps_state import MPSState, MPSOptions
-from mlxq.gates import RX
-from mlxq.bench import _zz_phase_gate, _xx_phase_gate, _yy_phase_gate
+from mettleq.mps_state import MPSState, MPSOptions
+from mettleq.gates import RX
+from mettleq.bench import _zz_phase_gate, _xx_phase_gate, _yy_phase_gate
 
 
 def run_tfim(n: int, steps: int, dt: float, J: float, h: float, opts: MPSOptions):
@@ -93,7 +93,7 @@ def main() -> None:
 
     if args.plot:
         try:
-            from mlxq.plotting import plot_scaling
+            from mettleq.plotting import plot_scaling
             xs = [r[0] for r in rows]
             ys = [r[1] for r in rows]
             png = out / f"mps_dgrowth_{args.circuit}_n{args.n}.png"

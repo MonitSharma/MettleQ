@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-custatevec_bench.py — Re-run mlxQ benchmark schedules on NVIDIA/cuStateVec.
+custatevec_bench.py — Re-run MettleQ benchmark schedules on NVIDIA/cuStateVec.
 
 Requirements on the CUDA system:
   - Python 3.10+
@@ -229,7 +229,7 @@ def main():
         print(f"{key:24s} | {n:2d}q | wall {wall_ms:10.2f} ms")
         rows.append((n, wall_ms))
 
-    # write CSV in mlxQ style
+    # Write CSV in the MettleQ benchmark format.
     out_csv = out_dir / f"{key}_cuda_data.csv"
     with open(out_csv, 'w', newline='') as f:
         wr = csv.writer(f)
@@ -258,4 +258,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

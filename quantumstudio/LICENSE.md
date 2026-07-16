@@ -3,7 +3,7 @@
 Last updated: June 2026
 
 ## Summary
-QuantumStudio is free and open source under the **MIT License**. The source code
+MettleQ Studio is free and open source under the **MIT License**. The source code
 and the compiled binary distributions (DMG / app bundles) are both covered by
 the same MIT terms. No purchase or license key is required.
 

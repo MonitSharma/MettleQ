@@ -3,13 +3,13 @@ import cmath
 import numpy as np
 import mlx.core as mx
 
-# Use mlxq core functionality instead of raw NumPy wherever feasible
-from mlxq.mlxQgates import H as G_H, X as G_X, Y as G_Y, Z as G_Z, I as G_I, RZ as G_RZ, RY as G_RY, CNOT as G_CNOT, CZ as G_CZ, SWAP as G_SWAP, Toffoli as G_Toffoli, iSWAP as G_iSWAP
-from mlxq.mlxQtensor import kron as mx_kron
-from mlxq.mlxQobservables import expectation_value as mx_expect
-from mlxq.mlxQinformation import ptrace as mx_ptrace, purity as mx_purity, operator_to_vector as mx_vec, vector_to_operator as mx_unvec, ptranspose as mx_ptranspose, negativity_pure as mx_negativity_pure, concurrence_pure as mx_concurrence_pure
-from mlxq.mlxQchannels import depolarizing_kraus, amplitude_damping_kraus, bitflip_kraus, choi_from_kraus, apply_kraus
-from mlxq.mlxQsim import StateVectorSimulator, qft as qft_apply, iqft as iqft_apply
+# Use mettleq core functionality instead of raw NumPy wherever feasible
+from mettleq.mlxQgates import H as G_H, X as G_X, Y as G_Y, Z as G_Z, I as G_I, RZ as G_RZ, RY as G_RY, CNOT as G_CNOT, CZ as G_CZ, SWAP as G_SWAP, Toffoli as G_Toffoli, iSWAP as G_iSWAP
+from mettleq.mlxQtensor import kron as mx_kron
+from mettleq.mlxQobservables import expectation_value as mx_expect
+from mettleq.mlxQinformation import ptrace as mx_ptrace, purity as mx_purity, operator_to_vector as mx_vec, vector_to_operator as mx_unvec, ptranspose as mx_ptranspose, negativity_pure as mx_negativity_pure, concurrence_pure as mx_concurrence_pure
+from mettleq.mlxQchannels import depolarizing_kraus, amplitude_damping_kraus, bitflip_kraus, choi_from_kraus, apply_kraus
+from mettleq.mlxQsim import StateVectorSimulator, qft as qft_apply, iqft as iqft_apply
 
 
 def mat_close(A: mx.array, B: mx.array, tol: float = 1e-6) -> bool:
@@ -42,7 +42,7 @@ def _kron_mx(*ops):
 
 
 def _expval(vec: mx.array, op: mx.array) -> complex:
-    """Exact ⟨ψ|op|ψ⟩ using mlxq utility for robust shapes."""
+    """Exact ⟨ψ|op|ψ⟩ using mettleq utility for robust shapes."""
     return complex(mx_expect(mx.reshape(vec, (vec.shape[0],)), op))
 
 

@@ -5,10 +5,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import math
 import mlx.core as mx
 
-from mlxq.mlxQpretty import info, success, warn, error, table, console
-from mlxq.mlxQsim import StateVectorSimulator
-from mlxq.mlxQgates import H, X, Y, Z, CNOT
-from mlxq.mlxQtensor import kron
+from mettleq.mlxQpretty import info, success, warn, error, table, console
+from mettleq.mlxQsim import StateVectorSimulator
+from mettleq.mlxQgates import H, X, Y, Z, CNOT
+from mettleq.mlxQtensor import kron
 
 
 def _vec(arr):
@@ -46,7 +46,7 @@ def test_consist_apply_matrix_two_qubit():
 
 def test_consist_apply_swap_dense_vs_builtin_2q():
     info("Internal consistency: dense SWAP vs built-in SWAP (2q)")
-    from mlxq.mlxQgates import SWAP as SW
+    from mettleq.mlxQgates import SWAP as SW
     simA = StateVectorSimulator(2)
     simB = StateVectorSimulator(2)
     # Prepare |01>
@@ -55,7 +55,7 @@ def test_consist_apply_swap_dense_vs_builtin_2q():
     # Dense SWAP
     simA.apply_dense_gate(SW(), [0, 1])
     # Built-in via device execute path (prepare same initial state |01>)
-    from mlxq.mlxQdevice import Device
+    from mettleq.mlxQdevice import Device
     dev = Device(2)
     dev.execute([{ 'name': 'X', 'wires': [1]}])
     dev.execute([{ 'name': 'SWAP', 'wires': [0,1]}])
@@ -67,7 +67,7 @@ def test_consist_apply_swap_dense_vs_builtin_2q():
 
 def test_consist_apply_cphase_dense_vs_builtin():
     info("Internal consistency: dense CPHASE vs built-in (2q)")
-    from mlxq.mlxQgates import CPHASE as CP
+    from mettleq.mlxQgates import CPHASE as CP
     theta = 0.7
     # Dense apply
     simA = StateVectorSimulator(2)
@@ -82,13 +82,13 @@ def test_consist_apply_cphase_dense_vs_builtin():
 
 def test_consist_apply_crz_dense_vs_builtin():
     info("Internal consistency: dense CRZ vs built-in (2q)")
-    from mlxq.mlxQgates import CRZ as CRZgate
+    from mettleq.mlxQgates import CRZ as CRZgate
     theta = -0.45
     # Dense apply
     simA = StateVectorSimulator(2)
     simA.apply_dense_gate(CRZgate(theta), [0, 1])
     # Built-in via Device path
-    from mlxq.mlxQdevice import Device
+    from mettleq.mlxQdevice import Device
     dev = Device(2)
     dev.execute([{ 'name': 'CRZ', 'wires': [0,1], 'parameters': [theta]}])
     diff = mx.max(mx.abs(simA.state - dev.sim.state))
@@ -98,7 +98,7 @@ def test_consist_apply_crz_dense_vs_builtin():
 
 def test_consist_apply_sequence_dense_vs_builtin():
     info("Internal consistency: dense sequence (H on q0; CNOT 0->1)")
-    from mlxq.mlxQgates import H as Hgate
+    from mettleq.mlxQgates import H as Hgate
     simA = StateVectorSimulator(2)
     # Dense: apply H on q0 then CNOT(0,1)
     simA.apply_dense_gate(Hgate(), [0])

@@ -10,11 +10,11 @@ from pathlib import Path
 from datetime import datetime
 from runpy import run_path
 
-# Ensure local package path before importing mlxq
+# Ensure local package path before importing mettleq
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from mlxq.pretty import info, success, warn, error, table
-from mlxq.mlxQbench import run_scaling_benchmark, run_qasm_suite
+from mettleq.pretty import info, success, warn, error, table
+from mettleq.bench import run_scaling_benchmark, run_qasm_suite
 
 
 class Tee:
@@ -94,9 +94,9 @@ def _copy_plots():
                 (d / cmp.name).write_bytes(cmp.read_bytes())
             except Exception:
                 pass
-    # Visualization appendix artifacts (mlxQ vs PennyLane) and GHZ distributions
+    # Visualization appendix artifacts (MettleQ vs PennyLane) and GHZ distributions
     for p in list(src.glob('vis_*_side_by_side.png')) + \
-             list(src.glob('vis_*_mlxq.png')) + \
+             list(src.glob('vis_*_mettleq.png')) + \
              list(src.glob('vis_*_pl.png')) + \
              list(src.glob('vis_*_hist_side_by_side.png')) + \
              list(src.glob('vqe_convergence_*.png')) + \
@@ -112,7 +112,7 @@ def _write_report(logfile: Path):
     report = Path('BENCH_REPORT.md')
     ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     with open(report, 'w', encoding='utf-8') as f:
-        f.write(f"# mlxQ Benchmark Report\n\n")
+        f.write(f"# MettleQ Benchmark Report\n\n")
         f.write(f"**Generated:** {ts}\n\n")
         f.write(f"**Log File:** {logfile}\n\n---\n\n## Benchmark Results\n\n")
         f.write("```\n")
@@ -132,7 +132,7 @@ def _env_int(name: str, default: int) -> int:
 
 def _cap_for(key: str, fallback: int) -> int:
     uc = key.upper()
-    env_name = f"MLXQ_CAP_{uc}"
+    env_name = f"METTLEQ_CAP_{uc}"
     try:
         val = os.environ.get(env_name)
         if val is not None and val != "":
@@ -151,12 +151,12 @@ def main():
     tee = Tee(log_file)
     sys.stdout = tee
     try:
-        print("📊 Starting mlxQ Benchmark Suite")
+        print("📊 Starting MettleQ Benchmark Suite")
         print(f"📝 Logging to: {log_file}")
         print(f"📝 Also updating: {latest}")
         print("")
         print("===================================")
-        print("mlxQ Benchmark Run")
+        print("MettleQ Benchmark Run")
         print(f"Started: {datetime.now()}")
         print("===================================")
         print("")
@@ -165,7 +165,7 @@ def main():
         _run_core_tests()
 
         # Single-circuit mode (if requested via env)
-        one = os.environ.get('MLXQ_ONE_CIRCUIT', '').strip()
+        one = os.environ.get('METTLEQ_ONE_CIRCUIT', '').strip()
         if one:
             def _parse_qubit_spec(spec: str):
                 spec = (spec or '').strip()
@@ -181,14 +181,14 @@ def main():
                     if tok.isdigit():
                         out.append(int(tok))
                 return out or None
-            qs = _parse_qubit_spec(os.environ.get('MLXQ_ONE_QUBITS', '')) or \
-                 _parse_qubit_spec(os.environ.get('MLXQ_PUB_QUBITS', ''))
+            qs = _parse_qubit_spec(os.environ.get('METTLEQ_ONE_QUBITS', '')) or \
+                 _parse_qubit_spec(os.environ.get('METTLEQ_PUB_QUBITS', ''))
             if not qs:
-                max_q = _env_int('MLXQ_MAX_QUBITS', 25)
+                max_q = _env_int('METTLEQ_MAX_QUBITS', 25)
                 base = [1,2,5,7,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25]
                 qs = [q for q in base if q <= max_q]
             try:
-                cap = os.environ.get('MLXQ_ONE_CAP')
+                cap = os.environ.get('METTLEQ_ONE_CAP')
                 cap_i = int(cap) if cap else None
             except Exception:
                 cap_i = None
@@ -207,14 +207,14 @@ def main():
         print("")
         print("=== Running full benchmark suite ===")
         # Compose canonical lists with env-configurable global cap
-        max_q = _env_int('MLXQ_MAX_QUBITS', 25)
+        max_q = _env_int('METTLEQ_MAX_QUBITS', 25)
         base = [1,2,5,7,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25]
         pub_qubits = [q for q in base if q <= max_q]
         vqe_qubits = [q for q in [1,2,5,7,10,11,12,13,14,15] if q <= max_q]
         # Match legacy steady_state list exactly
         steady_qubits = [q for q in [1,2,5,7,10,11,12] if q <= max_q]
 
-        # Allow explicit override via env: MLXQ_PUB_QUBITS, MLXQ_VQE_QUBITS, MLXQ_STEADY_QUBITS
+        # Allow explicit override via env: METTLEQ_PUB_QUBITS, METTLEQ_VQE_QUBITS, METTLEQ_STEADY_QUBITS
         def _parse_qubit_spec(spec: str):
             spec = (spec or '').strip()
             if not spec:
@@ -233,9 +233,9 @@ def main():
                     out.append(int(tok))
             return out or None
 
-        env_pub = os.environ.get('MLXQ_PUB_QUBITS', '')
-        env_vqe = os.environ.get('MLXQ_VQE_QUBITS', '')
-        env_steady = os.environ.get('MLXQ_STEADY_QUBITS', '')
+        env_pub = os.environ.get('METTLEQ_PUB_QUBITS', '')
+        env_vqe = os.environ.get('METTLEQ_VQE_QUBITS', '')
+        env_steady = os.environ.get('METTLEQ_STEADY_QUBITS', '')
         qp = _parse_qubit_spec(env_pub)
         qv = _parse_qubit_spec(env_vqe)
         qs = _parse_qubit_spec(env_steady)
@@ -246,7 +246,7 @@ def main():
         if qs:
             steady_qubits = qs
 
-        # Per-benchmark caps (overridable via MLXQ_CAP_* env vars)
+        # Per-benchmark caps (overridable via METTLEQ_CAP_* env vars)
         cap_pub = min(max_q, 30)  # hamiltonian_simulation default cap
         cap_time_evolution = min(max_q, 30)
         cap_trotter = min(max_q, 30)

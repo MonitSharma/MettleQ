@@ -3,10 +3,10 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import math
 
-from mlxq.mlxQdevice import Device
-from mlxq.mlxQgates import H, CNOT, RX, RZ
-from mlxq.mps_state import MPSOptions
-from mlxq.mlxQpretty import info, table
+from mettleq.mlxQdevice import Device
+from mettleq.mlxQgates import H, CNOT, RX, RZ
+from mettleq.mps_state import MPSOptions
+from mettleq.mlxQpretty import info, table
 
 
 def _close_vec(a, b, tol=1e-6):
@@ -77,8 +77,8 @@ def test_mps_param_bond_growth_tfim():
     n = 10; J = 1.0; h = 0.5; dt = 0.1
     dev = Device(n, backend='mps', mps_opts=MPSOptions(dmax=256, eps=1e-12))
     sim = dev.sim
-    from mlxq.mlxQgates import RX as _RX
-    from mlxq.bench import _zz_phase_gate as ZZ
+    from mettleq.mlxQgates import RX as _RX
+    from mettleq.bench import _zz_phase_gate as ZZ
     Uzz = ZZ(-dt*J)
     Ux = _RX(2.0*h*dt)
     # a few TEBD steps

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# QuantumStudio Control Script
+# MettleQ Studio Control Script
 # Benchmark UI for osxQuantum (macOS)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,7 +19,7 @@ RUNTIME_PYTHON_DEFAULT="$PROJECT_ROOT/.runtime-venv/bin/python"
 BACKEND_PORT=8127
 
 # Flutter app name
-FLUTTER_APP_BUNDLE_NAME="QuantumStudio"
+FLUTTER_APP_BUNDLE_NAME="MettleQ"
 FLUTTER_APP_BUNDLE_PATH_DEBUG="$FLUTTER_DIR/build/macos/Build/Products/Debug/${FLUTTER_APP_BUNDLE_NAME}.app"
 FLUTTER_APP_BUNDLE_PATH_RELEASE="$FLUTTER_DIR/build/macos/Build/Products/Release/${FLUTTER_APP_BUNDLE_NAME}.app"
 
@@ -183,7 +183,7 @@ cmd_up() {
         shift
     done
 
-    echo -e "${BLUE}=== Starting QuantumStudio ===${NC}"
+    echo -e "${BLUE}=== Starting MettleQ Studio ===${NC}"
     start_backend
 
     if [ "$skip_flutter" = false ]; then
@@ -191,20 +191,20 @@ cmd_up() {
     fi
 
     echo ""
-    echo -e "${GREEN}=== QuantumStudio Ready ===${NC}"
+    echo -e "${GREEN}=== MettleQ Studio Ready ===${NC}"
     echo -e "Backend:    http://localhost:$BACKEND_PORT"
     echo -e "API Docs:   http://localhost:$BACKEND_PORT/docs"
 }
 
 cmd_down() {
-    echo -e "${BLUE}=== Stopping QuantumStudio ===${NC}"
+    echo -e "${BLUE}=== Stopping MettleQ Studio ===${NC}"
     stop_flutter
     stop_backend
-    echo -e "${GREEN}=== QuantumStudio Stopped ===${NC}"
+    echo -e "${GREEN}=== MettleQ Studio Stopped ===${NC}"
 }
 
 cmd_status() {
-    echo -e "${BLUE}=== QuantumStudio Status ===${NC}"
+    echo -e "${BLUE}=== MettleQ Studio Status ===${NC}"
     echo ""
     echo -e "${GREEN}Services:${NC}"
     print_status "Backend" $BACKEND_PORT
@@ -274,7 +274,7 @@ cmd_logs() {
 
 usage() {
     cat << EOF
-${BLUE}QuantumStudio Control Script${NC}
+${BLUE}MettleQ Studio Control Script${NC}
 
 Usage: quantumctl <command> [options]
 
@@ -338,7 +338,7 @@ case "${1:-}" in
         echo -e "${GREEN}Cleaned.${NC}"
         ;;
     version)
-        echo -e "${BLUE}QuantumStudio - Benchmark UI${NC}"
+        echo -e "${BLUE}MettleQ Studio - Benchmark UI${NC}"
         echo "Version: $APP_VERSION"
         echo "Root: $ROOT_DIR"
         echo ""

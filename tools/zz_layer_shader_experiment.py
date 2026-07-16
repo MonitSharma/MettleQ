@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import mlx.core as mx  # noqa: E402
 import numpy as np  # noqa: E402
-from mlxq.sim import StateVectorSimulator  # noqa: E402
+from mettleq.sim import StateVectorSimulator  # noqa: E402
 
 N = 25
 THETA = -0.05  # matches TFIM dt*J at r=20, t=1, J=1

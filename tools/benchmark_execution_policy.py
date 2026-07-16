@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Calibrate Qupertino's CPU/GPU policy for statevector and MPS execution.
+"""Calibrate MettleQ's CPU/GPU policy for statevector and MPS execution.
 
 The benchmark times one complete canonical-operation execution followed by a
 local expectation value. CPU and GPU arms are run independently in rotating
@@ -23,7 +23,7 @@ from pathlib import Path
 import mlx.core as mx
 import numpy as np
 
-from mlxq.integrations._common import (
+from mettleq.integrations._common import (
     execute_operations,
     pauli_product_expectation,
 )
@@ -128,7 +128,7 @@ def _plot(summary_rows: list[dict], output: Path) -> None:
         axis.set_yscale("log")
         axis.grid(True, which="both", alpha=0.25)
         axis.legend()
-    figure.suptitle("Qupertino CPU/GPU execution-policy calibration")
+    figure.suptitle("MettleQ CPU/GPU execution-policy calibration")
     figure.tight_layout()
     figure.savefig(output, dpi=180)
     plt.close(figure)
@@ -327,7 +327,7 @@ def main() -> int:
         "mlx": importlib.metadata.version("mlx"),
         "metal_available": bool(mx.metal.is_available()),
         "default_mlx_device": str(mx.default_device()),
-        "mlxq_metal_kernels": os.environ.get("MLXQ_METAL_KERNELS"),
+        "mettleq_metal_kernels": os.environ.get("METTLEQ_METAL_KERNELS"),
     }
     (args.outdir / "execution_policy_manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n"

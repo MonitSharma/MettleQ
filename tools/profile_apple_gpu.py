@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synchronized Qupertino custom-Metal inspection campaign.
+"""Synchronized MettleQ custom-Metal inspection campaign.
 
 This is intentionally a profiler, not a benchmark-claim generator.  It records
 the first execution in the current process, synchronized warm executions,
@@ -20,8 +20,8 @@ from typing import Any, Dict, List
 
 import mlx.core as mx
 
-from mlxq.device import Device
-from mlxq.execution import metal_memory_snapshot, metal_runtime_status
+from mettleq.device import Device
+from mettleq.execution import metal_memory_snapshot, metal_runtime_status
 
 
 def _qft_ops(n: int) -> List[Dict[str, Any]]:
@@ -84,7 +84,7 @@ def _clear_allocator_cache() -> None:
 
 
 def _run_once(n: int, ops: List[Dict[str, Any]], *, metal: bool) -> Dict[str, Any]:
-    os.environ["MLXQ_METAL_KERNELS"] = "1" if metal else "0"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1" if metal else "0"
     dev = Device(n)
     _reset_peak_memory()
     memory_before = metal_memory_snapshot()
@@ -119,11 +119,11 @@ def _median(runs: List[Dict[str, Any]], key: str) -> float:
 
 
 def _validate(n: int, ops: List[Dict[str, Any]]) -> float:
-    os.environ["MLXQ_METAL_KERNELS"] = "0"
+    os.environ["METTLEQ_METAL_KERNELS"] = "0"
     pure = Device(n)
     pure.execute(ops)
     pure.synchronize()
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     metal = Device(n)
     metal.execute(ops)
     metal.synchronize()
@@ -293,7 +293,7 @@ def _capture_metal_trace(
     if not callable(start) or not callable(stop):
         raise RuntimeError("this MLX build does not expose Metal capture")
     path.parent.mkdir(parents=True, exist_ok=True)
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     dev = Device(n)
     try:
         start(str(path))
@@ -333,9 +333,9 @@ def main() -> int:
     if bool(args.capture_workload) != bool(args.capture_output):
         parser.error("--capture-workload and --capture-output must be used together")
 
-    previous_policy = os.environ.get("MLXQ_METAL_KERNELS")
+    previous_policy = os.environ.get("METTLEQ_METAL_KERNELS")
     capability = metal_runtime_status(args.qubits)
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     capability = metal_runtime_status(args.qubits)
     if not capability["enabled"]:
         raise SystemExit(capability["reason"])
@@ -354,9 +354,9 @@ def main() -> int:
             )
     finally:
         if previous_policy is None:
-            os.environ.pop("MLXQ_METAL_KERNELS", None)
+            os.environ.pop("METTLEQ_METAL_KERNELS", None)
         else:
-            os.environ["MLXQ_METAL_KERNELS"] = previous_policy
+            os.environ["METTLEQ_METAL_KERNELS"] = previous_policy
 
     payload = {
         "schema_version": 1,

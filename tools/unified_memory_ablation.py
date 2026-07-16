@@ -29,10 +29,10 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-os.environ.setdefault("MLXQ_PRINT_ASCII", "0")
+os.environ.setdefault("METTLEQ_PRINT_ASCII", "0")
 
 import mlx.core as mx  # noqa: E402
-from mlxq.device import Device  # noqa: E402
+from mettleq.device import Device  # noqa: E402
 
 
 def _stats(values: list[float]) -> dict:

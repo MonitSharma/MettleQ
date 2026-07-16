@@ -4,10 +4,10 @@ import math
 import mlx.core as mx
 import pytest
 
-from mlxq.device import Device
-from mlxq.sim import StateVectorSimulator
-import mlxq.execution as execution
-from mlxq.execution import (
+from mettleq.device import Device
+from mettleq.sim import StateVectorSimulator
+import mettleq.execution as execution
+from mettleq.execution import (
     METAL_CHECKPOINT_BUDGET_ENV,
     STATEVECTOR_UNSAFE_OVERRIDE_ENV,
     StatevectorMemoryError,
@@ -41,12 +41,12 @@ def _qft_ops(n):
 
 
 def test_metal_policy_is_explicit_and_invalid_values_fail_closed(monkeypatch):
-    monkeypatch.delenv("MLXQ_METAL_KERNELS", raising=False)
+    monkeypatch.delenv("METTLEQ_METAL_KERNELS", raising=False)
     off = metal_runtime_status(4)
     assert off["policy"] == "off_by_default"
     assert not off["enabled"]
 
-    monkeypatch.setenv("MLXQ_METAL_KERNELS", "not-a-policy")
+    monkeypatch.setenv("METTLEQ_METAL_KERNELS", "not-a-policy")
     invalid = metal_runtime_status(4)
     assert invalid["policy"] == "invalid"
     assert not invalid["enabled"]
@@ -54,7 +54,7 @@ def test_metal_policy_is_explicit_and_invalid_values_fail_closed(monkeypatch):
 
 
 def test_capability_report_exposes_index_and_memory_limits(monkeypatch):
-    monkeypatch.setenv("MLXQ_METAL_KERNELS", "1")
+    monkeypatch.setenv("METTLEQ_METAL_KERNELS", "1")
     report = metal_runtime_status(32)
     assert report["kernel_constraints"]["index_bits"] == 32
     assert report["kernel_constraints"]["index_qubit_limit"] == 31
@@ -162,10 +162,10 @@ def test_static_capabilities_are_cached_but_policy_remains_dynamic(monkeypatch):
     monkeypatch.setattr(execution, "_package_version", package_version)
     monkeypatch.setattr(execution, "_device_info", device_info)
     monkeypatch.setattr(execution, "_metal_available", metal_available)
-    monkeypatch.setenv("MLXQ_METAL_KERNELS", "1")
+    monkeypatch.setenv("METTLEQ_METAL_KERNELS", "1")
 
     first = metal_runtime_status(20)
-    monkeypatch.setenv("MLXQ_METAL_KERNELS", "0")
+    monkeypatch.setenv("METTLEQ_METAL_KERNELS", "0")
     second = metal_runtime_status(20)
 
     assert calls == {"version": 1, "device": 1, "metal": 1}
@@ -180,7 +180,7 @@ def test_static_capabilities_are_cached_but_policy_remains_dynamic(monkeypatch):
 
 
 def test_fast_selector_keeps_selected_device_and_other_checks_live(monkeypatch):
-    monkeypatch.setenv("MLXQ_METAL_KERNELS", "1")
+    monkeypatch.setenv("METTLEQ_METAL_KERNELS", "1")
     monkeypatch.setattr(execution, "_default_device", lambda: "Device(gpu, 0)")
     report = metal_runtime_status(4)
     assert metal_runtime_enabled(4) == report["enabled"]
@@ -190,9 +190,9 @@ def test_fast_selector_keeps_selected_device_and_other_checks_live(monkeypatch):
     assert not metal_runtime_status(4)["enabled"]
 
     monkeypatch.setattr(execution, "_default_device", lambda: "Device(gpu, 0)")
-    monkeypatch.setenv("MLXQ_DENSE_ONLY", "1")
+    monkeypatch.setenv("METTLEQ_DENSE_ONLY", "1")
     assert not metal_runtime_enabled(4)
-    monkeypatch.delenv("MLXQ_DENSE_ONLY")
+    monkeypatch.delenv("METTLEQ_DENSE_ONLY")
     assert not metal_runtime_enabled(4, dtype="complex128")
     assert not metal_runtime_enabled(32)
 
@@ -217,7 +217,7 @@ def test_checkpoint_budget_policy_is_opt_in_and_rejects_invalid_values(monkeypat
 
 
 def test_checkpointing_occurs_between_fused_layers_and_preserves_state(monkeypatch):
-    monkeypatch.setenv("MLXQ_METAL_KERNELS", "1")
+    monkeypatch.setenv("METTLEQ_METAL_KERNELS", "1")
     capability = metal_runtime_status(4)
     if not capability["enabled"]:
         pytest.skip(capability["reason"])
@@ -250,7 +250,7 @@ def test_checkpointing_occurs_between_fused_layers_and_preserves_state(monkeypat
 
 
 def test_oversized_fused_layer_streams_between_custom_launches(monkeypatch):
-    monkeypatch.setenv("MLXQ_METAL_KERNELS", "1")
+    monkeypatch.setenv("METTLEQ_METAL_KERNELS", "1")
     capability = metal_runtime_status(4)
     if not capability["enabled"]:
         pytest.skip(capability["reason"])
@@ -328,12 +328,12 @@ def test_streamable_layer_families_match_pure_mlx_and_plan(
 ):
     n = 5
     ops = _streaming_ops(kind, n)
-    monkeypatch.setenv("MLXQ_METAL_KERNELS", "0")
+    monkeypatch.setenv("METTLEQ_METAL_KERNELS", "0")
     reference = Device(n)
     reference.execute(ops)
     reference.synchronize()
 
-    monkeypatch.setenv("MLXQ_METAL_KERNELS", "1")
+    monkeypatch.setenv("METTLEQ_METAL_KERNELS", "1")
     capability = metal_runtime_status(n)
     if not capability["enabled"]:
         pytest.skip(capability["reason"])
@@ -364,7 +364,7 @@ def test_streamable_layer_families_match_pure_mlx_and_plan(
 
 
 def test_configured_checkpoint_budget_stays_inactive_without_metal(monkeypatch):
-    monkeypatch.setenv("MLXQ_METAL_KERNELS", "0")
+    monkeypatch.setenv("METTLEQ_METAL_KERNELS", "0")
     plan = Device(4, metal_checkpoint_budget_bytes=512).explain(_qft_ops(4))
     assert plan["checkpointing"]["configured"]
     assert not plan["checkpointing"]["enabled"]
@@ -373,7 +373,7 @@ def test_configured_checkpoint_budget_stays_inactive_without_metal(monkeypatch):
 
 
 def test_disabled_plan_reports_fallback_without_claiming_dispatch(monkeypatch):
-    monkeypatch.setenv("MLXQ_METAL_KERNELS", "0")
+    monkeypatch.setenv("METTLEQ_METAL_KERNELS", "0")
     dev = Device(4)
     plan = dev.explain(_qft_ops(4))
     assert plan["selected_custom_kernels"] == []
@@ -390,7 +390,7 @@ def test_disabled_plan_reports_fallback_without_claiming_dispatch(monkeypatch):
 
 
 def test_metal_plan_observes_qft_dispatch_and_synchronized_evaluation(monkeypatch):
-    monkeypatch.setenv("MLXQ_METAL_KERNELS", "1")
+    monkeypatch.setenv("METTLEQ_METAL_KERNELS", "1")
     capability = metal_runtime_status(4)
     if not capability["enabled"]:
         pytest.skip(capability["reason"])
@@ -400,7 +400,7 @@ def test_metal_plan_observes_qft_dispatch_and_synchronized_evaluation(monkeypatc
     plan = dev.last_execution_plan
     assert plan is not None
     assert plan["matched_structured_patterns"] == {"qft_stage": 3}
-    assert plan["selected_concrete_kernels"] == ["mlxq_qft_stage_gen"]
+    assert plan["selected_concrete_kernels"] == ["mettleq_qft_stage_gen"]
     assert plan["expected_custom_kernel_launches"] == 3
     assert len(plan["observed_custom_dispatches"]) == 3
     assert plan["execution_status"] == "lazy_graph_built"
@@ -414,13 +414,13 @@ def test_metal_plan_observes_qft_dispatch_and_synchronized_evaluation(monkeypatc
 
 
 def test_dense_ablation_and_mps_explain_why_custom_kernels_are_not_used(monkeypatch):
-    monkeypatch.setenv("MLXQ_METAL_KERNELS", "1")
-    monkeypatch.setenv("MLXQ_DENSE_ONLY", "1")
+    monkeypatch.setenv("METTLEQ_METAL_KERNELS", "1")
+    monkeypatch.setenv("METTLEQ_DENSE_ONLY", "1")
     dense_plan = Device(3).explain(_qft_ops(3))
     assert dense_plan["selected_custom_kernels"] == []
     assert "dense_ablation_disabled" in dense_plan["capabilities"]["failed_checks"]
 
-    monkeypatch.delenv("MLXQ_DENSE_ONLY")
+    monkeypatch.delenv("METTLEQ_DENSE_ONLY")
     mps_plan = Device(3, backend="mps").explain([{"name": "H", "wires": [0]}])
     assert mps_plan["backend"] == "mps"
     assert mps_plan["selected_custom_kernels"] == []

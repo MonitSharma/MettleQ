@@ -164,7 +164,7 @@ def _plot_landscape(
         ncol=4,
         fontsize=8,
     )
-    figure.suptitle("Qupertino MPS limits depend on entanglement, not qubits alone")
+    figure.suptitle("MettleQ MPS limits depend on entanglement, not qubits alone")
     figure.tight_layout(rect=(0, 0.18, 1, 1))
     figure.savefig(output, dpi=190, bbox_inches="tight")
     plt.close(figure)

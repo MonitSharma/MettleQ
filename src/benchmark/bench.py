@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Python replica of bench.sh – runs mlxq benchmarks end-to-end with no estimates.
+Python replica of bench.sh – runs mettleq benchmarks end-to-end with no estimates.
 Outputs CSV/JSON under bench/ compatible with src/scripts/generate_*.py.
 """
 
@@ -9,16 +9,16 @@ import sys
 import importlib.util
 from pathlib import Path
 
-# Ensure local package path before importing mlxq
+# Ensure local package path before importing mettleq
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # add python/
 
-from mlxq.pretty import info, success, warn, error, table
-from mlxq.mlxQbench import run_scaling_benchmark, run_qasm_suite
-from mlxq.vendor import VENDOR_BENCHMARKS, ALGORITHM_BENCHMARKS, BENCH_KEYS
+from mettleq.pretty import info, success, warn, error, table
+from mettleq.bench import run_scaling_benchmark, run_qasm_suite
+from mettleq.vendor import VENDOR_BENCHMARKS, ALGORITHM_BENCHMARKS, BENCH_KEYS
 
 
 def _run_core_tests():
-    info("=== Testing mlxQCoreTest (Python) ===")
+    info("=== Testing MettleQ core (Python) ===")
     tests_path = Path(__file__).resolve().parents[1] / 'tests' / 'run_core_tests.py'
     spec = importlib.util.spec_from_file_location("mlxQuantumCoreTestRunner", str(tests_path))
     mod = importlib.util.module_from_spec(spec)
@@ -66,9 +66,9 @@ def main():
 
     # 2) Full benchmark suite (no estimates; we only run actual qubits lists)
     info("=== Running full benchmark suite ===")
-    # Global cap can be overridden via MLXQ_MAX_QUBITS
+    # Global cap can be overridden via METTLEQ_MAX_QUBITS
     try:
-        max_q = int(os.environ.get('MLXQ_MAX_QUBITS', '25'))
+        max_q = int(os.environ.get('METTLEQ_MAX_QUBITS', '25'))
     except Exception:
         max_q = 25
     info("Vendor groups:")
@@ -119,12 +119,12 @@ def main():
         return
 
     # 3b) Optional vendor/algorithm group runs
-    if os.environ.get('MLXQ_VENDOR_SUITE', '0') == '1':
-        info("=== Running vendor groups (MLXQ_VENDOR_SUITE=1) ===")
+    if os.environ.get('METTLEQ_VENDOR_SUITE', '0') == '1':
+        info("=== Running vendor groups (METTLEQ_VENDOR_SUITE=1) ===")
         for vendor in VENDOR_BENCHMARKS.keys():
             run_vendor_group(vendor, pub_qubits, simulate_cap=max_q)
-    if os.environ.get('MLXQ_ALGO_GROUPS', '0') == '1':
-        info("=== Running algorithm groups (MLXQ_ALGO_GROUPS=1) ===")
+    if os.environ.get('METTLEQ_ALGO_GROUPS', '0') == '1':
+        info("=== Running algorithm groups (METTLEQ_ALGO_GROUPS=1) ===")
         for group in ALGORITHM_BENCHMARKS.keys():
             run_algorithm_group(group, pub_qubits, simulate_cap=max_q)
 

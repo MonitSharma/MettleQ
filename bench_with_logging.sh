@@ -17,18 +17,18 @@ fi
 export PYTHON_BIN
 
 BENCH_ROOT="${ROOT_DIR}/bench"
-if [[ -z "${MLXQ_BENCH_OUT_DIR:-}" ]]; then
+if [[ -z "${METTLEQ_BENCH_OUT_DIR:-}" ]]; then
   RUN_ID="run_$(date +%Y%m%d_%H%M%S)"
-  export MLXQ_BENCH_OUT_DIR="${BENCH_ROOT}/runs/${RUN_ID}"
+  export METTLEQ_BENCH_OUT_DIR="${BENCH_ROOT}/runs/${RUN_ID}"
 fi
-mkdir -p "${MLXQ_BENCH_OUT_DIR}"
+mkdir -p "${METTLEQ_BENCH_OUT_DIR}"
 mkdir -p "${BENCH_ROOT}/runs"
 if [[ -e "${BENCH_ROOT}/current" && ! -L "${BENCH_ROOT}/current" ]]; then
   echo "⚠️  ${BENCH_ROOT}/current exists and is not a symlink; leaving it unchanged."
 else
-  ln -sfn "${MLXQ_BENCH_OUT_DIR}" "${BENCH_ROOT}/current"
+  ln -sfn "${METTLEQ_BENCH_OUT_DIR}" "${BENCH_ROOT}/current"
 fi
-echo "📁 Benchmark run directory: ${MLXQ_BENCH_OUT_DIR}"
+echo "📁 Benchmark run directory: ${METTLEQ_BENCH_OUT_DIR}"
 echo "🐍 Python interpreter: ${PYTHON_BIN}"
 
 mlx_preflight() {
@@ -47,7 +47,7 @@ PY
 mlx_preflight
 
 TS="$(date +%Y%m%d_%H%M%S)"
-LOG_FILE="${MLXQ_BENCH_OUT_DIR}/BENCHMARK_RUN_${TS}.log"
+LOG_FILE="${METTLEQ_BENCH_OUT_DIR}/BENCHMARK_RUN_${TS}.log"
 LATEST="${BENCH_ROOT}/LATEST_BENCHMARK.log"
 
 usage() {
@@ -55,28 +55,28 @@ usage() {
 Usage: ./bench_with_logging.sh [options]
 
 Options:
-  --max-qubits N               Global cap (MLXQ_MAX_QUBITS)
-  --cap-<key> N                Per-benchmark cap (MLXQ_CAP_<KEY>)
-  --qubits CSV|A-B             Override public list (MLXQ_PUB_QUBITS)
-  --vqe-qubits CSV|A-B         Override VQE list (MLXQ_VQE_QUBITS)
-  --steady-qubits CSV|A-B      Override steady-state list (MLXQ_STEADY_QUBITS)
+  --max-qubits N               Global cap (METTLEQ_MAX_QUBITS)
+  --cap-<key> N                Per-benchmark cap (METTLEQ_CAP_<KEY>)
+  --qubits CSV|A-B             Override public list (METTLEQ_PUB_QUBITS)
+  --vqe-qubits CSV|A-B         Override VQE list (METTLEQ_VQE_QUBITS)
+  --steady-qubits CSV|A-B      Override steady-state list (METTLEQ_STEADY_QUBITS)
   --all-qubits N               Shorthand for --qubits 1-N
-  --mps-dmax N                 Set MLXQ_MPS_DMAX (bond cap)
-  --mps-eps  X                 Set MLXQ_MPS_EPS (truncation threshold)
-  --mps-bmax N                 Set MLXQ_MPS_EARLY_STOP_BMAX (early-stop on bond)
-  --mps-stop-on-trunc          Stop a TEBD run on first truncation (MLXQ_MPS_STOP_ON_TRUNC=1)
-  --mps-pair-sweeps            Use even/odd pair-sweeps for 2q gates (MLXQ_MPS_PAIR_SWEEPS=1)
-  --mps-mpo-zz                 Use diagonal MPO for ZZ terms where supported (MLXQ_MPS_USE_MPO_ZZ=1)
-  --mps-mpo-xx                 Use basis-mapped MPO for XX terms (MLXQ_MPS_USE_MPO_XX=1)
-  --mps-mpo-yy                 Use basis-mapped MPO for YY terms (MLXQ_MPS_USE_MPO_YY=1)
+  --mps-dmax N                 Set METTLEQ_MPS_DMAX (bond cap)
+  --mps-eps  X                 Set METTLEQ_MPS_EPS (truncation threshold)
+  --mps-bmax N                 Set METTLEQ_MPS_EARLY_STOP_BMAX (early-stop on bond)
+  --mps-stop-on-trunc          Stop a TEBD run on first truncation (METTLEQ_MPS_STOP_ON_TRUNC=1)
+  --mps-pair-sweeps            Use even/odd pair-sweeps for 2q gates (METTLEQ_MPS_PAIR_SWEEPS=1)
+  --mps-mpo-zz                 Use diagonal MPO for ZZ terms where supported (METTLEQ_MPS_USE_MPO_ZZ=1)
+  --mps-mpo-xx                 Use basis-mapped MPO for XX terms (METTLEQ_MPS_USE_MPO_XX=1)
+  --mps-mpo-yy                 Use basis-mapped MPO for YY terms (METTLEQ_MPS_USE_MPO_YY=1)
   --with-mpsd                  Run full suite again with MPSD mode (MPO ZZ, separate _mpsd outputs)
   --frozen-parity-12           Run 12q parity suite: SV + MPS(full) + time_evolution MPSD
   --paper-2504                 Use paper 2504.14027 qubit schedule for supported keys (4,8,16,24,32,64,128,256; +512/1024 if cap allows)
   --circuit NAME               Single-circuit mode (e.g., qaoa)
   --simulate-limit N           Cap qubits for single-circuit run
-  --save-plots|--no-save-plots Save per-bench plots (MLXQ_SAVE_PLOTS)
-  --repeats N                  Measured repeats per qubit point (MLXQ_BENCH_REPEATS)
-  --warmups N                  Warmup runs per qubit point, excluded from summaries (MLXQ_BENCH_WARMUPS)
+  --save-plots|--no-save-plots Save per-bench plots (METTLEQ_SAVE_PLOTS)
+  --repeats N                  Measured repeats per qubit point (METTLEQ_BENCH_REPEATS)
+  --warmups N                  Warmup runs per qubit point, excluded from summaries (METTLEQ_BENCH_WARMUPS)
   --repro                      Reproducibility preset: --warmups 1 --repeats 5
   -h, --help                   Show this help
 EOF
@@ -89,30 +89,30 @@ PAPER_2504=0
 FROZEN_PARITY_12=0
 while [[ ${1:-} != "" ]]; do
   case "$1" in
-    --max-qubits) export MLXQ_MAX_QUBITS="${2:-}"; shift 2 ;;
-    --cap-*) key="${1#--cap-}"; val="${2:-}"; uc_key="$(echo "$key" | tr '[:lower:]' '[:upper:]')"; export MLXQ_CAP_${uc_key}="$val"; shift 2 ;;
-    --qubits) export MLXQ_PUB_QUBITS="${2:-}"; shift 2 ;;
-    --vqe-qubits) export MLXQ_VQE_QUBITS="${2:-}"; shift 2 ;;
-    --steady-qubits) export MLXQ_STEADY_QUBITS="${2:-}"; shift 2 ;;
-    --all-qubits) N="${2:-}"; [[ -z "$N" ]] && { echo "--all-qubits requires N" >&2; exit 1; }; export MLXQ_PUB_QUBITS="1-${N}"; shift 2 ;;
-    --save-plots) export MLXQ_SAVE_PLOTS=1; shift ;;
-    --no-save-plots) export MLXQ_SAVE_PLOTS=0; shift ;;
-    --repeats) export MLXQ_BENCH_REPEATS="${2:-}"; shift 2 ;;
-    --warmups) export MLXQ_BENCH_WARMUPS="${2:-}"; shift 2 ;;
+    --max-qubits) export METTLEQ_MAX_QUBITS="${2:-}"; shift 2 ;;
+    --cap-*) key="${1#--cap-}"; val="${2:-}"; uc_key="$(echo "$key" | tr '[:lower:]' '[:upper:]')"; export METTLEQ_CAP_${uc_key}="$val"; shift 2 ;;
+    --qubits) export METTLEQ_PUB_QUBITS="${2:-}"; shift 2 ;;
+    --vqe-qubits) export METTLEQ_VQE_QUBITS="${2:-}"; shift 2 ;;
+    --steady-qubits) export METTLEQ_STEADY_QUBITS="${2:-}"; shift 2 ;;
+    --all-qubits) N="${2:-}"; [[ -z "$N" ]] && { echo "--all-qubits requires N" >&2; exit 1; }; export METTLEQ_PUB_QUBITS="1-${N}"; shift 2 ;;
+    --save-plots) export METTLEQ_SAVE_PLOTS=1; shift ;;
+    --no-save-plots) export METTLEQ_SAVE_PLOTS=0; shift ;;
+    --repeats) export METTLEQ_BENCH_REPEATS="${2:-}"; shift 2 ;;
+    --warmups) export METTLEQ_BENCH_WARMUPS="${2:-}"; shift 2 ;;
     --repro)
-      export MLXQ_BENCH_WARMUPS="${MLXQ_BENCH_WARMUPS:-1}"
-      export MLXQ_BENCH_REPEATS="${MLXQ_BENCH_REPEATS:-5}"
+      export METTLEQ_BENCH_WARMUPS="${METTLEQ_BENCH_WARMUPS:-1}"
+      export METTLEQ_BENCH_REPEATS="${METTLEQ_BENCH_REPEATS:-5}"
       shift ;;
-    --circuit) export MLXQ_ONE_CIRCUIT="${2:-}"; shift 2 ;;
-    --simulate-limit) export MLXQ_ONE_CAP="${2:-}"; shift 2 ;;
-    --mps-dmax) export MLXQ_MPS_DMAX="${2:-}"; shift 2 ;;
-    --mps-eps) export MLXQ_MPS_EPS="${2:-}"; shift 2 ;;
-    --mps-bmax) export MLXQ_MPS_EARLY_STOP_BMAX="${2:-}"; shift 2 ;;
-    --mps-stop-on-trunc) export MLXQ_MPS_STOP_ON_TRUNC=1; shift ;;
-    --mps-pair-sweeps) export MLXQ_MPS_PAIR_SWEEPS=1; shift ;;
-    --mps-mpo-zz) export MLXQ_MPS_USE_MPO_ZZ=1; shift ;;
-    --mps-mpo-xx) export MLXQ_MPS_USE_MPO_XX=1; shift ;;
-    --mps-mpo-yy) export MLXQ_MPS_USE_MPO_YY=1; shift ;;
+    --circuit) export METTLEQ_ONE_CIRCUIT="${2:-}"; shift 2 ;;
+    --simulate-limit) export METTLEQ_ONE_CAP="${2:-}"; shift 2 ;;
+    --mps-dmax) export METTLEQ_MPS_DMAX="${2:-}"; shift 2 ;;
+    --mps-eps) export METTLEQ_MPS_EPS="${2:-}"; shift 2 ;;
+    --mps-bmax) export METTLEQ_MPS_EARLY_STOP_BMAX="${2:-}"; shift 2 ;;
+    --mps-stop-on-trunc) export METTLEQ_MPS_STOP_ON_TRUNC=1; shift ;;
+    --mps-pair-sweeps) export METTLEQ_MPS_PAIR_SWEEPS=1; shift ;;
+    --mps-mpo-zz) export METTLEQ_MPS_USE_MPO_ZZ=1; shift ;;
+    --mps-mpo-xx) export METTLEQ_MPS_USE_MPO_XX=1; shift ;;
+    --mps-mpo-yy) export METTLEQ_MPS_USE_MPO_YY=1; shift ;;
     --with-mpsd) WITH_MPSD=1; shift ;;
     --with-mps) WITH_MPS=1; shift ;;
     --frozen-parity-12) FROZEN_PARITY_12=1; shift ;;
@@ -124,14 +124,14 @@ done
 
 if [[ "$FROZEN_PARITY_12" == "1" ]]; then
   MAX_Q=12
-  export MLXQ_MAX_QUBITS=12
+  export METTLEQ_MAX_QUBITS=12
   WITH_MPS=1
   WITH_MPSD=1
 fi
 
-export MLXQ_SAVE_PLOTS="${MLXQ_SAVE_PLOTS:-1}"
+export METTLEQ_SAVE_PLOTS="${METTLEQ_SAVE_PLOTS:-1}"
 
-echo "📊 Starting mlxQ Benchmark Suite" | tee "$LOG_FILE"
+echo "📊 Starting MettleQ Benchmark Suite" | tee "$LOG_FILE"
 echo "📝 Logging to: $LOG_FILE" | tee -a "$LOG_FILE"
 echo "" | tee -a "$LOG_FILE"
 
@@ -148,21 +148,21 @@ cap_csv_to_max() {
   join_csv "${out[@]}"
 }
 
-MAX_Q="${MLXQ_MAX_QUBITS:-25}"
+MAX_Q="${METTLEQ_MAX_QUBITS:-25}"
 BASE_LIST=(1 2 5 7 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25)
 VQE_LIST=(1 2 5 7 10 11 12 13 14 15)
 STEADY_LIST=(1 2 5 7 10 11 12)
 
 # Resolve CSVs
-if [[ -n "${MLXQ_PUB_QUBITS:-}" ]]; then PUB_CSV=$(expand_range_or_csv "$MLXQ_PUB_QUBITS"); else PUB_CSV=$(cap_to_max "$MAX_Q" "${BASE_LIST[@]}"); fi
-if [[ -n "${MLXQ_VQE_QUBITS:-}" ]]; then VQE_CSV=$(expand_range_or_csv "$MLXQ_VQE_QUBITS"); else VQE_CSV=$(cap_to_max "$MAX_Q" "${VQE_LIST[@]}"); fi
-if [[ -n "${MLXQ_STEADY_QUBITS:-}" ]]; then STEADY_CSV=$(expand_range_or_csv "$MLXQ_STEADY_QUBITS"); else STEADY_CSV=$(cap_to_max "$MAX_Q" "${STEADY_LIST[@]}"); fi
+if [[ -n "${METTLEQ_PUB_QUBITS:-}" ]]; then PUB_CSV=$(expand_range_or_csv "$METTLEQ_PUB_QUBITS"); else PUB_CSV=$(cap_to_max "$MAX_Q" "${BASE_LIST[@]}"); fi
+if [[ -n "${METTLEQ_VQE_QUBITS:-}" ]]; then VQE_CSV=$(expand_range_or_csv "$METTLEQ_VQE_QUBITS"); else VQE_CSV=$(cap_to_max "$MAX_Q" "${VQE_LIST[@]}"); fi
+if [[ -n "${METTLEQ_STEADY_QUBITS:-}" ]]; then STEADY_CSV=$(expand_range_or_csv "$METTLEQ_STEADY_QUBITS"); else STEADY_CSV=$(cap_to_max "$MAX_Q" "${STEADY_LIST[@]}"); fi
 
 # 1..30 contiguous for 30‑cap families
 PUB30_CSV=""; for i in $(seq 1 30); do [[ -z "$PUB30_CSV" ]] && PUB30_CSV="$i" || PUB30_CSV="$PUB30_CSV,$i"; done
 PUB30_CSV="$(cap_csv_to_max "$MAX_Q" "$PUB30_CSV")"
 
-# Prefilled explicit enumerations (can be overridden by MLXQ_LIST_<KEY>)
+# Prefilled explicit enumerations (can be overridden by METTLEQ_LIST_<KEY>)
 LIST25_CSV="1,2,5,7,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25"
 LIST30_CSV="${LIST25_CSV},26,27,28"
 LIST_HAMILTONIAN_SIMULATION="$LIST30_CSV"
@@ -213,26 +213,26 @@ CAP_GHZ=${CAP_GHZ:-25}
 # Optional paper-2504 preset (quasi-log grid). Applies to supported keys.
 if [[ "$PAPER_2504" == "1" ]]; then
   GRID_2504="4,8,16,24,32,64,128,256,512,1024"
-  export MLXQ_LIST_QFT="$GRID_2504"
-  export MLXQ_LIST_QFT_ENTANGLED="$GRID_2504"
-  export MLXQ_LIST_QFTENTANGLED="$GRID_2504"
-  export MLXQ_LIST_GHZ="$GRID_2504"
-  export MLXQ_LIST_WSTATE="$GRID_2504"
-  export MLXQ_LIST_GRAPH_STATE="$GRID_2504"
-  export MLXQ_LIST_GRAPHSTATE="$GRID_2504"
-  export MLXQ_LIST_PHASE_ESTIMATION="$GRID_2504"
-  export MLXQ_LIST_PHASE_ESTIMATION_INEXACT="$GRID_2504"
-  export MLXQ_LIST_QPEEXACT="$GRID_2504"
-  export MLXQ_LIST_QPEINEXACT="$GRID_2504"
-  export MLXQ_LIST_AE="$GRID_2504"
-  export MLXQ_LIST_QUANTUM_WALK="$GRID_2504"
-  export MLXQ_LIST_QUANTUM_WALK_VCHAIN="$GRID_2504"
-  export MLXQ_LIST_QWALK="$GRID_2504"
-  export MLXQ_LIST_RANDOM_CIRCUIT="$GRID_2504"
-  export MLXQ_LIST_RANDOM="$GRID_2504"
-  export MLXQ_LIST_REALAMP="$GRID_2504"
-  export MLXQ_LIST_SU2RAND="$GRID_2504"
-  export MLXQ_LIST_QNN="$GRID_2504"
+  export METTLEQ_LIST_QFT="$GRID_2504"
+  export METTLEQ_LIST_QFT_ENTANGLED="$GRID_2504"
+  export METTLEQ_LIST_QFTENTANGLED="$GRID_2504"
+  export METTLEQ_LIST_GHZ="$GRID_2504"
+  export METTLEQ_LIST_WSTATE="$GRID_2504"
+  export METTLEQ_LIST_GRAPH_STATE="$GRID_2504"
+  export METTLEQ_LIST_GRAPHSTATE="$GRID_2504"
+  export METTLEQ_LIST_PHASE_ESTIMATION="$GRID_2504"
+  export METTLEQ_LIST_PHASE_ESTIMATION_INEXACT="$GRID_2504"
+  export METTLEQ_LIST_QPEEXACT="$GRID_2504"
+  export METTLEQ_LIST_QPEINEXACT="$GRID_2504"
+  export METTLEQ_LIST_AE="$GRID_2504"
+  export METTLEQ_LIST_QUANTUM_WALK="$GRID_2504"
+  export METTLEQ_LIST_QUANTUM_WALK_VCHAIN="$GRID_2504"
+  export METTLEQ_LIST_QWALK="$GRID_2504"
+  export METTLEQ_LIST_RANDOM_CIRCUIT="$GRID_2504"
+  export METTLEQ_LIST_RANDOM="$GRID_2504"
+  export METTLEQ_LIST_REALAMP="$GRID_2504"
+  export METTLEQ_LIST_SU2RAND="$GRID_2504"
+  export METTLEQ_LIST_QNN="$GRID_2504"
   # Bump caps for paper schedule to allow up to 256 by default
   CAP_HAMILTONIAN_SIMULATION=256
   CAP_TIME_EVOLUTION=256
@@ -263,12 +263,12 @@ run_one() {
   if [[ -n "${cap:-}" && "$cap" -gt "$MAX_Q" ]]; then cap="$MAX_Q"; fi
   csv="$(cap_csv_to_max "$MAX_Q" "$csv")"
   echo -e "\n=== Running: ./bench.sh --circuit ${key} --simulate-limit ${cap} --qubits ${csv}" | tee -a "$LOG_FILE"
-  MLXQ_BENCH_OUT_DIR="${MLXQ_BENCH_OUT_DIR}" "${ROOT_DIR}/bench.sh" --circuit "$key" --simulate-limit "$cap" --qubits "$csv" 2>&1 | tee -a "$LOG_FILE"
+  METTLEQ_BENCH_OUT_DIR="${METTLEQ_BENCH_OUT_DIR}" "${ROOT_DIR}/bench.sh" --circuit "$key" --simulate-limit "$cap" --qubits "$csv" 2>&1 | tee -a "$LOG_FILE"
 }
 
 # Single-circuit
-if [[ -n "${MLXQ_ONE_CIRCUIT:-}" ]]; then
-  key="$MLXQ_ONE_CIRCUIT"; cap="${MLXQ_ONE_CAP:-}"; csv="$PUB_CSV"
+if [[ -n "${METTLEQ_ONE_CIRCUIT:-}" ]]; then
+  key="$METTLEQ_ONE_CIRCUIT"; cap="${METTLEQ_ONE_CAP:-}"; csv="$PUB_CSV"
   case "$key" in
     vqe) csv="$VQE_CSV"; cap="${cap:-15}" ;;
     steady_state) csv="$STEADY_CSV"; cap="${cap:-12}" ;;
@@ -277,44 +277,44 @@ if [[ -n "${MLXQ_ONE_CIRCUIT:-}" ]]; then
     phase_estimation) cap="${cap:-15}" ;;
     *) cap="${cap:-$MAX_Q}" ;;
   esac
-  if [[ -z "${MLXQ_PUB_QUBITS:-}" ]]; then
+  if [[ -z "${METTLEQ_PUB_QUBITS:-}" ]]; then
     csv="$(cap_csv_to_max "$MAX_Q" "$csv")"
   fi
-  if [[ -z "${MLXQ_ONE_CAP:-}" && -n "${cap:-}" && "$cap" -gt "$MAX_Q" ]]; then
+  if [[ -z "${METTLEQ_ONE_CAP:-}" && -n "${cap:-}" && "$cap" -gt "$MAX_Q" ]]; then
     cap="$MAX_Q"
   fi
-  # Baseline run (SV by default unless MLXQ_BACKEND set)
+  # Baseline run (SV by default unless METTLEQ_BACKEND set)
   run_one "$key" "$cap" "$csv"
   # Optional single-circuit MPS follow-up
   if [[ "$WITH_MPS" == "1" ]]; then
-    echo -e "\n=== Running (single-circuit) MPS: MLXQ_BACKEND=mps ===" | tee -a "$LOG_FILE"
-    export MLXQ_BACKEND=mps
+    echo -e "\n=== Running (single-circuit) MPS: METTLEQ_BACKEND=mps ===" | tee -a "$LOG_FILE"
+    export METTLEQ_BACKEND=mps
     # Clear MPSD flag if previously set in env
-    unset MLXQ_MPSD || true
+    unset METTLEQ_MPSD || true
     run_one "$key" "$cap" "$csv"
   fi
   # Optional single-circuit MPSD follow-up
   if [[ "$WITH_MPSD" == "1" ]]; then
-    echo -e "\n=== Running (single-circuit) MPSD: MLXQ_BACKEND=mps MLXQ_MPSD=1 MLXQ_MPS_USE_MPO_ZZ=1 ===" | tee -a "$LOG_FILE"
-    export MLXQ_BACKEND=mps
-    export MLXQ_MPSD=1
-    export MLXQ_MPS_USE_MPO_ZZ=1
+    echo -e "\n=== Running (single-circuit) MPSD: METTLEQ_BACKEND=mps METTLEQ_MPSD=1 METTLEQ_MPS_USE_MPO_ZZ=1 ===" | tee -a "$LOG_FILE"
+    export METTLEQ_BACKEND=mps
+    export METTLEQ_MPSD=1
+    export METTLEQ_MPS_USE_MPO_ZZ=1
     run_one "$key" "$cap" "$csv"
   fi
   # Aggregate and copy after all single-circuit runs
-  if [[ "${MLXQ_SAVE_PLOTS}" == "1" ]]; then
-    MLXQ_BENCH_OUT_DIR="${MLXQ_BENCH_OUT_DIR}" "${PYTHON_BIN}" "${ROOT_DIR}/src/benchmark/aggregate_plots.py" 2>&1 | tee -a "$LOG_FILE" || true
+  if [[ "${METTLEQ_SAVE_PLOTS}" == "1" ]]; then
+    METTLEQ_BENCH_OUT_DIR="${METTLEQ_BENCH_OUT_DIR}" "${PYTHON_BIN}" "${ROOT_DIR}/src/benchmark/aggregate_plots.py" 2>&1 | tee -a "$LOG_FILE" || true
   fi
   cp "$LOG_FILE" "$LATEST" || true
   echo "✅ Done" | tee -a "$LOG_FILE"
   exit 0
 fi
 
-# Per‑bench explicit qubit lists via MLXQ_LIST_<KEY> or sensible defaults
+# Per‑bench explicit qubit lists via METTLEQ_LIST_<KEY> or sensible defaults
 list_for() {
   local key="$1"; local key_uc="$(echo "$key" | tr '[:lower:]' '[:upper:]')"
   # Env override
-  local override; override=$(eval echo \${MLXQ_LIST_${key_uc}:-})
+  local override; override=$(eval echo \${METTLEQ_LIST_${key_uc}:-})
   if [[ -n "$override" ]]; then cap_csv_to_max "$MAX_Q" "$override"; return; fi
   # Script preset
   local preset; preset=$(eval echo \${LIST_${key_uc}:-})
@@ -355,15 +355,15 @@ run_one grover                "$CAP_GROVER"                "$(list_for grover)"
 run_one ghz                   "$CAP_GHZ"                   "$(list_for ghz)"
 
 # Aggregate plots and copy
-[[ "${MLXQ_SAVE_PLOTS}" == "1" ]] && MLXQ_BENCH_OUT_DIR="${MLXQ_BENCH_OUT_DIR}" "${PYTHON_BIN}" "${ROOT_DIR}/src/benchmark/aggregate_plots.py" 2>&1 | tee -a "$LOG_FILE" || true
+[[ "${METTLEQ_SAVE_PLOTS}" == "1" ]] && METTLEQ_BENCH_OUT_DIR="${METTLEQ_BENCH_OUT_DIR}" "${PYTHON_BIN}" "${ROOT_DIR}/src/benchmark/aggregate_plots.py" 2>&1 | tee -a "$LOG_FILE" || true
 # Aggregate MPS summaries (if present)
-"${PYTHON_BIN}" "${ROOT_DIR}/tools/mps_report.py" --bench "${MLXQ_BENCH_OUT_DIR}" 2>&1 | tee -a "$LOG_FILE" || true
+"${PYTHON_BIN}" "${ROOT_DIR}/tools/mps_report.py" --bench "${METTLEQ_BENCH_OUT_DIR}" 2>&1 | tee -a "$LOG_FILE" || true
 
 "${PYTHON_BIN}" - <<'PY' 2>/dev/null || true
 from pathlib import Path
 import shutil
 import os
-bench = Path(os.environ.get('MLXQ_BENCH_OUT_DIR', 'bench'))
+bench = Path(os.environ.get('METTLEQ_BENCH_OUT_DIR', 'bench'))
 for d in (
     Path('paper')/'prx-quantum'/'images',
     Path('assets')/'benchmarks-frozen'/'latest',
@@ -394,8 +394,8 @@ echo "✅ Done" | tee -a "$LOG_FILE"
 # Optionally run the full suite with MPS backend as separate entries
 if [[ "$WITH_MPS" == "1" ]]; then
   echo "" | tee -a "$LOG_FILE"
-  echo "=== Running MPS backend suite (MLXQ_BACKEND=mps) ===" | tee -a "$LOG_FILE"
-  export MLXQ_BACKEND=mps
+  echo "=== Running MPS backend suite (METTLEQ_BACKEND=mps) ===" | tee -a "$LOG_FILE"
+  export METTLEQ_BACKEND=mps
   # re-run the same suite with identical lists/caps
   run_one hamiltonian_simulation "$CAP_HAMILTONIAN_SIMULATION" "$(list_for hamiltonian_simulation)"
   run_one time_evolution        "$CAP_TIME_EVOLUTION"        "$(list_for time_evolution)"
@@ -418,15 +418,15 @@ if [[ "$WITH_MPS" == "1" ]]; then
   run_one variational_circuit   "$CAP_VARIATIONAL_CIRCUIT"   "$(list_for variational_circuit)"
   run_one grover                "$CAP_GROVER"                "$(list_for grover)"
   run_one ghz                   "$CAP_GHZ"                   "$(list_for ghz)"
-  if [[ "${MLXQ_SAVE_PLOTS}" == "1" ]]; then
-    MLXQ_BENCH_OUT_DIR="${MLXQ_BENCH_OUT_DIR}" "${PYTHON_BIN}" "${ROOT_DIR}/src/benchmark/aggregate_plots.py" 2>&1 | tee -a "$LOG_FILE" || true
+  if [[ "${METTLEQ_SAVE_PLOTS}" == "1" ]]; then
+    METTLEQ_BENCH_OUT_DIR="${METTLEQ_BENCH_OUT_DIR}" "${PYTHON_BIN}" "${ROOT_DIR}/src/benchmark/aggregate_plots.py" 2>&1 | tee -a "$LOG_FILE" || true
   fi
-  "${PYTHON_BIN}" "${ROOT_DIR}/tools/mps_report.py" --bench "${MLXQ_BENCH_OUT_DIR}" 2>&1 | tee -a "$LOG_FILE" || true
+  "${PYTHON_BIN}" "${ROOT_DIR}/tools/mps_report.py" --bench "${METTLEQ_BENCH_OUT_DIR}" 2>&1 | tee -a "$LOG_FILE" || true
   "${PYTHON_BIN}" - <<'PY' 2>/dev/null || true
 from pathlib import Path
 import shutil
 import os
-bench = Path(os.environ.get('MLXQ_BENCH_OUT_DIR', 'bench'))
+bench = Path(os.environ.get('METTLEQ_BENCH_OUT_DIR', 'bench'))
 for d in (
     Path('paper')/'prx-quantum'/'images',
     Path('assets')/'benchmarks-frozen'/'latest',
@@ -451,9 +451,9 @@ fi
 if [[ "$WITH_MPSD" == "1" ]]; then
   echo "" | tee -a "$LOG_FILE"
   echo "=== Running MPSD (MPS + MPO ZZ) backend suite ===" | tee -a "$LOG_FILE"
-  export MLXQ_BACKEND=mps
-  export MLXQ_MPSD=1
-  export MLXQ_MPS_USE_MPO_ZZ=1
+  export METTLEQ_BACKEND=mps
+  export METTLEQ_MPSD=1
+  export METTLEQ_MPS_USE_MPO_ZZ=1
   # Frozen parity mode uses only time_evolution in MPSD to match baseline shape.
   if [[ "$FROZEN_PARITY_12" == "1" ]]; then
     run_one time_evolution "$CAP_TIME_EVOLUTION" "$(list_for time_evolution)"
@@ -481,14 +481,14 @@ if [[ "$WITH_MPSD" == "1" ]]; then
     run_one grover                "$CAP_GROVER"                "$(list_for grover)"
     run_one ghz                   "$CAP_GHZ"                   "$(list_for ghz)"
   fi
-  if [[ "${MLXQ_SAVE_PLOTS}" == "1" ]]; then
-    MLXQ_BENCH_OUT_DIR="${MLXQ_BENCH_OUT_DIR}" "${PYTHON_BIN}" "${ROOT_DIR}/src/benchmark/aggregate_plots.py" 2>&1 | tee -a "$LOG_FILE" || true
+  if [[ "${METTLEQ_SAVE_PLOTS}" == "1" ]]; then
+    METTLEQ_BENCH_OUT_DIR="${METTLEQ_BENCH_OUT_DIR}" "${PYTHON_BIN}" "${ROOT_DIR}/src/benchmark/aggregate_plots.py" 2>&1 | tee -a "$LOG_FILE" || true
   fi
   "${PYTHON_BIN}" - <<'PY' 2>/dev/null || true
 from pathlib import Path
 import shutil
 import os
-bench = Path(os.environ.get('MLXQ_BENCH_OUT_DIR', 'bench'))
+bench = Path(os.environ.get('METTLEQ_BENCH_OUT_DIR', 'bench'))
 for d in (
     Path('paper')/'prx-quantum'/'images',
     Path('assets')/'benchmarks-frozen'/'latest',

@@ -6,18 +6,18 @@ from pathlib import Path
 
 
 def test_scaling_benchmark_repro_artifacts():
-    from mlxq.bench import run_scaling_benchmark
+    from mettleq.bench import run_scaling_benchmark
 
-    keys = ["MLXQ_BACKEND", "MLXQ_SAVE_PLOTS", "MLXQ_BENCH_WARMUPS", "MLXQ_BENCH_REPEATS", "MLXQ_MEMRAY"]
+    keys = ["METTLEQ_BACKEND", "METTLEQ_SAVE_PLOTS", "METTLEQ_BENCH_WARMUPS", "METTLEQ_BENCH_REPEATS", "METTLEQ_MEMRAY"]
     old_env = {key: os.environ.get(key) for key in keys}
     try:
-        os.environ["MLXQ_BACKEND"] = "sv"
-        os.environ["MLXQ_SAVE_PLOTS"] = "0"
-        os.environ["MLXQ_BENCH_WARMUPS"] = "1"
-        os.environ["MLXQ_BENCH_REPEATS"] = "2"
-        os.environ.pop("MLXQ_MEMRAY", None)
+        os.environ["METTLEQ_BACKEND"] = "sv"
+        os.environ["METTLEQ_SAVE_PLOTS"] = "0"
+        os.environ["METTLEQ_BENCH_WARMUPS"] = "1"
+        os.environ["METTLEQ_BENCH_REPEATS"] = "2"
+        os.environ.pop("METTLEQ_MEMRAY", None)
 
-        with tempfile.TemporaryDirectory(prefix="mlxq_repro_test_") as tmp:
+        with tempfile.TemporaryDirectory(prefix="mettleq_repro_test_") as tmp:
             out_dir = Path(tmp) / "bench_repro"
             result = run_scaling_benchmark("ghz", [2], simulate_cap=2, out_prefix=str(out_dir))
             assert result["results"][0]["timing"]["measured_repeats"] == 2

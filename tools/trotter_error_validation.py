@@ -149,7 +149,7 @@ def run(args: argparse.Namespace) -> list[dict]:
             "platform": platform.platform(),
             "elapsed_s": time.perf_counter() - t0,
             "reference": "scipy.linalg.expm complex128 dense Hamiltonian",
-            "schedule": "first-order product formula matching src/mlxq/bench.py simulate_hamiltonian",
+            "schedule": "first-order product formula matching src/mettleq/bench.py simulate_hamiltonian",
             "files": {"summary_csv": csv_path.name, "summary_md": "trotter_error.md"},
         },
         "rows": rows,

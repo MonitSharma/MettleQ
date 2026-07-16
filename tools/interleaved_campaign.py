@@ -33,19 +33,19 @@ sys.path.insert(0, str(ROOT / "tools"))
 import mlx.core as mx  # noqa: E402
 import numpy as np  # noqa: E402
 
-from mlxq.device import Device  # noqa: E402
+from mettleq.device import Device  # noqa: E402
 import qiskit_aer_baseline as qab  # noqa: E402
 import pennylane_baseline as plb  # noqa: E402
 from qiskit import QuantumCircuit, transpile  # noqa: E402
 from qiskit_aer import AerSimulator  # noqa: E402
 
-PROBE_LIMIT_S = 0.95  # clean mlxq qft25 runs ~0.69 s; abort if machine is loaded
+PROBE_LIMIT_S = 0.95  # clean mettleq qft25 runs ~0.69 s; abort if machine is loaded
 
 WORKLOADS = ["qft", "qaoa_ring", "tfim_trotter", "phase_estimation", "grover_proxy", "ghz"]
 SIZES = [15, 20, 25]
 
 
-def mlxq_ops(bench: str, n: int):
+def mettleq_ops(bench: str, n: int):
     ops = []
     if bench == "qft":
         for j in range(n):
@@ -95,8 +95,8 @@ def mlxq_ops(bench: str, n: int):
     return ops
 
 
-def run_mlxq(bench: str, n: int) -> float:
-    ops = mlxq_ops(bench, n)
+def run_mettleq(bench: str, n: int) -> float:
+    ops = mettleq_ops(bench, n)
     dev = Device(n)
     t0 = time.perf_counter()
     dev.execute(ops)
@@ -109,13 +109,13 @@ def run_mlxq(bench: str, n: int) -> float:
     return (time.perf_counter() - t0) * 1000.0
 
 
-def run_mlxq_metal(bench: str, n: int) -> float:
+def run_mettleq_metal(bench: str, n: int) -> float:
     """Same circuits through the hand-tuned Metal shader tier."""
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     try:
-        return run_mlxq(bench, n)
+        return run_mettleq(bench, n)
     finally:
-        os.environ.pop("MLXQ_METAL_KERNELS", None)
+        os.environ.pop("METTLEQ_METAL_KERNELS", None)
 
 
 _AER_SIM = AerSimulator(method="statevector", device="CPU")
@@ -148,13 +148,13 @@ def run_pl(bench: str, n: int) -> float:
     return (time.perf_counter() - t0) * 1000.0
 
 
-RUNNERS = {"mlxq": run_mlxq, "mlxq_metal": run_mlxq_metal,
+RUNNERS = {"mettleq": run_mettleq, "mettleq_metal": run_mettleq_metal,
            "aer": run_aer, "pennylane": run_pl}
 
 
 def quietness_probe() -> float:
-    run_mlxq("qft", 25)  # warm
-    vals = [run_mlxq("qft", 25) for _ in range(2)]
+    run_mettleq("qft", 25)  # warm
+    vals = [run_mettleq("qft", 25) for _ in range(2)]
     return min(vals) / 1000.0
 
 
@@ -181,7 +181,7 @@ def main() -> int:
         "probe_qft25_s": probe_s,
         "repeats": args.repeats,
         "warmups": args.warmups,
-        "interleaving": "round-robin mlxq->mlxq_metal->aer->pennylane within each repeat of each cell",
+        "interleaving": "round-robin mettleq->mettleq_metal->aer->pennylane within each repeat of each cell",
         "pennylane_qft": "explicit gate-identical ladder (no qml.QFT template)",
         "platform": platform.platform(),
         "python": sys.version,
@@ -233,12 +233,12 @@ def main() -> int:
     ablation = {}
     for bench in ("qft", "qaoa_ring"):
         n = 25
-        run_mlxq(bench, n)  # warm dispatch
-        disp = [run_mlxq(bench, n) / 1000.0 for _ in range(args.ablation_repeats)]
-        os.environ["MLXQ_DENSE_ONLY"] = "1"
-        run_mlxq(bench, n)  # warm dense
-        dense = [run_mlxq(bench, n) / 1000.0 for _ in range(max(2, args.ablation_repeats // 2))]
-        del os.environ["MLXQ_DENSE_ONLY"]
+        run_mettleq(bench, n)  # warm dispatch
+        disp = [run_mettleq(bench, n) / 1000.0 for _ in range(args.ablation_repeats)]
+        os.environ["METTLEQ_DENSE_ONLY"] = "1"
+        run_mettleq(bench, n)  # warm dense
+        dense = [run_mettleq(bench, n) / 1000.0 for _ in range(max(2, args.ablation_repeats // 2))]
+        del os.environ["METTLEQ_DENSE_ONLY"]
         ablation[bench] = {"dispatch_runs_s": disp, "dense_runs_s": dense,
                            "dispatch_mean_s": fmean(disp), "dense_mean_s": fmean(dense),
                            "ratio": fmean(dense) / fmean(disp)}

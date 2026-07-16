@@ -1,4 +1,4 @@
-# QuantumStudio
+# MettleQ Studio
 
 Local macOS UI for osxQuantum benchmarks.
 

@@ -11,7 +11,7 @@ import csv
 from pathlib import Path
 from typing import Dict, List
 
-from mlxq.vendor import BENCH_KEYS
+from mettleq.vendor import BENCH_KEYS
 
 
 def load_csv(path: Path) -> List[Dict[str, str]]:
@@ -27,7 +27,7 @@ def load_csv(path: Path) -> List[Dict[str, str]]:
 
 
 def main() -> None:
-    bench_dir = Path(os.environ.get('MLXQ_BENCH_OUT_DIR', 'bench'))
+    bench_dir = Path(os.environ.get('METTLEQ_BENCH_OUT_DIR', 'bench'))
     bench_dir.mkdir(parents=True, exist_ok=True)
     data: Dict[str, List[Dict[str, str]]] = {}
     for key in BENCH_KEYS:
@@ -50,7 +50,7 @@ def main() -> None:
         # Use the shared plotting theme
         import math
         import matplotlib.pyplot as plt  # type: ignore
-        from mlxq.plotting import set_theme
+        from mettleq.plotting import set_theme
         set_theme()
         keys = sorted(data.keys())
         n = len(keys)

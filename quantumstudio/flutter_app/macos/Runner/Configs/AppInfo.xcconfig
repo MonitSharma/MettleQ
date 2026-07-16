@@ -5,10 +5,10 @@
 // 'flutter create' template.
 
 // The application's name. By default this is also the title of the Flutter window.
-PRODUCT_NAME = Qupertino
+PRODUCT_NAME = MettleQ
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.quantumstudio.app
+PRODUCT_BUNDLE_IDENTIFIER = ai.qneura.mettleq
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 Qupertino. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 MettleQ. All rights reserved.

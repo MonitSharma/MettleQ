@@ -28,8 +28,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import mlx.core as mx  # noqa: E402
 
-from mlxq.device import Device  # noqa: E402
-from mlxq.execution import (  # noqa: E402
+from mettleq.device import Device  # noqa: E402
+from mettleq.execution import (  # noqa: E402
     METAL_CHECKPOINT_BUDGET_ENV,
     metal_memory_snapshot,
     metal_runtime_status,
@@ -126,12 +126,12 @@ def _validate(
     operations: List[Dict[str, Any]],
     budgets: Dict[str, Optional[int]],
 ) -> Dict[str, float]:
-    os.environ["MLXQ_METAL_KERNELS"] = "0"
+    os.environ["METTLEQ_METAL_KERNELS"] = "0"
     reference = Device(n)
     reference.execute(operations)
     reference.synchronize()
     errors: Dict[str, float] = {}
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     for label, budget in budgets.items():
         candidate = Device(n, metal_checkpoint_budget_bytes=budget)
         candidate.execute(operations)
@@ -168,7 +168,7 @@ def main() -> int:
         parser.error("every checkpoint budget must be a finite positive MiB value")
 
     os.environ.pop(METAL_CHECKPOINT_BUDGET_ENV, None)
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     capability = metal_runtime_status(args.qubits)
     if not capability["enabled"]:
         raise SystemExit(capability["reason"])
@@ -284,7 +284,7 @@ def main() -> int:
     (outdir / "checkpoint_sweep_manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n"
     )
-    os.environ.pop("MLXQ_METAL_KERNELS", None)
+    os.environ.pop("METTLEQ_METAL_KERNELS", None)
     print(f"wrote {outdir}", flush=True)
     return 0
 

@@ -231,7 +231,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Choose how QuantumStudio appears. System follows your OS preference.',
+                      'Choose how MettleQ Studio appears. System follows your OS preference.',
                       style: TextStyle(
                         fontSize: 11,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,

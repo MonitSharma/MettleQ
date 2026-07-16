@@ -5,7 +5,7 @@ import sys
 # Ensure local package path so direct execution works
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from mlxq.qml import Device, qnode, H, RX, RY, RZ, CNOT, expval, PauliZ, PauliX, PauliY, basic_entangler_layers
+from mettleq.qml import Device, qnode, H, RX, RY, RZ, CNOT, expval, PauliZ, PauliX, PauliY, basic_entangler_layers
 
 # QPE example helpers (exact simulation)
 from examples.qpe_energy_estimation import (

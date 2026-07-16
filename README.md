@@ -1,10 +1,10 @@
 <div align="center">
-  <img src="quantumstudio/assets/app_icon_source.png" alt="Qupertino logo" width="150"/>
-  <h1>Qupertino</h1>
+  <img src="quantumstudio/assets/app_icon_source.png" alt="MettleQ logo" width="150"/>
+  <h1>MettleQ</h1>
   <p><strong>Fast, inspectable local quantum-circuit simulation for Apple Silicon.</strong></p>
   <p>Qiskit and PennyLane integration, exact statevector and MPS methods, MLX/Metal execution, and reproducible evidence.</p>
   <p>
-    <a href="https://github.com/MonitSharma/Qupertino/actions/workflows/ci.yml"><img src="https://github.com/MonitSharma/Qupertino/actions/workflows/ci.yml/badge.svg" alt="CI status"/></a>
+    <a href="https://github.com/MonitSharma/MettleQ/actions/workflows/ci.yml"><img src="https://github.com/MonitSharma/MettleQ/actions/workflows/ci.yml/badge.svg" alt="CI status"/></a>
     <img src="https://img.shields.io/badge/platform-Apple%20Silicon-111111" alt="Apple Silicon"/>
     <img src="https://img.shields.io/badge/Python-3.9%2B-3776AB" alt="Python 3.9+"/>
     <img src="https://img.shields.io/badge/MLX-0.6%2B-6E56CF" alt="MLX 0.6+"/>
@@ -19,14 +19,14 @@
   </p>
 </div>
 
-![QuantumStudio dashboard](quantumstudio/assets/screenshots/screen003.png)
+![MettleQ Studio dashboard](quantumstudio/assets/screenshots/screen003.png)
 
 > **Project goal:** build the fastest trustworthy local quantum-simulation
 > engine for Apple Silicon, with native Qiskit and PennyLane paths that choose
 > the Mac CPU for small work and the integrated GPU only when measured overhead
 > is amortized.
 
-Qupertino exposes exact statevector and bounded matrix-product-state (MPS)
+MettleQ exposes exact statevector and bounded matrix-product-state (MPS)
 simulation through a Qiskit `BackendV2`, Qiskit SamplerV2/EstimatorV2, and a
 registered PennyLane device. Every execution selects one numerical device. It
 does not add CPU and GPU timings together or market them as cooperative
@@ -41,19 +41,20 @@ acceleration.
 | Circuit inputs | Native Python operations, strict unitary OpenQASM 2.0, Qiskit circuits, and PennyLane QNodes |
 | Workloads | QFT, phase estimation, Grover, QAOA, VQE, QCBM, QNN, random circuits, and spin dynamics |
 | Trust model | Pre-allocation statevector checks, capability-gated dispatch, recoverable SVDs, MPS accuracy thresholds and convergence reports, explicit plans, numerical parity tests, synchronized benchmarks, and safe fallbacks |
-| Current test suite | **343 tests** across the simulator, SDK adapters, planner, algorithms, MPS, QASM, Metal dispatch, campaign analysis, and QuantumStudio backend |
-| Desktop product | QuantumStudio orchestration, monitoring, plotting, and export |
-| SDK adapters | Native Qiskit backend and registered PennyLane device, plus the original internal `mlxq.qml` teaching wrapper |
+| Current test suite | **356 tests** across the simulator, SDK adapters, planner, algorithms, MPS, peaked circuits, QASM, Metal dispatch, campaign analysis, and MettleQ Studio backend |
+| Desktop product | MettleQ Studio orchestration, monitoring, plotting, and export |
+| SDK adapters | Native Qiskit backend and registered PennyLane device, plus the original internal `mettleq.qml` teaching wrapper |
 
 ## Project lineage
 
-This repository is a private development fork of the original public Qupertino
-project. The fork is maintained independently and does not open pull requests
-against upstream.
+MettleQ is an independently maintained private fork of the original public
+**Qupertino** project. The original name and links below are intentionally
+preserved for attribution. This fork is kept in the maintainer's GitHub
+account and does not open pull requests against upstream.
 
 | | Repository |
 | --- | --- |
-| **Private fork** | [MonitSharma/Qupertino](https://github.com/MonitSharma/Qupertino) |
+| **Private fork** | [MonitSharma/MettleQ](https://github.com/MonitSharma/MettleQ) |
 | **Original upstream** | [BoltzmannEntropy/Qupertino](https://github.com/BoltzmannEntropy/Qupertino) |
 | **Original website** | [QupertinoWEB](https://boltzmannentropy.github.io/QupertinoWEB/) |
 | **Original author** | Shlomo Kashani |
@@ -65,9 +66,28 @@ against upstream.
 | **Step 6 adaptive statevector/MPS revision** | Fork commit `3f40a47` |
 | **Step 7 MPS limit campaign revision** | Fork commit `7b3d2ff` |
 | **Step 8 reliable/routed MPS engine revision** | Fork commit `0691674` |
+| **MettleQ 0.2 rename, peaked benchmark, and batched sampling** | This revision |
 
 Original authorship, licensing, and citation information are retained at the
 end of this README.
+
+MettleQ is more than a cosmetic rename. It keeps the useful MLX/Metal base and
+extends it toward a trustworthy SDK backend:
+
+| Original base | MettleQ direction |
+| --- | --- |
+| Direct simulator and benchmark stack | Normal Qiskit `BackendV2`/V2 primitives and a registered PennyLane device |
+| Primarily dense statevector execution | Exact statevector plus bounded, routed, recoverable MPS |
+| Benchmark-oriented dispatch | Explicit CPU/GPU planner, statevector memory preflight, safe fallbacks, and inspectable execution reports |
+| Performance plots | Frozen raw evidence, matched baselines, accuracy thresholds, and automated `Dmax` convergence |
+| MLX and custom Metal paths | Capability-gated Metal, measured crossover policy, and CPU MPS until a real GPU crossover is demonstrated |
+| Original desktop tooling | MettleQ Studio, synchronized with the renamed engine and SDK surfaces |
+
+The project aim is the fastest trustworthy local quantum-simulation engine for
+Apple Silicon—not merely the fastest isolated kernel. A result must preserve
+SDK semantics, fit available unified memory, expose approximation evidence,
+and beat its reference under a matched protocol before it is described as a
+speedup.
 
 ## Quick start
 
@@ -81,8 +101,8 @@ end of this README.
 ### Install
 
 ```bash
-git clone git@github.com:MonitSharma/Qupertino.git
-cd Qupertino
+git clone git@github.com:MonitSharma/MettleQ.git
+cd MettleQ
 
 python3 -m venv .venv
 source .venv/bin/activate
@@ -96,17 +116,22 @@ For an SDK-focused install without the development and desktop extras:
 python -m pip install -e '.[sdk]'
 ```
 
-### Use Qupertino from Qiskit
+Version 0.2 makes `mettleq` and the PennyLane device name `mettleq` canonical.
+The former `mlxq` import namespace, `qupertino` PennyLane entry point, and
+`Qupertino*` adapter class aliases remain available as migration shims; new
+code should use the MettleQ names.
+
+### Use MettleQ from Qiskit
 
 ```python
 from qiskit import QuantumCircuit, transpile
-from mlxq.integrations.qiskit import (
-    QupertinoBackend,
-    QupertinoEstimatorV2,
-    QupertinoSamplerV2,
+from mettleq.integrations.qiskit import (
+    MettleQBackend,
+    MettleQEstimatorV2,
+    MettleQSamplerV2,
 )
 
-backend = QupertinoBackend(method="automatic", device="auto")
+backend = MettleQBackend(method="automatic", device="auto")
 circuit = QuantumCircuit(3, 3)
 circuit.h(0)
 circuit.cx(0, 1)
@@ -118,21 +143,21 @@ result = backend.run(compiled, shots=4096, seed_simulator=7).result()
 print(result.get_counts())
 
 # Native Qiskit V2 primitives use the same planner and execution engine.
-sampler = QupertinoSamplerV2(backend=backend)
-estimator = QupertinoEstimatorV2(backend=backend)
+sampler = MettleQSamplerV2(backend=backend)
+estimator = MettleQEstimatorV2(backend=backend)
 ```
 
 Pass `return_statevector=True` only when the caller needs a full state readback.
 `execution_report=True` adds the execution plan and statevector preflight to
 the native Qiskit result data.
 
-### Use Qupertino from PennyLane
+### Use MettleQ from PennyLane
 
 ```python
 import pennylane as qml
 
 device = qml.device(
-    "qupertino",
+    "mettleq",
     wires=3,
     method="automatic",
     device="auto",
@@ -167,7 +192,7 @@ Qiskit and PennyLane accept the same policy vocabulary:
 Approximate automatic fallback is opt-in:
 
 ```python
-backend = QupertinoBackend(
+backend = MettleQBackend(
     method="automatic",
     device="auto",
     allow_approximation=True,
@@ -193,14 +218,14 @@ bond-dimension convergence report:
 ```python
 from qiskit import QuantumCircuit
 from qiskit.quantum_info import SparsePauliOp
-from mlxq.integrations.qiskit import QupertinoEstimatorV2
+from mettleq.integrations.qiskit import MettleQEstimatorV2
 
 circuit = QuantumCircuit(3)
 circuit.h(0)
 circuit.cx(0, 1)
 observable = SparsePauliOp("IIZ")  # Z on Qiskit qubit 0
 
-estimator = QupertinoEstimatorV2(
+estimator = MettleQEstimatorV2(
     method="matrix_product_state",
     device="cpu",
     mps_max_bond_dimension=64,
@@ -208,23 +233,23 @@ estimator = QupertinoEstimatorV2(
     mps_convergence_atol=1e-5,
 )
 pub_result = estimator.run([(circuit, observable)]).result()[0]
-print(pub_result.metadata["qupertino_mps_accuracy"])
-print(pub_result.metadata["qupertino_mps_convergence"])
+print(pub_result.metadata["mettleq_mps_accuracy"])
+print(pub_result.metadata["mettleq_mps_convergence"])
 ```
 
 Accuracy thresholds are based on local truncation and norm telemetry; passing
 them is not a global fidelity proof. Use convergence or an independent
 reference for results that matter.
 
-Launch the Python process with `MLXQ_METAL_KERNELS=auto` to request custom
+Launch the Python process with `METTLEQ_METAL_KERNELS=auto` to request custom
 Metal kernels when all capability checks pass. Without it, both SDK adapters
 use the safe pure-MLX path.
 
 ### Run a first accelerated circuit
 
 ```bash
-MLXQ_METAL_KERNELS=auto PYTHONPATH=src .venv/bin/python - <<'PY'
-from mlxq import Device, metal_runtime_status
+METTLEQ_METAL_KERNELS=auto PYTHONPATH=src .venv/bin/python - <<'PY'
+from mettleq import Device, metal_runtime_status
 
 operations = [
     {"name": "H", "wires": [0]},
@@ -242,7 +267,7 @@ print("execution plan:", device.last_execution_plan)
 PY
 ```
 
-`MLXQ_METAL_KERNELS=auto` requests custom kernels only when the runtime proves
+`METTLEQ_METAL_KERNELS=auto` requests custom kernels only when the runtime proves
 that the platform, GPU device, dtype, backend, indexing, and memory constraints
 are compatible. The unset default remains off; unsupported configurations fall
 back safely.
@@ -253,7 +278,7 @@ the device's maximum buffer and recommended working-set limits, and the
 remaining lower-bound headroom:
 
 ```python
-from mlxq import statevector_preflight
+from mettleq import statevector_preflight
 
 report = statevector_preflight(27)
 print(report["decision"])
@@ -263,9 +288,9 @@ print(report["cost_model"])
 `StateVectorSimulator` and the `sv` `Device` enforce the same decision before
 allocation. A pass means the reported lower bounds do not already rule the
 request out; it is not a promise that an arbitrary lazy circuit graph will
-fit. If a lower bound exceeds a device limit, Qupertino raises
+fit. If a lower bound exceeds a device limit, MettleQ raises
 `StatevectorMemoryError` with the computed sizes and suggests the MPS backend
-or fewer qubits. The last-resort `MLXQ_ALLOW_UNSAFE_STATEVECTOR=1` override (or
+or fewer qubits. The last-resort `METTLEQ_ALLOW_UNSAFE_STATEVECTOR=1` override (or
 `Device(..., allow_unsafe_statevector=True)`) is explicit, defaults off, and is
 recorded in the preflight and execution plan.
 
@@ -276,8 +301,8 @@ input/output traffic estimate used to choose evaluation locations, not a
 promise that allocator peak will equal the value:
 
 ```bash
-MLXQ_METAL_KERNELS=auto \
-MLXQ_METAL_CHECKPOINT_BUDGET_MB=256 \
+METTLEQ_METAL_KERNELS=auto \
+METTLEQ_METAL_CHECKPOINT_BUDGET_MB=256 \
 PYTHONPATH=src .venv/bin/python your_simulation.py
 ```
 
@@ -298,7 +323,7 @@ is opt-in; unset preserves fully lazy execution.
 ```mermaid
 flowchart TB
     QISKIT["Qiskit circuits and PUBs"] --> QAPI["BackendV2 · SamplerV2 · EstimatorV2"]
-    PL["PennyLane QNodes and tapes"] --> PAPI["PennyLane qupertino device"]
+    PL["PennyLane QNodes and tapes"] --> PAPI["PennyLane mettleq device"]
     QAPI --> IR["Validated canonical circuit IR"]
     PAPI --> IR
     IR --> PLAN["Inspectable method and device planner"]
@@ -343,7 +368,7 @@ Custom Metal was enabled for compatible statevector layers. MPS used
 `Dmax=32`, `eps=1e-10`, and recorded zero truncation events and zero discarded
 weight on this shallow circuit.
 
-| SDK | Path | Median | Reference / Qupertino | Absolute error |
+| SDK | Path | Median | Reference / MettleQ | Absolute error |
 | --- | --- | ---: | ---: | ---: |
 | Qiskit | Statevector CPU | 238.69 ms | 2.77× | `4.42e-11` |
 | Qiskit | Statevector GPU | **18.11 ms** | **36.54×** | `4.42e-10` |
@@ -361,7 +386,7 @@ general random-circuit claim: bond growth, `Dmax`, and truncation determine MPS
 cost and accuracy.
 
 <div align="center">
-  <img src="assets/benchmarks-frozen/fork-m3pro-20260715-step6-adaptive-sdk/sdk_method_matrix/sdk_method_matrix.png" alt="Qiskit and PennyLane statevector CPU, statevector GPU, MPS CPU, and MPS GPU method timing matrix" width="900"/>
+  <img src="assets/benchmarks-frozen/fork-m3pro-20260716-mettleq-relabel/sdk_method_matrix.png" alt="Qiskit and PennyLane statevector CPU, statevector GPU, MPS CPU, and MPS GPU method timing matrix" width="900"/>
   <br/><em>End-to-end SDK timing on a log scale. CPU and GPU are independent alternatives, not cooperative arms.</em>
 </div>
 
@@ -389,11 +414,11 @@ and charts are frozen in
 
 #### Unchanged Step 5 protocol: historical versus current session
 
-The older four-step protocol was also rerun unchanged. Qupertino itself was
+The older four-step protocol was also rerun unchanged. MettleQ itself was
 slower in the current session, so the larger PennyLane ratio must not be read as
 an engine improvement:
 
-| SDK contract | Previous Qupertino | Current Qupertino | Current reference | Current speedup | Qupertino change |
+| SDK contract | Previous MettleQ | Current MettleQ | Current reference | Current speedup | MettleQ change |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Qiskit full statevector | 10.10 ms | 11.01 ms | Aer CPU 77.61 ms | 7.05× | 8.98% slower |
 | PennyLane local `⟨Z⟩` | 18.31 ms | 21.44 ms | `default.qubit` 1,075.41 ms | 50.15× | 17.12% slower |
@@ -635,7 +660,7 @@ claim rather than a newly reproduced four-backend result.
   <img src="assets/perf-charts/chart_4way_25q.png" alt="Original upstream four-backend M1 Max comparison" width="820"/>
 </div>
 
-| Workload @ 25q | Qupertino Metal | Qupertino MLX | Aer CPU | PennyLane lightning |
+| Workload @ 25q | MettleQ Metal | MettleQ MLX | Aer CPU | PennyLane lightning |
 | --- | ---: | ---: | ---: | ---: |
 | QFT | **0.059 s** | 0.72 s | 2.80 s | 5.61 s |
 | Ring-QAOA, 6 layers | **0.150 s** | 2.07 s | 5.35 s | 6.84 s |
@@ -654,13 +679,13 @@ circuit used one warmup and seven repeats with implementation order reversed on
 alternating repeats. Timings include SDK translation, execution,
 synchronization, and the requested native result.
 
-| SDK-native result | Qupertino median | CPU reference median | Speedup | Numerical check |
+| SDK-native result | MettleQ median | CPU reference median | Speedup | Numerical check |
 | --- | ---: | ---: | ---: | --- |
 | Qiskit full statevector | **10.10 ms** | Aer 74.65 ms | **7.39×** | max amplitude error `1.287e-8` |
 | PennyLane local `⟨Z⟩` | **18.31 ms** | `default.qubit` 708.70 ms | **38.70×** | expectation error `4.657e-9` |
 
 <div align="center">
-  <img src="assets/benchmarks-frozen/fork-m3pro-20260715-step5-sdk/sdk_adapter_timings.png" alt="Native Qiskit and PennyLane adapter timing comparison on Apple M3 Pro" width="820"/>
+  <img src="assets/benchmarks-frozen/fork-m3pro-20260716-mettleq-relabel/sdk_adapter_step5.png" alt="Native Qiskit and PennyLane adapter timing comparison on Apple M3 Pro" width="820"/>
   <br/><em>Scoped comparisons within each SDK. The Qiskit and PennyLane result contracts differ and are not compared to each other.</em>
 </div>
 
@@ -675,7 +700,7 @@ manifest are frozen in
 There is no honest single MPS qubit limit: entanglement topology and bond
 growth matter more than width alone. Step 8 first fixed the numerical and
 trust failures exposed by Step 7, then measured the new engine at clean commit
-`0691674` through Qiskit `QupertinoEstimatorV2`.
+`0691674` through Qiskit `MettleQEstimatorV2`.
 
 The current CPU MPS path uses a recoverable SciPy/NumPy SVD ladder, an explicit
 mixed-canonical center, renormalized two-site splits, local accuracy thresholds,
@@ -707,7 +732,7 @@ test points, not universal maxima:
 | All to all | 36q d1 | 4.935 s | Bond cap; within configured local thresholds |
 
 <div align="center">
-  <img src="assets/benchmarks-frozen/fork-m3pro-20260716-step8-mps-reliability/mps_limit_landscape.png" alt="Current Qupertino MPS completion envelope, bond pressure, truncation, and timeout across seven entanglement families" width="920"/>
+  <img src="assets/benchmarks-frozen/fork-m3pro-20260716-mettleq-relabel/mps_limit_landscape.png" alt="Current MettleQ MPS completion envelope, bond pressure, truncation, and timeout across seven entanglement families" width="920"/>
   <br/><em>Filled points show no observed local truncation; hollow points show truncation. The triangle retains the 60-second timeout as a failure marker, not a runtime.</em>
 </div>
 
@@ -717,18 +742,18 @@ respectively. Runtime rises sharply with bond capacity on high-entanglement
 cases, so convergence is evidence the caller must deliberately pay for.
 
 <div align="center">
-  <img src="assets/benchmarks-frozen/fork-m3pro-20260716-step8-mps-reliability/mps_dmax_convergence.png" alt="Current MPS runtime, normalized state stability, and exact small-circuit error across bond dimensions 32, 64, and 128" width="920"/>
+  <img src="assets/benchmarks-frozen/fork-m3pro-20260716-mettleq-relabel/mps_dmax_convergence.png" alt="Current MPS runtime, normalized state stability, and exact small-circuit error across bond dimensions 32, 64, and 128" width="920"/>
   <br/><em>Normalized state stability prevents silent norm collapse. It does not prove a truncated result is globally accurate.</em>
 </div>
 
-#### Matched Qupertino versus Qiskit Aer MPS
+#### Matched MettleQ versus Qiskit Aer MPS
 
 Only after the reliability work completed, the same Qiskit circuits and
-analytic `Z0` EstimatorV2 contract were run through Qupertino CPU routed,
-Qupertino CPU restore, Qupertino GPU tensors, and Qiskit Aer CPU MPS. Each case
+analytic `Z0` EstimatorV2 contract were run through MettleQ CPU routed,
+MettleQ CPU restore, MettleQ GPU tensors, and Qiskit Aer CPU MPS. Each case
 used one warmup, three rotating-order repeats, and a fresh process.
 
-| Circuit | QP CPU routed | QP CPU restore | QP GPU tensors | Aer CPU MPS | Routing gain | QP / Aer speedup |
+| Circuit | MettleQ CPU routed | MettleQ CPU restore | MettleQ GPU tensors | Aer CPU MPS | Routing gain | MettleQ / Aer speedup |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | GHZ 1,000q d1 | 338.76 ms | 338.28 ms | 797.22 ms | **57.90 ms** | 1.00x | 0.17x |
 | Line 100q d8 | 153.25 ms | 154.50 ms | 514.20 ms | **29.00 ms** | 1.01x | 0.19x |
@@ -739,11 +764,11 @@ used one warmup, three rotating-order repeats, and a fresh process.
 | All to all 20q d1 | 851.13 ms | 4,700.62 ms | 1,422.03 ms | **25.17 ms** | 5.52x | 0.030x |
 
 <div align="center">
-  <img src="assets/benchmarks-frozen/fork-m3pro-20260716-step8-mps-reliability/matched_aer_comparison.png" alt="Matched Qupertino CPU routed, CPU restore, GPU tensor, and Qiskit Aer CPU MPS results" width="920"/>
-  <br/><em>Aer is faster on six schedules; Qupertino wins the tested 36-qubit grid by 1.69x. CPU beats GPU tensors everywhere, so automatic MPS remains on CPU.</em>
+  <img src="assets/benchmarks-frozen/fork-m3pro-20260716-mettleq-relabel/matched_aer_comparison.png" alt="Matched MettleQ CPU routed, CPU restore, GPU tensor, and Qiskit Aer CPU MPS results" width="920"/>
+  <br/><em>Aer is faster on six schedules; MettleQ wins the tested 36-qubit grid by 1.69x. CPU beats GPU tensors everywhere, so automatic MPS remains on CPU.</em>
 </div>
 
-Routing is nevertheless material inside Qupertino: it improves ring by 1.70x,
+Routing is nevertheless material inside MettleQ: it improves ring by 1.70x,
 rainbow by 1.25x, random long range by 1.42x, and all to all by 5.52x. The
 all-to-all schedule falls from 2,280 restore-baseline swaps to 384 routed
 swaps. Grid preflight correctly rejects lookahead when it predicts no saving.
@@ -751,6 +776,66 @@ swaps. Grid preflight correctly rejects lookahead when it predicts no saving.
 The raw rows, exact commands, clean-engine manifests, summaries, and plotted
 source data are frozen in
 [`fork-m3pro-20260716-step8-mps-reliability/`](assets/benchmarks-frozen/fork-m3pro-20260716-step8-mps-reliability/).
+
+### Peaked-circuit boundary: useful benchmark, different required algorithm
+
+Quantum Advantage Tracker issue
+[#153](https://github.com/quantum-advantage-tracker/quantum-advantage-tracker.github.io/issues/153)
+uses the 56-qubit `peaked_circuit_P9_Hqap_56x1917` circuit: 3,890 `u` gates
+and 1,917 `rzz` gates. The successful reference is not ordinary left-to-right
+MPS. It consolidates the circuit, builds from the midpoint as an MPO, and uses
+greedy unswapping. MettleQ therefore treats P9 as a research benchmark for a
+future MPO/TNO method, while also running an explicitly labeled forward-MPS
+boundary probe.
+
+The exact published QASM and expected bitstring are vendored with Apache-2.0
+attribution and a SHA-256 integrity test. On this M3 Pro, current forward MPS
+at `Dmax=64`, `eps=1e-10`, and 100 shots completed all 5,807 gates in
+**111.52 s**, but returned the published peak **0 times**. It saturated the
+bond cap, accumulated `190.68` relative local discarded-weight sum, and thus
+did not produce a trustworthy P9 answer. Routing still mattered: 25,524 actual
+swaps versus a 68,342 restore-routing baseline, a reduction of 42,818 swaps.
+
+This is not a speed comparison with the reference laptop solver. That method,
+cutoff, sampling procedure, and result contract differ. A 250-operation P9
+prefix completed in 5.75 s and is useful only as a throughput/telemetry probe;
+it has no published-peak accuracy contract.
+
+For CI and matched timing, MettleQ also includes a deterministic mirrored
+peaked family. A seeded `u`/`rzz`/permutation body and its inverse create
+temporary entanglement, followed by small rotations with an analytically known
+unique mode. Linear, grid, long-range, and all-to-all variants at 6, 8, and 10
+qubits recovered the expected peak in every repeat.
+
+The first matched run exposed a Python loop over every shot and wire. Replacing
+it with memory-bounded batched MPS conditional sampling reduced the median
+MettleQ time across the 12 cells from **673.3 ms to 28.5 ms**—a **23.6x median
+time reduction**. The median of the 12 matched per-cell speedups is **27.2x**.
+Peak recovery was unchanged. Current MettleQ timings span
+11.98–174.37 ms. Qiskit Aer MPS is still faster in all 12 small cells, by about
+5.2x on geometric mean, so no competitive win is claimed.
+
+<div align="center">
+  <img src="assets/benchmarks-frozen/fork-m3pro-20260716-step10-batched-mps-sampling/peaked_sampling_improvement.png" alt="MettleQ MPS sampling before and after memory-bounded batching across 12 peaked-circuit cases" width="920"/>
+  <br/><em>Matched historical versus current MettleQ timings. Both runs use the same circuits, shots, warmups, repeats, Dmax, and truncation threshold.</em>
+</div>
+
+<div align="center">
+  <img src="assets/benchmarks-frozen/fork-m3pro-20260716-step10-batched-mps-sampling/peaked_comparison.png" alt="Current MettleQ versus Qiskit Aer MPS timing on the mirrored peaked family" width="920"/>
+  <br/><em>Current end-to-end 1,024-shot result: correctness passes, but Aer remains faster on these small circuits.</em>
+</div>
+
+The viable next algorithmic step is a separate midpoint-MPO/TNO execution
+method that reuses MettleQ's Qiskit translation, trust reports, and benchmark
+protocol. Increasing forward-MPS `Dmax` alone is not a credible route to P9:
+it raises SVD and memory cost while the observed truncation evidence is already
+far outside the configured trust envelope.
+
+The raw matched rows, before/after summary, full P9 attempt, diagnostics,
+manifest, and plots are frozen in
+[`step9-mettleq-peaked/`](assets/benchmarks-frozen/fork-m3pro-20260716-step9-mettleq-peaked/)
+and
+[`step10-batched-mps-sampling/`](assets/benchmarks-frozen/fork-m3pro-20260716-step10-batched-mps-sampling/).
 
 <details>
 <summary><strong>Show the historical Step 7 failure envelope</strong></summary>
@@ -760,7 +845,7 @@ source data are frozen in
 A 10,000-qubit GHZ chain needs bond
 dimension 2, while a much smaller nonlocal circuit can saturate `Dmax`, lose
 norm, or fail its SVD. Step 7 therefore swept seven deterministic topologies
-through the public Qiskit `QupertinoEstimatorV2` path, with every case isolated
+through the public Qiskit `MettleQEstimatorV2` path, with every case isolated
 in a fresh process.
 
 The completion-envelope runs used CPU MPS, `Dmax=64`, `eps=1e-10`, and a
@@ -786,7 +871,7 @@ cases passed the `5e-5` acceptance threshold; rainbow, random-long-range, and
 all-to-all cases did not all pass at `Dmax=64`.
 
 <div align="center">
-  <img src="assets/benchmarks-frozen/fork-m3pro-20260715-step7-mps-limits/mps_limit_landscape.png" alt="Qupertino MPS completion envelope, bond growth, truncation, errors, and timeout across seven entanglement families" width="920"/>
+  <img src="assets/benchmarks-frozen/fork-m3pro-20260715-step7-mps-limits/mps_limit_landscape.png" alt="MettleQ MPS completion envelope, bond growth, truncation, errors, and timeout across seven entanglement families" width="920"/>
   <br/><em>Filled points show no observed local truncation; hollow points show truncation. X and triangle markers retain numerical failures and the 30-second timeout.</em>
 </div>
 
@@ -839,6 +924,9 @@ auditable. This fork adds explicit evidence at each layer:
 - **Routing evidence:** whole-circuit preflight compares lookahead and immediate
   restoration, records predicted and actual swaps, and skips routing work for
   already-local circuits.
+- **Bounded MPS sampling:** finite shots contract the MPS directly in adaptive
+  batches instead of materializing `2**n` probabilities or looping one shot at
+  a time; the batch ceiling scales down with `Dmax²` temporary storage.
 - **Hermetic tests:** generated files use temporary directories, and successful
   tests leave the checkout unchanged.
 
@@ -849,16 +937,17 @@ auditable. This fork adds explicit evidence at each layer:
 | Core simulator and gate algebra | 149 |
 | Quantum-computing examples and algorithms | 41 |
 | Internal consistency and measurement parity | 21 |
-| MPS backend and correctness | 18 |
+| MPS backend and correctness | 22 |
 | QML wrapper, QFT, and subset semantics | 10 |
 | Strict OpenQASM and silent-risk checks | 7 |
 | QPE energy estimation | 2 |
 | Benchmark protocol and plotting | 10 |
+| Peaked-circuit fixtures, topology regressions, and backend recovery | 6 |
 | Custom Metal parity and dispatch | 19 |
 | Execution plans, memory policy, planner, and capability reporting | 33 |
-| Native Qiskit and PennyLane integrations | 15 |
-| QuantumStudio backend and MCP API | 18 |
-| **Total** | **343** |
+| Native Qiskit and PennyLane integrations and rebrand compatibility | 18 |
+| MettleQ Studio backend and MCP API | 18 |
+| **Total** | **356** |
 
 Run everything with:
 
@@ -884,6 +973,11 @@ Silicon runner labeled `macOS` and `ARM64`.
   This prevents the former process-aborting failure but adds overhead to shallow
   low-bond circuits. The matched M3 Pro campaign found no GPU-tensor crossover,
   and Aer remained faster on six of seven schedules.
+- The published 56-qubit P9 peaked circuit needs a midpoint-MPO/TNO plus
+  unswapping strategy. MettleQ forward MPS can execute it approximately, but
+  its failed peak recovery and accumulated truncation explicitly fail the
+  trust contract; P9 support is not complete until a matched method recovers
+  the expected peak with convergence evidence.
 - The bundled strict importer accepts 33 of 42 OpenQASM files. It rejects reset,
   classical control, mid-circuit measurement, opaque gates, arbitrary includes,
   and malformed declarations.
@@ -906,12 +1000,12 @@ Silicon runner labeled `macOS` and `ARM64`.
 
 | Integration | Status | Intended experience |
 | --- | --- | --- |
-| Native `mlxq` Python operations | Available | Execute validated operation dictionaries directly |
+| Native `mettleq` Python operations | Available | Execute validated operation dictionaries directly |
 | OpenQASM 2.0 | Available, strict unitary subset | Import supported circuits with explicit rejection of dynamic semantics |
-| `mlxq.qml` | Available, internal wrapper | PennyLane-like tapes, measurements, templates, and parameter-shift gradients |
+| `mettleq.qml` | Available, internal wrapper | PennyLane-like tapes, measurements, templates, and parameter-shift gradients |
 | Qiskit `BackendV2` | Available: statevector + MPS | Transpile and run unitary circuits; receive native `Result`, device-sampled counts/memory, optional statevector, accuracy classification, and execution evidence |
 | Qiskit SamplerV2 / EstimatorV2 | Available | Use PUB batching, native `BitArray` samples, device-resident Pauli expectations, and optional analytic `Dmax` convergence reports |
-| PennyLane `qupertino` device | Available: statevector + MPS | Use a normal QNode with analytic or finite-shot measurements, threshold policy, analytic `Dmax` convergence, tracking, and parameter-shift gradients |
+| PennyLane `mettleq` device | Available: statevector + MPS | Use a normal QNode with analytic or finite-shot measurements, threshold policy, analytic `Dmax` convergence, tracking, and parameter-shift gradients |
 | Other SDKs | Out of scope for the current phase | Qiskit and PennyLane are the only active integration targets |
 
 Both adapters translate through one tested canonical operation layer. Qiskit's
@@ -926,7 +1020,7 @@ core rather than being reimplemented or bypassed by an adapter.
 ### Reproducible single workload
 
 ```bash
-MLXQ_METAL_KERNELS=1 ./bench.sh \
+METTLEQ_METAL_KERNELS=1 ./bench.sh \
   --circuit qft --qubits 15,20,25 --warmups 1 --repeats 5
 ```
 
@@ -939,7 +1033,7 @@ MLXQ_METAL_KERNELS=1 ./bench.sh \
 ### Calibrate CPU/GPU selection
 
 ```bash
-MLXQ_METAL_KERNELS=auto PYTHONPATH=src .venv/bin/python \
+METTLEQ_METAL_KERNELS=auto PYTHONPATH=src .venv/bin/python \
   tools/benchmark_execution_policy.py \
   --outdir bench/runs/execution-policy \
   --warmups 1 --repeats 7
@@ -952,7 +1046,7 @@ means automatic MPS should remain on CPU over the tested range.
 ### Benchmark Qiskit and PennyLane method/device paths
 
 ```bash
-MLXQ_METAL_KERNELS=auto PYTHONPATH=src .venv/bin/python \
+METTLEQ_METAL_KERNELS=auto PYTHONPATH=src .venv/bin/python \
   tools/benchmark_sdk_method_matrix.py \
   --outdir bench/runs/sdk-method-matrix \
   --qubits 20 --steps 2 --warmups 1 --repeats 7
@@ -982,7 +1076,7 @@ The campaign separates completion, timeout, process error, small exact
 validation, local accuracy classification, routing, SVD fallbacks, bond growth,
 normalized state stability, runtime, and peak RSS.
 
-### Run the matched Qupertino/Aer MPS protocol
+### Run the matched MettleQ/Aer MPS protocol
 
 ```bash
 PYTHONPATH=src caffeinate -i .venv/bin/python \
@@ -994,9 +1088,27 @@ PYTHONPATH=src caffeinate -i .venv/bin/python \
 ```
 
 This benchmark uses the same Qiskit circuits and analytic `Z0` result contract
-for Qupertino CPU routed, CPU restore, GPU tensors, and Qiskit Aer CPU MPS. Run
+for MettleQ CPU routed, CPU restore, GPU tensors, and Qiskit Aer CPU MPS. Run
 it only on an otherwise idle machine; implementation order rotates and every
 case starts in a fresh process.
+
+### Run the peaked-circuit protocol
+
+```bash
+PYTHONPATH=src caffeinate -i .venv/bin/python \
+  tools/benchmark_peaked_circuits.py \
+  --output-dir bench/runs/peaked \
+  --qubits 6,8,10 \
+  --topologies linear,grid,long_range,all_to_all \
+  --depth 2 --shots 1024 --warmups 1 --repeats 3 \
+  --dmax 64 --eps 1e-10 --published-mode both \
+  --published-prefix-operations 250 --published-timeout-s 120
+```
+
+`--published-mode full` runs the exact 56-qubit QASM in a killable child
+process. Its result is labeled `mettleq_forward_mps` and
+`algorithm_matched=false`; use the mirrored family for CI and the full input to
+develop and validate the future midpoint-MPO/TNO method.
 
 ### Statevector or MPS backend
 
@@ -1016,7 +1128,7 @@ case starts in a fresh process.
 
 ```bash
 PYTHONPATH=src .venv/bin/python tools/profile_apple_gpu.py \
-  --qubits 20 --repeats 7 --output /tmp/qupertino-profile.json
+  --qubits 20 --repeats 7 --output /tmp/mettleq-profile.json
 ```
 
 The profiler records synchronized cold/warm timing, allocator memory, estimated
@@ -1065,12 +1177,25 @@ The Step 7 MPS entanglement-limit evidence is frozen under
 [`assets/benchmarks-frozen/fork-m3pro-20260715-step7-mps-limits/`](assets/benchmarks-frozen/fork-m3pro-20260715-step7-mps-limits/). It contains 49 `Dmax=64` topology/qubit/depth probes, `Dmax=32/64/128` convergence rows, independent statevector validation through 20 qubits, retained SVD/norm failures, exact-commit manifests, and the plotted source data.
 
 The Step 8 reliable/routed MPS evidence is frozen under
-[`assets/benchmarks-frozen/fork-m3pro-20260716-step8-mps-reliability/`](assets/benchmarks-frozen/fork-m3pro-20260716-step8-mps-reliability/). It contains the clean-engine 26-case standard and 16-case boundary campaigns, `Dmax=32/64/128` convergence inputs, the matched four-path Qupertino/Aer campaign, raw rows, summaries, manifests, and charts.
+[`assets/benchmarks-frozen/fork-m3pro-20260716-step8-mps-reliability/`](assets/benchmarks-frozen/fork-m3pro-20260716-step8-mps-reliability/). It contains the clean-engine 26-case standard and 16-case boundary campaigns, `Dmax=32/64/128` convergence inputs, the matched four-path MettleQ/Aer campaign, raw rows, summaries, manifests, and charts.
+
+The Step 9 peaked-circuit evidence is frozen under
+[`fork-m3pro-20260716-step9-mettleq-peaked/`](assets/benchmarks-frozen/fork-m3pro-20260716-step9-mettleq-peaked/).
+It contains the matched 12-cell mirrored family, the 250-operation prefix, the
+completed full P9 forward-MPS boundary run, and its negative peak-recovery
+evidence. Step 10 repeats the same 12-cell protocol after batched MPS sampling
+under
+[`fork-m3pro-20260716-step10-batched-mps-sampling/`](assets/benchmarks-frozen/fork-m3pro-20260716-step10-batched-mps-sampling/).
+
+Pre-rename raw evidence retains its original schema and is not rewritten.
+Current README-facing plots with MettleQ labels are reproducibly rendered from
+those frozen rows under
+[`fork-m3pro-20260716-mettleq-relabel/`](assets/benchmarks-frozen/fork-m3pro-20260716-mettleq-relabel/).
 
 Recreate the current sweep and comparison:
 
 ```bash
-unset MLXQ_METAL_CHECKPOINT_BUDGET_MB MLXQ_DENSE_ONLY
+unset METTLEQ_METAL_CHECKPOINT_BUDGET_MB METTLEQ_DENSE_ONLY
 PYTHONPATH=src caffeinate -i .venv/bin/python tools/shader_suite_sweep.py \
   --outdir bench/runs/shader_sweep_current --qubits 25 --repeats 10
 
@@ -1099,7 +1224,7 @@ PYTHONPATH=src .venv/bin/python tools/plot_memory_policy_campaign.py \
   --summary bench/runs/memory_policy_current/memory_policy_summary.csv \
   --output bench/runs/memory_policy_current/memory_policy.png
 
-MLXQ_METAL_KERNELS=auto PYTHONPATH=src caffeinate -i .venv/bin/python \
+METTLEQ_METAL_KERNELS=auto PYTHONPATH=src caffeinate -i .venv/bin/python \
   tools/benchmark_sdk_adapters.py \
   --outdir bench/runs/sdk-adapters \
   --qubits 20 --steps 4 --warmups 1 --repeats 7
@@ -1108,20 +1233,20 @@ PYTHONPATH=src .venv/bin/python tools/plot_sdk_adapters.py \
   --summary bench/runs/sdk-adapters/sdk_adapter_summary.json \
   --output bench/runs/sdk-adapters/sdk_adapter_timings.png
 
-unset MLXQ_METAL_KERNELS
+unset METTLEQ_METAL_KERNELS
 PYTHONPATH=src .venv/bin/python tools/benchmark_execution_policy.py \
   --outdir bench/runs/execution-policy-pure-mlx --warmups 1 --repeats 7
 
-MLXQ_METAL_KERNELS=auto PYTHONPATH=src .venv/bin/python \
+METTLEQ_METAL_KERNELS=auto PYTHONPATH=src .venv/bin/python \
   tools/benchmark_execution_policy.py \
   --outdir bench/runs/execution-policy-metal --warmups 1 --repeats 7
 
-MLXQ_METAL_KERNELS=auto PYTHONPATH=src .venv/bin/python \
+METTLEQ_METAL_KERNELS=auto PYTHONPATH=src .venv/bin/python \
   tools/benchmark_sdk_method_matrix.py \
   --outdir bench/runs/sdk-method-matrix \
   --qubits 20 --steps 2 --warmups 1 --repeats 7
 
-unset MLXQ_METAL_KERNELS
+unset METTLEQ_METAL_KERNELS
 PYTHONPATH=src caffeinate -i .venv/bin/python \
   tools/benchmark_mps_limits.py \
   --outdir bench/runs/mps-limits-step8 \
@@ -1140,9 +1265,9 @@ PYTHONPATH=src caffeinate -i .venv/bin/python \
 Transient runs belong under `bench/runs/`. Promote only reviewed evidence to
 `assets/benchmarks-frozen/`; keep historical sample bundles immutable.
 
-## QuantumStudio
+## MettleQ Studio
 
-QuantumStudio is the desktop companion for launching runs, monitoring progress,
+MettleQ Studio is the desktop companion for launching runs, monitoring progress,
 viewing results, and exporting artifacts.
 
 ```bash
@@ -1161,12 +1286,12 @@ Build local UI artifacts with:
 ```
 
 <details>
-<summary><strong>Show the QuantumStudio gallery</strong></summary>
+<summary><strong>Show the MettleQ Studio gallery</strong></summary>
 
-![QuantumStudio run view](quantumstudio/assets/screenshots/screen001.png)
-![QuantumStudio circuit view](quantumstudio/assets/screenshots/screen002.png)
-![QuantumStudio dashboard](quantumstudio/assets/screenshots/screen003.png)
-![QuantumStudio results view](quantumstudio/assets/screenshots/screen004.png)
+![MettleQ Studio run view](quantumstudio/assets/screenshots/screen001.png)
+![MettleQ Studio circuit view](quantumstudio/assets/screenshots/screen002.png)
+![MettleQ Studio dashboard](quantumstudio/assets/screenshots/screen003.png)
+![MettleQ Studio results view](quantumstudio/assets/screenshots/screen004.png)
 
 </details>
 
@@ -1174,8 +1299,9 @@ Build local UI artifacts with:
 
 | Path | Purpose |
 | --- | --- |
-| `src/mlxq/` | Simulator, gates, statevector, MPS, QASM, QML wrapper, execution plans, and Metal shaders |
-| `src/mlxq/integrations/` | Shared adapter layer, Qiskit `BackendV2`, and PennyLane device plugin |
+| `src/mettleq/` | Simulator, gates, statevector, MPS, QASM, QML wrapper, execution plans, and Metal shaders |
+| `src/mettleq/integrations/` | Shared adapter layer, Qiskit `BackendV2`, and PennyLane device plugin |
+| `src/mettleq/datasets/` | Published peaked-circuit input, integrity metadata, attribution, and third-party license |
 | `src/tests/` | Simulator, algorithm, correctness, protocol, and Metal tests |
 | `tools/` | GPU profiler, sweep runners, SDK benchmark, comparison plots, and supporting utilities |
 | `bench.sh` | Main benchmark launcher |
@@ -1196,7 +1322,7 @@ Build local UI artifacts with:
 # Simulator only
 python -m pytest src/tests -q
 
-# QuantumStudio backend only
+# MettleQ Studio backend only
 python -m pytest quantumstudio/tests -q
 
 # One targeted module
@@ -1208,7 +1334,7 @@ test run should leave `git status --short` unchanged.
 
 ## Citation
 
-The original project citation remains:
+The original Qupertino project citation remains:
 
 ```bibtex
 @software{kashani_qupertino_2026,
@@ -1220,11 +1346,25 @@ The original project citation remains:
 }
 ```
 
+For this independent fork:
+
+```bibtex
+@software{sharma_mettleq_2026,
+  author       = {Sharma, Monit},
+  title        = {MettleQ: Trustworthy Local Quantum Simulation for Apple Silicon},
+  year         = {2026},
+  url          = {https://github.com/MonitSharma/MettleQ},
+  note         = {Independent fork of Qupertino}
+}
+```
+
 The associated technical report is self-published but unpublished; its PDF and
 LaTeX source are not distributed in this repository.
 
 ## License
 
-Qupertino / QuantumStudio is free and open source under the [MIT License](LICENSE).
+MettleQ / MettleQ Studio is free and open source under the [MIT License](LICENSE).
 The source and compiled macOS binaries may be used, modified, and redistributed,
-including commercially, under the license terms.
+including commercially, under the license terms. The vendored P9 benchmark
+input is covered separately by the Apache License 2.0 and attribution stored in
+[`src/mettleq/datasets/`](src/mettleq/datasets/).

@@ -20,7 +20,7 @@ Future<void> main() async {
     () {
       WidgetsFlutterBinding.ensureInitialized();
       _configureGlobalErrorHandling();
-      runApp(const QuantumStudioApp());
+      runApp(const MettleQStudioApp());
     },
     (error, stackTrace) {
       logger.error('zone', 'Unhandled async exception: $error\n$stackTrace');
@@ -54,14 +54,14 @@ void _configureGlobalErrorHandling() {
   };
 }
 
-class QuantumStudioApp extends StatefulWidget {
-  const QuantumStudioApp({super.key});
+class MettleQStudioApp extends StatefulWidget {
+  const MettleQStudioApp({super.key});
 
   @override
-  State<QuantumStudioApp> createState() => _QuantumStudioAppState();
+  State<MettleQStudioApp> createState() => _MettleQStudioAppState();
 }
 
-class _QuantumStudioAppState extends State<QuantumStudioApp> {
+class _MettleQStudioAppState extends State<MettleQStudioApp> {
   @override
   void initState() {
     super.initState();
@@ -82,7 +82,7 @@ class _QuantumStudioAppState extends State<QuantumStudioApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Qupertino',
+      title: 'MettleQ',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -136,7 +136,7 @@ class _MainShellState extends State<MainShell>
       onExitRequested: _handleExitRequested,
     );
     unawaited(_initializeBackend());
-    logger.info('main', 'Qupertino started');
+    logger.info('main', 'MettleQ started');
   }
 
   @override

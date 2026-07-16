@@ -5,11 +5,11 @@ import random
 
 import mlx.core as mx
 
-from mlxq.mlxQdevice import Device
-from mlxq.mlxQgates import RX, RZ, CNOT
-from mlxq.mlxQsim import StateVectorSimulator
-from mlxq.mps_state import MPSState, MPSOptions
-from mlxq.mlxQpretty import info, table
+from mettleq.mlxQdevice import Device
+from mettleq.mlxQgates import RX, RZ, CNOT
+from mettleq.mlxQsim import StateVectorSimulator
+from mettleq.mps_state import MPSState, MPSOptions
+from mettleq.mlxQpretty import info, table
 
 
 def _close_vec(a, b, tol=1e-5):
@@ -53,7 +53,7 @@ def test_mps_tebd_tfim_single_step():
     # Build expected SV result
     dev_sv = Device(n, backend='sv')
     # Sequential sweep: ZZ(i,i+1) for i=0..n-2, then RX on all
-    from mlxq.mlxQgates import X as _X  # just to ensure module load
+    from mettleq.mlxQgates import X as _X  # just to ensure module load
     # Two-qubit ZZ phase gate
     import math
     def zz_phase(theta: float):
@@ -119,7 +119,7 @@ def test_mps_long_range_ising_single_step():
     info("MPS vs SV for long-range Ising (single step)")
     n = 5
     import math
-    from mlxq.mlxQgates import RX
+    from mettleq.mlxQgates import RX
     # Build one-step operator schedule: only ZZ pairs for a small dt
     dt = 0.05; J = 0.3; alpha = 2.0
     def zz_phase(theta: float):
@@ -153,8 +153,8 @@ def test_mps_ladder_heisenberg_single_step():
     n = 4  # 2x2 ladder
     import math
     J = 0.2; Jr = 0.15; dt = 0.05
-    from mlxq.mlxQgates import X as _X  # ensure gates module loaded
-    from mlxq.bench import _xx_phase_gate as XX, _yy_phase_gate as YY, _zz_phase_gate as ZZ
+    from mettleq.mlxQgates import X as _X  # ensure gates module loaded
+    from mettleq.bench import _xx_phase_gate as XX, _yy_phase_gate as YY, _zz_phase_gate as ZZ
     Ux_leg = XX(-dt*J); Uy_leg = YY(-dt*J); Uz_leg = ZZ(-dt*J)
     Ux_rung = XX(-dt*Jr); Uy_rung = YY(-dt*Jr); Uz_rung = ZZ(-dt*Jr)
     # SV reference
@@ -200,9 +200,9 @@ def test_mps_mpo_xx_single_step():
 def test_mps_early_stop_flag(monkeypatch):
     """Bench simulate_heisenberg with small early-stop bmax triggers early_stop flag."""
     info("MPS early-stop flag (heisenberg)")
-    from mlxq.bench import simulate_heisenberg
-    monkeypatch.setenv('MLXQ_BACKEND', 'mps')
-    monkeypatch.setenv('MLXQ_MPS_EARLY_STOP_BMAX', '1')  # very small to trigger quickly
+    from mettleq.bench import simulate_heisenberg
+    monkeypatch.setenv('METTLEQ_BACKEND', 'mps')
+    monkeypatch.setenv('METTLEQ_MPS_EARLY_STOP_BMAX', '1')  # very small to trigger quickly
     res = simulate_heisenberg(6, trotter_steps=20)
     m = res.get('mps', {})
     assert isinstance(m, dict) and m.get('early_stop', False)
@@ -211,12 +211,12 @@ def test_mps_early_stop_flag(monkeypatch):
 def test_mps_bonds_csv_emitted(tmp_path, monkeypatch):
     """A tiny MPS scaling run emits bonds CSV and summary CSV."""
     info("MPS bonds CSV emission (time_evolution n=2)")
-    from mlxq.bench import run_scaling_benchmark
+    from mettleq.bench import run_scaling_benchmark
     out_dir = tmp_path / 'bench_test_unit'
-    monkeypatch.setenv('MLXQ_BACKEND', 'mps')
-    monkeypatch.setenv('MLXQ_SAVE_PLOTS', '0')
-    monkeypatch.setenv('MLXQ_MPS_DMAX', '32')
-    monkeypatch.setenv('MLXQ_MPS_EPS', '1e-10')
+    monkeypatch.setenv('METTLEQ_BACKEND', 'mps')
+    monkeypatch.setenv('METTLEQ_SAVE_PLOTS', '0')
+    monkeypatch.setenv('METTLEQ_MPS_DMAX', '32')
+    monkeypatch.setenv('METTLEQ_MPS_EPS', '1e-10')
     run_scaling_benchmark('time_evolution', [2], simulate_cap=2, out_prefix=str(out_dir))
     bonds_csv = out_dir / 'time_evolution_mps_n2_bonds.csv'
     summary_csv = out_dir / 'time_evolution_mps_summary.csv'

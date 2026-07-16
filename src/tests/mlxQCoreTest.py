@@ -10,21 +10,21 @@ from datetime import datetime
 import mlx.core as mx
 import pytest
 
-from mlxq.mlxQsim import StateVectorSimulator, qft, iqft
-from mlxq.mlxQgates import H, X, Y, Z, I, RX, RY, RZ, SX, S, SDG, T, TDG, PhaseShift, U2, U3, SWAP, iSWAP, CNOT, CZ, CPHASE, CRX, CRY, CRZ, Toffoli, Fredkin
-from mlxq.mlxQtensor import kron
-from mlxq.mlxQobservables import expectation_value, is_unitary, pauli_decomposition_2x2, exp_i_pauli, pauli_strings_commute_words, is_hermitian, commutator
-from mlxq.mlxQdevice import Device
-from mlxq.mlxQqasm import QASMParseError, parse_qasm_file
-from mlxq.paths import qasm_local_path
-from mlxq.mlxQpretty import info, success, warn, error, table, console
-from mlxq.mlxQmetrics import cpu_seconds, peak_rss_mb, now_ms
-from mlxq.mlxQstates import bell_state, ghz_state, computational_basis, random_state, one_state, y_plus_state, y_minus_state, uniform_superposition, spin_coherent, to_bloch_vector, w_state, custom_state, state_overlap, max_mixed
-from mlxq.mlxQinformation import proj, ptrace, ptranspose, purity, entropy_qubit, concurrence_pure, negativity_pure, operator_to_vector, vector_to_operator, stacked_index, unstacked_index, spre, spost
-from mlxq.mlxQchannels import apply_kraus, depolarizing_kraus, amplitude_damping_kraus, bitflip_kraus, choi_from_kraus
-from mlxq.mlxQspin import Sx, Sy, Sz, hamiltonian_from_field, unitary_time_evolution
-from mlxq.mlxQdraw import circuit_ascii, random_circuit, circuit_mpl
-from mlxq.mlxQquantikz import circuit_to_quantikz
+from mettleq.mlxQsim import StateVectorSimulator, qft, iqft
+from mettleq.mlxQgates import H, X, Y, Z, I, RX, RY, RZ, SX, S, SDG, T, TDG, PhaseShift, U2, U3, SWAP, iSWAP, CNOT, CZ, CPHASE, CRX, CRY, CRZ, Toffoli, Fredkin
+from mettleq.mlxQtensor import kron
+from mettleq.mlxQobservables import expectation_value, is_unitary, pauli_decomposition_2x2, exp_i_pauli, pauli_strings_commute_words, is_hermitian, commutator
+from mettleq.mlxQdevice import Device
+from mettleq.mlxQqasm import QASMParseError, parse_qasm_file
+from mettleq.paths import qasm_local_path
+from mettleq.mlxQpretty import info, success, warn, error, table, console
+from mettleq.mlxQmetrics import cpu_seconds, peak_rss_mb, now_ms
+from mettleq.mlxQstates import bell_state, ghz_state, computational_basis, random_state, one_state, y_plus_state, y_minus_state, uniform_superposition, spin_coherent, to_bloch_vector, w_state, custom_state, state_overlap, max_mixed
+from mettleq.mlxQinformation import proj, ptrace, ptranspose, purity, entropy_qubit, concurrence_pure, negativity_pure, operator_to_vector, vector_to_operator, stacked_index, unstacked_index, spre, spost
+from mettleq.mlxQchannels import apply_kraus, depolarizing_kraus, amplitude_damping_kraus, bitflip_kraus, choi_from_kraus
+from mettleq.mlxQspin import Sx, Sy, Sz, hamiltonian_from_field, unitary_time_evolution
+from mettleq.mlxQdraw import circuit_ascii, random_circuit, circuit_mpl
+from mettleq.mlxQquantikz import circuit_to_quantikz
 
 
 def close(a, b, tol=1e-5):
@@ -320,7 +320,7 @@ def run_all():
     ]
 
     # Optional limit for dev runs
-    limit_env = os.environ.get('MLXQ_TEST_MAX')
+    limit_env = os.environ.get('METTLEQ_TEST_MAX')
     if limit_env:
         try:
             limit = int(limit_env)
@@ -969,7 +969,7 @@ def test_eigenstates_basic_xyz():
 
 def test_multictrlx_1_equals_cnot_matrix():
     info("MCX(1) equals CNOT")
-    from mlxq.gates import MultiControlledX
+    from mettleq.gates import MultiControlledX
     M = MultiControlledX(1)
     console.print(f"  • max|MCX1-CNOT| = [bold]{float(mx.max(mx.abs(M - CNOT())).item()):.2e}[/bold]")
     assert mat_close(M, CNOT(), 1e-6)
@@ -996,7 +996,7 @@ def test_ry_additivity():
 def test_crx_zero_is_identity():
     info("CRX(0) = I⊗I")
     Id2 = kron(I(), I())
-    from mlxq.gates import CRX
+    from mettleq.gates import CRX
     M = CRX(0.0)
     console.print(f"  • max|CRX(0)-I| = [bold]{float(mx.max(mx.abs(M-Id2)).item()):.2e}[/bold]")
     assert mat_close(M, Id2, 1e-6)
@@ -1005,7 +1005,7 @@ def test_crx_zero_is_identity():
 def test_cry_zero_is_identity():
     info("CRY(0) = I⊗I")
     Id2 = kron(I(), I())
-    from mlxq.gates import CRY
+    from mettleq.gates import CRY
     M = CRY(0.0)
     console.print(f"  • max|CRY(0)-I| = [bold]{float(mx.max(mx.abs(M-Id2)).item()):.2e}[/bold]")
     assert mat_close(M, Id2, 1e-6)
@@ -1014,7 +1014,7 @@ def test_cry_zero_is_identity():
 def test_crz_zero_is_identity():
     info("CRZ(0) = I⊗I")
     Id2 = kron(I(), I())
-    from mlxq.gates import CRZ
+    from mettleq.gates import CRZ
     M = CRZ(0.0)
     console.print(f"  • max|CRZ(0)-I| = [bold]{float(mx.max(mx.abs(M-Id2)).item()):.2e}[/bold]")
     assert mat_close(M, Id2, 1e-6)
@@ -1165,7 +1165,7 @@ def test_cphase_commutes_with_z_on_target():
 def test_crz_commutes_with_z_on_target():
     info("[CRZ(φ), I⊗Z] = 0")
     φ = -0.77
-    from mlxq.gates import CRZ
+    from mettleq.gates import CRZ
     CRZg = CRZ(φ)
     IZ = kron(I(), Z())
     comm = mx.matmul(CRZg, IZ) - mx.matmul(IZ, CRZg)
@@ -1339,7 +1339,7 @@ def test_qi_entropy_reduced_bell_one():
 
 def test_qi_depolarizing_channel_max_mixed():
     info("Depolarizing channel drives to maximally mixed at p=1")
-    from mlxq.states import zero_state
+    from mettleq.states import zero_state
     rho = proj(zero_state(1))
     K = depolarizing_kraus(1.0)
     out = apply_kraus(rho, K)
@@ -1424,7 +1424,7 @@ def test_qi_stacked_index_roundtrip():
 
 def test_spin_pauli_as_half():
     info("Spin-1/2: Sx=σx/2, etc. (unitarity of 2S matches Pauli)")
-    from mlxq.spin import Sx, Sy, Sz
+    from mettleq.spin import Sx, Sy, Sz
     ok = is_unitary(2.0 * Sx()) and is_unitary(2.0 * Sy()) and is_unitary(2.0 * Sz())
     console.print(f"  • ok = [bold]{ok}[/bold]")
     assert ok
@@ -1470,7 +1470,7 @@ def test_superoperator_unitary_action():
     info("vec(UρU†) = (U⊗U*) vec(ρ)")
     U = H()
     rho = proj(mx.array([1+0j,0+0j], mx.complex64))
-    from mlxq.tensor import kron
+    from mettleq.tensor import kron
     S = kron(U, mx.conjugate(U))
     lhs = mx.matmul(S, operator_to_vector(rho))
     rho2 = mx.matmul(U, mx.matmul(rho, mx.conjugate(mx.transpose(U))))
@@ -1484,7 +1484,7 @@ def test_vectorization_superoperator_identity():
     st = random_state(1, seed=5)
     rho = proj(st)
     U = RY(0.7)
-    from mlxq.tensor import kron
+    from mettleq.tensor import kron
     S = kron(U, mx.conjugate(U))
     vec_left = mx.matmul(S, operator_to_vector(rho))
     vec_right = operator_to_vector(mx.matmul(U, mx.matmul(rho, mx.conjugate(mx.transpose(U)))))
@@ -1799,7 +1799,7 @@ def test_spin_cosine_field_flip():
 
 def test_multictrlz_two_controls_phase_on_all_ones():
     info("MCZ (2 controls) applies -1 to |111> state only")
-    from mlxq.gates import MultiControlledZ
+    from mettleq.gates import MultiControlledZ
     M = MultiControlledZ(2)
     mx.eval(M)
     diag = [complex(M[i,i].item()) for i in range(8)]
@@ -1810,7 +1810,7 @@ def test_multictrlz_two_controls_phase_on_all_ones():
 
 def test_multictrlx_two_controls_flip_truth():
     info("MCX (2 controls) flips target for control state 11*")
-    from mlxq.gates import MultiControlledX
+    from mettleq.gates import MultiControlledX
     M = MultiControlledX(2)
     # Start in |110> (index 6), expect |111> (index 7)
     v_list = [0+0j]*8

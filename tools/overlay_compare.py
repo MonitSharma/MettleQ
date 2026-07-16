@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-overlay_compare.py — Overlay mlxQ CSVs with external results for visual comparison.
+overlay_compare.py — Overlay MettleQ CSVs with external results for visual comparison.
 
 Usage:
   python3 tools/overlay_compare.py \
       --ours bench/hamiltonian_simulation_data.csv \
       --ext external_hamiltonian_simulation.csv \
-      --label-ours "mlxQ (M1 Max)" \
+      --label-ours "MettleQ (Apple Silicon)" \
       --label-ext  "cuStateVec (A100)" \
       --out bench/hamiltonian_simulation_overlay.png
 
@@ -42,7 +42,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--ours', required=True)
     ap.add_argument('--ext', required=True)
-    ap.add_argument('--label-ours', default='mlxQ')
+    ap.add_argument('--label-ours', default='MettleQ')
     ap.add_argument('--label-ext', default='external')
     ap.add_argument('--ext-time-col', default='execution_time_ms')
     ap.add_argument('--ext-scale-ms', type=float, default=1.0, help='multiply ext times by this to get ms (e.g., 1000 if ext is seconds)')

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Python mlxQ benchmark launcher (explicit settings + full suite)
+# Python MettleQ benchmark launcher (explicit settings + full suite)
 # Mirrors the spirit of legacy/bench.sh but uses Python runners.
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,18 +19,18 @@ fi
 export PYTHON_BIN
 
 # Per-run output directory (can be overridden externally)
-if [[ -z "${MLXQ_BENCH_OUT_DIR:-}" ]]; then
+if [[ -z "${METTLEQ_BENCH_OUT_DIR:-}" ]]; then
   RUN_ID="run_$(date +%Y%m%d_%H%M%S)"
-  export MLXQ_BENCH_OUT_DIR="${BENCH_ROOT}/runs/${RUN_ID}"
+  export METTLEQ_BENCH_OUT_DIR="${BENCH_ROOT}/runs/${RUN_ID}"
 fi
-mkdir -p "${MLXQ_BENCH_OUT_DIR}"
+mkdir -p "${METTLEQ_BENCH_OUT_DIR}"
 mkdir -p "${BENCH_ROOT}/runs"
 if [[ -e "${BENCH_ROOT}/current" && ! -L "${BENCH_ROOT}/current" ]]; then
   echo "⚠️  ${BENCH_ROOT}/current exists and is not a symlink; leaving it unchanged."
 else
-  ln -sfn "${MLXQ_BENCH_OUT_DIR}" "${BENCH_ROOT}/current"
+  ln -sfn "${METTLEQ_BENCH_OUT_DIR}" "${BENCH_ROOT}/current"
 fi
-echo "📁 Benchmark run directory: ${MLXQ_BENCH_OUT_DIR}"
+echo "📁 Benchmark run directory: ${METTLEQ_BENCH_OUT_DIR}"
 echo "🐍 Python interpreter: ${PYTHON_BIN}"
 
 mlx_preflight() {
@@ -53,11 +53,11 @@ usage() {
 Usage: ./bench.sh [options]
 
 Options:
-  --max-qubits N               Global cap for all scaling benches (MLXQ_MAX_QUBITS)
-  --cap-<key> N                Per-benchmark cap (MLXQ_CAP_<KEY>), e.g. --cap-qft 12
-  --vendor-suite               Run grouped vendor suites (MLXQ_VENDOR_SUITE=1)
-  --algo-groups                Run grouped algorithm suites (MLXQ_ALGO_GROUPS=1)
-  --memray                     If available, record memray profiles (MLXQ_MEMRAY=1)
+  --max-qubits N               Global cap for all scaling benches (METTLEQ_MAX_QUBITS)
+  --cap-<key> N                Per-benchmark cap (METTLEQ_CAP_<KEY>), e.g. --cap-qft 12
+  --vendor-suite               Run grouped vendor suites (METTLEQ_VENDOR_SUITE=1)
+  --algo-groups                Run grouped algorithm suites (METTLEQ_ALGO_GROUPS=1)
+  --memray                     If available, record memray profiles (METTLEQ_MEMRAY=1)
   --qasm-suite                 Run OpenQASM suite (disabled by default)
   --benchpress                 Generate Benchpress-like figures only (no extra runs)
   --mqtbench                   Run MQTBench vendor group (subset we support)
@@ -68,19 +68,19 @@ Options:
   --circuit NAME               Run a single circuit by name (e.g., qaoa)
   --simulate-limit N           Cap qubits for single-circuit run
   --save-plots                 Save per-benchmark plots (default) and aggregate
-  --no-save-plots              Do not save plots (MLXQ_SAVE_PLOTS=0)
-  --repeats N                  Measured repeats per qubit point (MLXQ_BENCH_REPEATS)
-  --warmups N                  Warmup runs per qubit point, excluded from summaries (MLXQ_BENCH_WARMUPS)
+  --no-save-plots              Do not save plots (METTLEQ_SAVE_PLOTS=0)
+  --repeats N                  Measured repeats per qubit point (METTLEQ_BENCH_REPEATS)
+  --warmups N                  Warmup runs per qubit point, excluded from summaries (METTLEQ_BENCH_WARMUPS)
   --repro                      Reproducibility preset: --warmups 1 --repeats 5
-  --backend sv|mps             Choose simulation backend (env MLXQ_BACKEND)
-  --mps-dmax N                 Set MLXQ_MPS_DMAX (bond cap)
-  --mps-eps X                  Set MLXQ_MPS_EPS (truncation epsilon)
-  --mps-bmax N                 Set MLXQ_MPS_EARLY_STOP_BMAX (early-stop on bond)
-  --mps-stop-on-trunc          Stop TEBD on first truncation (MLXQ_MPS_STOP_ON_TRUNC=1)
-  --mps-pair-sweeps            Use even/odd pair-sweeps for 2q gates (MLXQ_MPS_PAIR_SWEEPS=1)
-  --mps-mpo-zz                 Use diagonal MPO for ZZ terms where supported (MLXQ_MPS_USE_MPO_ZZ=1)
-  --mps-mpo-xx                 Use basis-mapped MPO for XX terms (MLXQ_MPS_USE_MPO_XX=1)
-  --mps-mpo-yy                 Use basis-mapped MPO for YY terms (MLXQ_MPS_USE_MPO_YY=1)
+  --backend sv|mps             Choose simulation backend (env METTLEQ_BACKEND)
+  --mps-dmax N                 Set METTLEQ_MPS_DMAX (bond cap)
+  --mps-eps X                  Set METTLEQ_MPS_EPS (truncation epsilon)
+  --mps-bmax N                 Set METTLEQ_MPS_EARLY_STOP_BMAX (early-stop on bond)
+  --mps-stop-on-trunc          Stop TEBD on first truncation (METTLEQ_MPS_STOP_ON_TRUNC=1)
+  --mps-pair-sweeps            Use even/odd pair-sweeps for 2q gates (METTLEQ_MPS_PAIR_SWEEPS=1)
+  --mps-mpo-zz                 Use diagonal MPO for ZZ terms where supported (METTLEQ_MPS_USE_MPO_ZZ=1)
+  --mps-mpo-xx                 Use basis-mapped MPO for XX terms (METTLEQ_MPS_USE_MPO_XX=1)
+  --mps-mpo-yy                 Use basis-mapped MPO for YY terms (METTLEQ_MPS_USE_MPO_YY=1)
   --paper-2504                 Use paper 2504.14027 qubit schedule for supported keys (4,8,16,24,32,64,128,256; +512/1024 if cap allows)
   --qasm-max-qubits N          Cap for QASM suite only (QASM_MAX_QUBITS)
   --qasm-timeout-ms N          Timeout for QASM suite (QASM_TIMEOUT_MS)
@@ -96,7 +96,7 @@ EOF
 VENDOR_SUITE=0
 ALGO_GROUPS=0
 SAVE_PLOTS=1
-export MLXQ_SAVE_PLOTS=${MLXQ_SAVE_PLOTS:-1}
+export METTLEQ_SAVE_PLOTS=${METTLEQ_SAVE_PLOTS:-1}
 OVERRIDE_PUB_CSV=""
 OVERRIDE_VQE_CSV=""
 OVERRIDE_STEADY_CSV=""
@@ -111,14 +111,14 @@ PAPER_2504=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --max-qubits)
-      export MLXQ_MAX_QUBITS="${2:-}"
+      export METTLEQ_MAX_QUBITS="${2:-}"
       shift 2
       ;;
     --cap-*)
       key="${1#--cap-}"
       val="${2:-}"
       uc_key="$(echo "$key" | tr '[:lower:]' '[:upper:]')"
-      export MLXQ_CAP_${uc_key}="$val"
+      export METTLEQ_CAP_${uc_key}="$val"
       shift 2
       ;;
     --vendor-suite)
@@ -131,7 +131,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --memray)
-      export MLXQ_MEMRAY=1
+      export METTLEQ_MEMRAY=1
       shift
       ;;
     --qasm-suite)
@@ -148,25 +148,25 @@ while [[ $# -gt 0 ]]; do
       ;;
     --save-plots)
       SAVE_PLOTS=1
-      export MLXQ_SAVE_PLOTS=1
+      export METTLEQ_SAVE_PLOTS=1
       shift
       ;;
     --no-save-plots)
       SAVE_PLOTS=0
-      export MLXQ_SAVE_PLOTS=0
+      export METTLEQ_SAVE_PLOTS=0
       shift
       ;;
     --repeats)
-      export MLXQ_BENCH_REPEATS="${2:-}"
+      export METTLEQ_BENCH_REPEATS="${2:-}"
       shift 2
       ;;
     --warmups)
-      export MLXQ_BENCH_WARMUPS="${2:-}"
+      export METTLEQ_BENCH_WARMUPS="${2:-}"
       shift 2
       ;;
     --repro)
-      export MLXQ_BENCH_WARMUPS="${MLXQ_BENCH_WARMUPS:-1}"
-      export MLXQ_BENCH_REPEATS="${MLXQ_BENCH_REPEATS:-5}"
+      export METTLEQ_BENCH_WARMUPS="${METTLEQ_BENCH_WARMUPS:-1}"
+      export METTLEQ_BENCH_REPEATS="${METTLEQ_BENCH_REPEATS:-5}"
       shift
       ;;
     --qasm-max-qubits)
@@ -182,7 +182,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --backend)
-      export MLXQ_BACKEND="${2:-}"; shift 2 ;;
+      export METTLEQ_BACKEND="${2:-}"; shift 2 ;;
     --qubits)
       OVERRIDE_PUB_CSV="${2:-}"
       shift 2
@@ -206,21 +206,21 @@ while [[ $# -gt 0 ]]; do
     --simulate-limit)
       ONE_CAP="${2:-}"; shift 2 ;;
     --mps-dmax)
-      export MLXQ_MPS_DMAX="${2:-}"; shift 2 ;;
+      export METTLEQ_MPS_DMAX="${2:-}"; shift 2 ;;
     --mps-eps)
-      export MLXQ_MPS_EPS="${2:-}"; shift 2 ;;
+      export METTLEQ_MPS_EPS="${2:-}"; shift 2 ;;
     --mps-bmax)
-      export MLXQ_MPS_EARLY_STOP_BMAX="${2:-}"; shift 2 ;;
+      export METTLEQ_MPS_EARLY_STOP_BMAX="${2:-}"; shift 2 ;;
     --mps-stop-on-trunc)
-      export MLXQ_MPS_STOP_ON_TRUNC=1; shift ;;
+      export METTLEQ_MPS_STOP_ON_TRUNC=1; shift ;;
     --mps-pair-sweeps)
-      export MLXQ_MPS_PAIR_SWEEPS=1; shift ;;
+      export METTLEQ_MPS_PAIR_SWEEPS=1; shift ;;
     --mps-mpo-zz)
-      export MLXQ_MPS_USE_MPO_ZZ=1; shift ;;
+      export METTLEQ_MPS_USE_MPO_ZZ=1; shift ;;
     --mps-mpo-xx)
-      export MLXQ_MPS_USE_MPO_XX=1; shift ;;
+      export METTLEQ_MPS_USE_MPO_XX=1; shift ;;
     --mps-mpo-yy)
-      export MLXQ_MPS_USE_MPO_YY=1; shift ;;
+      export METTLEQ_MPS_USE_MPO_YY=1; shift ;;
     --paper-2504)
       PAPER_2504=1; shift ;;
     -h|--help)
@@ -233,14 +233,14 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Vendor suite temporarily disabled (flag is accepted but ignored)
-export MLXQ_VENDOR_SUITE=0
+export METTLEQ_VENDOR_SUITE=0
 if [[ "$ALGO_GROUPS" == "1" ]]; then
-  export MLXQ_ALGO_GROUPS=1
+  export METTLEQ_ALGO_GROUPS=1
 fi
 
 # Build canonical qubit lists (like legacy/bench.sh)
-# Global cap from MLXQ_MAX_QUBITS (default 25)
-MAX_Q="${MLXQ_MAX_QUBITS:-25}"
+# Global cap from METTLEQ_MAX_QUBITS (default 25)
+MAX_Q="${METTLEQ_MAX_QUBITS:-25}"
 BASE_LIST=(1 2 5 7 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25)
 VQE_LIST=(1 2 5 7 10 11 12 13 14 15)
 STEADY_LIST=(1 2 5 7 10 11 12)
@@ -286,11 +286,11 @@ cap_csv_to_max() {
 
 # Optional: per‑benchmark preset lists (CSV). Edit here to enforce explicit enumerations.
 # If non‑empty, these take precedence over BASE/VQE/STEADY/PUB30 defaults.
-# They are still overridden by environment MLXQ_LIST_<KEY> if provided.
+# They are still overridden by environment METTLEQ_LIST_<KEY> if provided.
 LIST25_CSV="1,2,5,7,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25"
 LIST30_CSV="${LIST25_CSV},26,27,28"
 
-# Prefilled explicit enumerations (can be overridden by MLXQ_LIST_<KEY>)
+# Prefilled explicit enumerations (can be overridden by METTLEQ_LIST_<KEY>)
 LIST_HAMILTONIAN_SIMULATION="$LIST30_CSV"
 LIST_TIME_EVOLUTION="$LIST30_CSV"
 LIST_TROTTER="$LIST30_CSV"
@@ -324,26 +324,26 @@ PUB30_CSV="$(cap_csv_to_max "$MAX_Q" "$PUB30_CSV")"
 if [[ "$PAPER_2504" == "1" ]]; then
   GRID_2504="4,8,16,24,32,64,128,256,512,1024"
   # Map paper keys to our internal keys and lists
-  export MLXQ_LIST_QFT="$GRID_2504"
-  export MLXQ_LIST_QFT_ENTANGLED="$GRID_2504"
-  export MLXQ_LIST_QFTENTANGLED="$GRID_2504"
-  export MLXQ_LIST_GHZ="$GRID_2504"
-  export MLXQ_LIST_WSTATE="$GRID_2504"
-  export MLXQ_LIST_GRAPH_STATE="$GRID_2504"
-  export MLXQ_LIST_GRAPHSTATE="$GRID_2504"
-  export MLXQ_LIST_PHASE_ESTIMATION="$GRID_2504"
-  export MLXQ_LIST_PHASE_ESTIMATION_INEXACT="$GRID_2504"
-  export MLXQ_LIST_QPEEXACT="$GRID_2504"
-  export MLXQ_LIST_QPEINEXACT="$GRID_2504"
-  export MLXQ_LIST_AE="$GRID_2504"
-  export MLXQ_LIST_QUANTUM_WALK="$GRID_2504"
-  export MLXQ_LIST_QUANTUM_WALK_VCHAIN="$GRID_2504"
-  export MLXQ_LIST_QWALK="$GRID_2504"
-  export MLXQ_LIST_RANDOM_CIRCUIT="$GRID_2504"
-  export MLXQ_LIST_RANDOM="$GRID_2504"
-  export MLXQ_LIST_REALAMP="$GRID_2504"
-  export MLXQ_LIST_SU2RAND="$GRID_2504"
-  export MLXQ_LIST_QNN="$GRID_2504"
+  export METTLEQ_LIST_QFT="$GRID_2504"
+  export METTLEQ_LIST_QFT_ENTANGLED="$GRID_2504"
+  export METTLEQ_LIST_QFTENTANGLED="$GRID_2504"
+  export METTLEQ_LIST_GHZ="$GRID_2504"
+  export METTLEQ_LIST_WSTATE="$GRID_2504"
+  export METTLEQ_LIST_GRAPH_STATE="$GRID_2504"
+  export METTLEQ_LIST_GRAPHSTATE="$GRID_2504"
+  export METTLEQ_LIST_PHASE_ESTIMATION="$GRID_2504"
+  export METTLEQ_LIST_PHASE_ESTIMATION_INEXACT="$GRID_2504"
+  export METTLEQ_LIST_QPEEXACT="$GRID_2504"
+  export METTLEQ_LIST_QPEINEXACT="$GRID_2504"
+  export METTLEQ_LIST_AE="$GRID_2504"
+  export METTLEQ_LIST_QUANTUM_WALK="$GRID_2504"
+  export METTLEQ_LIST_QUANTUM_WALK_VCHAIN="$GRID_2504"
+  export METTLEQ_LIST_QWALK="$GRID_2504"
+  export METTLEQ_LIST_RANDOM_CIRCUIT="$GRID_2504"
+  export METTLEQ_LIST_RANDOM="$GRID_2504"
+  export METTLEQ_LIST_REALAMP="$GRID_2504"
+  export METTLEQ_LIST_SU2RAND="$GRID_2504"
+  export METTLEQ_LIST_QNN="$GRID_2504"
 fi
 
 # Resolve an explicit per-benchmark qubit CSV, with env override support.
@@ -351,9 +351,9 @@ fi
 list_for() {
   local key="$1"
   local key_uc="$(echo "$key" | tr '[:lower:]' '[:upper:]')"
-  # Allow MLXQ_LIST_<KEY>="1,2,3,..." override
+  # Allow METTLEQ_LIST_<KEY>="1,2,3,..." override
   local override
-  override=$(eval echo \${MLXQ_LIST_${key_uc}:-})
+  override=$(eval echo \${METTLEQ_LIST_${key_uc}:-})
   if [[ -n "$override" ]]; then
     cap_csv_to_max "$MAX_Q" "$override"; return 0
   fi
@@ -388,9 +388,9 @@ run_bench() {
   esac
   EXECUTED+=",$key"
   echo "=== Running $key (qubits: $csv_qubits, cap: ${cap:-none}) ==="
-  "${PYTHON_BIN}" - "$key" "$csv_qubits" "${cap:-}" "$MLXQ_BENCH_OUT_DIR" <<'PY'
+  "${PYTHON_BIN}" - "$key" "$csv_qubits" "${cap:-}" "$METTLEQ_BENCH_OUT_DIR" <<'PY'
 import sys
-from mlxq.mlxQbench import run_scaling_benchmark
+from mettleq.bench import run_scaling_benchmark
 key = sys.argv[1]
 qs = [int(x) for x in sys.argv[2].split(',') if x]
 cap = int(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3] else None
@@ -401,11 +401,11 @@ PY
 
 # Resolve per-benchmark caps from env (fallback to sensible defaults)
 cap_for() {
-  # $1 is bench key (e.g., qft). Look up MLXQ_CAP_<KEY> else default
+  # $1 is bench key (e.g., qft). Look up METTLEQ_CAP_<KEY> else default
   local key_uc
   key_uc=$(echo "$1" | tr '[:lower:]' '[:upper:]')
   local val
-  val=$(eval echo \${MLXQ_CAP_${key_uc}:-})
+  val=$(eval echo \${METTLEQ_CAP_${key_uc}:-})
   if [[ -n "$val" ]]; then
     echo "$val"
     return
@@ -505,7 +505,7 @@ if [[ "$QASM_SUITE" == "1" ]]; then
   export QASM_MAX_QUBITS="${QASM_MAX_QUBITS:-18}"
   export QASM_MAX_MEM_MB="${QASM_MAX_MEM_MB:-4096}"
   "${PYTHON_BIN}" - <<'PY'
-from mlxq.mlxQbench import run_qasm_suite
+from mettleq.bench import run_qasm_suite
 run_qasm_suite()
 PY
 fi
@@ -516,7 +516,7 @@ echo "=== Generating GHZ measurement distributions (4/5/6 qubits) ==="
 "${PYTHON_BIN}" - <<'PY' || true
 import os
 from pathlib import Path
-from mlxq.mlxQdevice import Device
+from mettleq.device import Device
 import matplotlib.pyplot as plt  # type: ignore
 import platform, subprocess
 
@@ -541,7 +541,7 @@ def detect_hw():
         label = f"{gen} {var}"
     return f"{gen}_{var}", label
 
-outdir = Path(os.environ.get("MLXQ_BENCH_OUT_DIR", "bench"))
+outdir = Path(os.environ.get("METTLEQ_BENCH_OUT_DIR", "bench"))
 outdir.mkdir(parents=True, exist_ok=True)
 def ghz_ops(n):
     ops = [{"name":"H","wires":[0]}]
@@ -606,9 +606,9 @@ PY
 
 if [[ "$SAVE_PLOTS" == "1" ]]; then
   echo "=== Aggregating plots ==="
-  MLXQ_BENCH_OUT_DIR="${MLXQ_BENCH_OUT_DIR}" "${PYTHON_BIN}" "${ROOT_DIR}/src/benchmark/aggregate_plots.py" || true
+  METTLEQ_BENCH_OUT_DIR="${METTLEQ_BENCH_OUT_DIR}" "${PYTHON_BIN}" "${ROOT_DIR}/src/benchmark/aggregate_plots.py" || true
   # MPS report aggregation (if summaries exist)
-  "${PYTHON_BIN}" "${ROOT_DIR}/tools/mps_report.py" --bench "${MLXQ_BENCH_OUT_DIR}" || true
+  "${PYTHON_BIN}" "${ROOT_DIR}/tools/mps_report.py" --bench "${METTLEQ_BENCH_OUT_DIR}" || true
   if [[ "$BENCHPRESS_ONLY" == "1" ]]; then
     echo "=== Generating Benchpress-like figures ==="
     "${PYTHON_BIN}" "${ROOT_DIR}/src/benchmark/benchpress_replica.py" || true
@@ -618,7 +618,7 @@ if [[ "$SAVE_PLOTS" == "1" ]]; then
 from pathlib import Path
 import shutil
 import os
-bench = Path(os.environ.get('MLXQ_BENCH_OUT_DIR', 'bench'))
+bench = Path(os.environ.get('METTLEQ_BENCH_OUT_DIR', 'bench'))
 if not bench.is_dir():
     raise SystemExit(0)
 dests = [
@@ -630,7 +630,7 @@ for d in dests:
 patterns = [
     '*_scaling.png', '*_bonds.png',
     'all_benchmarks_comparison.png', 'all_mps_bonds_comparison.png',
-    'vis_*_side_by_side.png','vis_*_mlxq.png','vis_*_pl.png','vis_*_hist_side_by_side.png',
+    'vis_*_side_by_side.png','vis_*_mettleq.png','vis_*_pl.png','vis_*_hist_side_by_side.png',
     'vqe_convergence_*.png', 'ghz*_distribution_*.png'
 ]
 for pat in patterns:

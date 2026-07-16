@@ -1,12 +1,12 @@
 import numpy as np
 import pytest
 
-import mlxq.planning as planning
-from mlxq.device import Device
-from mlxq.gates import CNOT, H
-from mlxq.integrations import _common
-from mlxq.mps_accuracy import MPSAccuracyError
-from mlxq.mps_state import MPSOptions
+import mettleq.planning as planning
+from mettleq.device import Device
+from mettleq.gates import CNOT, H
+from mettleq.integrations import _common
+from mettleq.mps_accuracy import MPSAccuracyError
+from mettleq.mps_state import MPSOptions
 
 
 def _local_chain(n_qubits):

@@ -2,9 +2,10 @@ import numpy as np
 import pytest
 import mlx.core as mx
 
-from mlxq.gates import CNOT, CRY, H, RX, RY, RZ
-from mlxq.mps_state import MPSOptions, MPSState
-from mlxq.sim import StateVectorSimulator
+from mettleq.gates import CNOT, CRY, H, RX, RY, RZ
+from mettleq.device import Device, _pauli_pair_phase
+from mettleq.mps_state import MPSOptions, MPSState
+from mettleq.sim import StateVectorSimulator
 
 
 EXACT_MPS = MPSOptions(dmax=64, eps=0.0)
@@ -187,3 +188,67 @@ def test_explicit_canonicalization_moves_center_and_preserves_norm():
     _assert_mixed_canonical(mps, center=2)
     np.testing.assert_allclose(after, before, atol=5e-5, rtol=0.0)
     assert mps.norm() == pytest.approx(1.0, abs=2e-6)
+
+
+@pytest.mark.parametrize("routing_strategy", ["restore", "lookahead"])
+def test_specialized_routed_zz_matches_dense_statevector(routing_strategy):
+    operations = []
+    for wire, angle in enumerate((0.13, -0.29, 0.47, -0.61, 0.83)):
+        operations.append({"name": "RY", "wires": [wire], "parameters": [angle]})
+    for first, second, theta in (
+        (0, 4, 0.17),
+        (3, 1, -0.31),
+        (4, 2, 0.23),
+        (0, 3, -0.11),
+    ):
+        operations.append(
+            {"name": "ZZPHASE", "wires": [first, second], "parameters": [theta]}
+        )
+
+    sv = StateVectorSimulator(5)
+    for operation in operations:
+        wires = operation["wires"]
+        if operation["name"] == "RY":
+            sv.apply_single(RY(operation["parameters"][0]), wires[0])
+        else:
+            sv.apply_two(
+                _pauli_pair_phase("ZZPHASE", operation["parameters"][0]),
+                wires[0],
+                wires[1],
+            )
+
+    device = Device(
+        5,
+        backend="mps",
+        mps_opts=MPSOptions(
+            dmax=64,
+            eps=0.0,
+            routing_strategy=routing_strategy,
+        ),
+    )
+    device.execute(operations)
+    device.sim.restore_logical_order()
+
+    _assert_same_state(_statevector(sv), _mps_statevector(device.sim), atol=8e-5)
+    diagnostics = device.sim.truncation_diagnostics()
+    assert diagnostics["routing_logical_two_qubit_gates"] == 4
+
+
+def test_batched_mps_sampling_matches_bell_distribution_and_wire_subset():
+    mps = MPSState(3, EXACT_MPS)
+    mps.apply_single(H(), 0)
+    mps.apply_two(CNOT(), 0, 1)
+    samples = mps.sample_array(
+        4096, wires=[1, 0], rng=np.random.default_rng(153)
+    )
+    assert samples.shape == (4096, 2)
+    assert np.all(samples[:, 0] == samples[:, 1])
+    probability_one = float(samples[:, 0].mean())
+    assert probability_one == pytest.approx(0.5, abs=0.03)
+
+
+def test_batched_mps_sampling_handles_zero_shots():
+    samples = MPSState(4, EXACT_MPS).sample_array(
+        0, wires=[3, 1], rng=np.random.default_rng(153)
+    )
+    assert samples.shape == (0, 2)

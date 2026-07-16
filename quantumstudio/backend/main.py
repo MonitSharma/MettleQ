@@ -842,7 +842,7 @@ def _parse_qubits_spec(spec: str) -> List[int]:
 
 
 def _default_qubits_for(name: str, max_qubits: int) -> List[int]:
-    env_key = f"MLXQ_LIST_{name.upper()}"
+    env_key = f"METTLEQ_LIST_{name.upper()}"
     env_val = os.environ.get(env_key)
     if env_val:
         return [q for q in _parse_qubits_spec(env_val) if q <= max_qubits]
@@ -956,7 +956,7 @@ def _detect_hw_label() -> tuple[str, str]:
 def _generate_ghz_distributions(log_file) -> None:
     try:
         import matplotlib.pyplot as plt  # type: ignore
-        from mlxq.mlxQdevice import Device
+        from mettleq.device import Device
     except Exception:
         log_file.write("GHZ plot generation unavailable (missing deps).\n")
         log_file.write(traceback.format_exc())
@@ -1057,9 +1057,9 @@ def _run_job(run_id: str, payload: RunRequest) -> None:
         RUNS[run_id]["started_at"] = started_at
 
     base_env = os.environ.copy()
-    base_env["MLXQ_SAVE_PLOTS"] = "1" if payload.save_plots else "0"
-    base_env["MLXQ_BENCH_WARMUPS"] = str(payload.benchmark_warmups)
-    base_env["MLXQ_BENCH_REPEATS"] = str(payload.benchmark_repeats)
+    base_env["METTLEQ_SAVE_PLOTS"] = "1" if payload.save_plots else "0"
+    base_env["METTLEQ_BENCH_WARMUPS"] = str(payload.benchmark_warmups)
+    base_env["METTLEQ_BENCH_REPEATS"] = str(payload.benchmark_repeats)
     default_max_qubits = payload.max_qubits or 25
     run_env_overrides = {k: v for k, v in payload.env_overrides.items() if str(v).strip()}
 
@@ -1067,9 +1067,9 @@ def _run_job(run_id: str, payload: RunRequest) -> None:
     os.environ.setdefault("MPLBACKEND", "Agg")
     with log_path.open("w", encoding="utf-8") as log_file:
         try:
-            from mlxq import bench as mlxq_bench
+            from mettleq import bench as mettleq_bench
         except Exception:
-            log_file.write("Failed to import mlxq benchmarks.\n")
+            log_file.write("Failed to import mettleq benchmarks.\n")
             log_file.write(traceback.format_exc())
             exit_code = 1
         else:
@@ -1086,10 +1086,10 @@ def _run_job(run_id: str, payload: RunRequest) -> None:
 
                 env_overrides: Dict[str, Optional[str]] = {
                     **run_env_overrides,
-                    "MLXQ_BACKEND": cfg.backend or None,
-                    "MLXQ_SAVE_PLOTS": base_env.get("MLXQ_SAVE_PLOTS"),
-                    "MLXQ_BENCH_WARMUPS": base_env.get("MLXQ_BENCH_WARMUPS"),
-                    "MLXQ_BENCH_REPEATS": base_env.get("MLXQ_BENCH_REPEATS"),
+                    "METTLEQ_BACKEND": cfg.backend or None,
+                    "METTLEQ_SAVE_PLOTS": base_env.get("METTLEQ_SAVE_PLOTS"),
+                    "METTLEQ_BENCH_WARMUPS": base_env.get("METTLEQ_BENCH_WARMUPS"),
+                    "METTLEQ_BENCH_REPEATS": base_env.get("METTLEQ_BENCH_REPEATS"),
                 }
 
                 log_file.write(f"\n=== Running {cfg.name} (qubits={cfg.qubits_spec}, backend={cfg.backend}) ===\n")
@@ -1107,12 +1107,12 @@ def _run_job(run_id: str, payload: RunRequest) -> None:
                                 "QASM_SIMULATE_LIMIT": str(payload.qasm_simulate_limit) if payload.qasm_simulate_limit is not None else None,
                             }
                             with _temp_environ(qasm_env):
-                                mlxq_bench.run_qasm_suite(
+                                mettleq_bench.run_qasm_suite(
                                     csv_out=str(BENCH_DIR / "qasm_MLX_python.csv"),
                                     json_out=str(BENCH_DIR / "qasm_MLX_python.json"),
                                 )
                         else:
-                            mlxq_bench.run_scaling_benchmark(
+                            mettleq_bench.run_scaling_benchmark(
                                 cfg.name,
                                 qubits,
                                 simulate_cap=cfg.simulate_cap,
@@ -1151,7 +1151,7 @@ def _run_job(run_id: str, payload: RunRequest) -> None:
     _persist_run(run_id)
 
 
-app = FastAPI(title="QuantumStudio API", version="0.1.0")
+app = FastAPI(title="MettleQ Studio API", version="0.1.0")
 
 # CORS: Allow localhost origins for the bundled Flutter app
 # Note: Using allow_origin_regex for local development flexibility
@@ -1364,7 +1364,7 @@ async def serve_bench_asset(asset_path: str):
     except Exception:
         logger.exception("bench_asset_serve_failed path=%s", asset_path)
         raise HTTPException(status_code=404, detail="Bench asset not found")
-logger.info("QuantumStudio backend initialized (loaded %d persisted runs)", len(RUNS))
+logger.info("MettleQ Studio backend initialized (loaded %d persisted runs)", len(RUNS))
 logger.info(
     "Runtime controls: auth_enabled=%s rate_limit_enabled=%s default_limit=%d/%ds heavy_limit=%d/%ds run_limit=%d/%ds",
     bool(API_AUTH_TOKEN),
@@ -1841,7 +1841,7 @@ async def parse_qasm(request: QasmParseRequest) -> Dict[str, Any]:
     """Parse QASM content and return the circuit structure."""
     temp_path: Optional[str] = None
     try:
-        from mlxq.qasm import parse_qasm_file
+        from mettleq.qasm import parse_qasm_file
         import tempfile
 
         _validate_qasm_content_size(request.content)
@@ -1870,8 +1870,8 @@ async def visualize_qasm_ascii(request: QasmVisualizeRequest) -> Dict[str, Any]:
     """Generate ASCII circuit visualization from QASM."""
     temp_path: Optional[str] = None
     try:
-        from mlxq.qasm import parse_qasm_file
-        from mlxq.draw import circuit_ascii
+        from mettleq.qasm import parse_qasm_file
+        from mettleq.draw import circuit_ascii
         import tempfile
 
         # Get content
@@ -1909,8 +1909,8 @@ async def visualize_qasm_image(request: QasmVisualizeRequest) -> Dict[str, Any]:
     """Generate PNG circuit visualization from QASM, return as base64."""
     temp_path: Optional[str] = None
     try:
-        from mlxq.qasm import parse_qasm_file
-        from mlxq.draw import circuit_mpl
+        from mettleq.qasm import parse_qasm_file
+        from mettleq.draw import circuit_mpl
         import tempfile
         import base64
         import io

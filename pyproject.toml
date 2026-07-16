@@ -3,8 +3,8 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mlxq"
-version = "0.1.0"
+name = "mettleq"
+version = "0.2.0"
 description = "Trustworthy Apple Silicon quantum simulation with MLX and Metal"
 requires-python = ">=3.9"
 dependencies = [
@@ -51,14 +51,16 @@ baselines = [
 ]
 
 [project.entry-points."pennylane.plugins"]
-qupertino = "mlxq.integrations.pennylane:QupertinoDevice"
+mettleq = "mettleq.integrations.pennylane:MettleQDevice"
+qupertino = "mettleq.integrations.pennylane:MettleQDevice"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["mlxq*"]
+include = ["mettleq*", "mlxq*"]
 
 [tool.setuptools.package-data]
-"mlxq.integrations" = ["pennylane_capabilities.toml"]
+"mettleq.integrations" = ["pennylane_capabilities.toml"]
+"mettleq" = ["datasets/*.qasm", "datasets/*.md", "datasets/*.txt"]

@@ -6,8 +6,8 @@ import numpy as np
 import mlx.core as mx
 import pytest
 
-from mlxq.sim import StateVectorSimulator, qft
-from mlxq.device import Device
+from mettleq.sim import StateVectorSimulator, qft
+from mettleq.device import Device
 
 
 def _rand_state(n, seed=9):
@@ -19,19 +19,19 @@ def _rand_state(n, seed=9):
 
 @pytest.fixture
 def metal_env(monkeypatch):
-    monkeypatch.setenv("MLXQ_METAL_KERNELS", "1")
+    monkeypatch.setenv("METTLEQ_METAL_KERNELS", "1")
     yield
 
 
 def test_metal_qft_matches_mlx(metal_env):
     n = 8
     base = _rand_state(n)
-    os.environ.pop("MLXQ_METAL_KERNELS", None)
+    os.environ.pop("METTLEQ_METAL_KERNELS", None)
     s1 = StateVectorSimulator(n)
     s1.state = base
     qft(s1, list(range(n)))
     mx.eval(s1.state)
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     s2 = StateVectorSimulator(n)
     s2.state = base
     qft(s2, list(range(n)))
@@ -44,11 +44,11 @@ def test_metal_zz_layer_matches_mlx(metal_env):
     n = 7
     ops = [{"name": "ZZPHASE", "wires": [i, i + 1], "parameters": [-0.05]}
            for i in range(n - 1)]
-    os.environ.pop("MLXQ_METAL_KERNELS", None)
+    os.environ.pop("METTLEQ_METAL_KERNELS", None)
     d1 = Device(n)
     d1.execute(ops)
     mx.eval(d1.sim.state)
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     d2 = Device(n)
     d2.execute(ops)
     mx.eval(d2.sim.state)
@@ -68,11 +68,11 @@ def test_metal_u2_layer_grover_pattern_matches_mlx(metal_env):
         ops.append({"name": "X", "wires": [q]})
     for q in range(n - 1):
         ops.append({"name": "CZ", "wires": [q, q + 1]})
-    os.environ.pop("MLXQ_METAL_KERNELS", None)
+    os.environ.pop("METTLEQ_METAL_KERNELS", None)
     d1 = Device(n)
     d1.execute(ops)
     mx.eval(d1.sim.state)
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     d2 = Device(n)
     d2.execute(ops)
     mx.eval(d2.sim.state)
@@ -87,11 +87,11 @@ def test_metal_u2_layer_ry_rz_matches_mlx(metal_env):
     for q in range(n):
         ops.append({"name": "RY", "wires": [q], "parameters": [0.23]})
         ops.append({"name": "RZ", "wires": [q], "parameters": [-0.41]})
-    os.environ.pop("MLXQ_METAL_KERNELS", None)
+    os.environ.pop("METTLEQ_METAL_KERNELS", None)
     d1 = Device(n)
     d1.execute(ops)
     mx.eval(d1.sim.state)
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     d2 = Device(n)
     d2.execute(ops)
     mx.eval(d2.sim.state)
@@ -104,11 +104,11 @@ def test_u2_detector_skips_nonuniform_params(metal_env):
     n = 5
     ops = [{"name": "RY", "wires": [q], "parameters": [0.1 + 0.05 * q]}
            for q in range(n)]
-    os.environ.pop("MLXQ_METAL_KERNELS", None)
+    os.environ.pop("METTLEQ_METAL_KERNELS", None)
     d1 = Device(n)
     d1.execute(ops)
     mx.eval(d1.sim.state)
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     d2 = Device(n)
     d2.execute(ops)
     mx.eval(d2.sim.state)
@@ -122,11 +122,11 @@ def test_metal_diag_layer_matches_mlx(metal_env):
     ops = [{"name": "CZ", "wires": [q, q + 1]} for q in range(n - 1)]
     ops += [{"name": "CPHASE", "wires": [q, (q + 1) % n], "parameters": [0.37]}
             for q in range(n)]
-    os.environ.pop("MLXQ_METAL_KERNELS", None)
+    os.environ.pop("METTLEQ_METAL_KERNELS", None)
     d1 = Device(n)
     d1.execute(ops)
     mx.eval(d1.sim.state)
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     d2 = Device(n)
     d2.execute(ops)
     mx.eval(d2.sim.state)
@@ -141,11 +141,11 @@ def test_metal_xor_affine_matches_mlx(metal_env):
     ops += [{"name": "CNOT", "wires": [q, q + 1]} for q in range(n - 1)]
     ops += [{"name": "X", "wires": [2]}, {"name": "SWAP", "wires": [1, 4]},
             {"name": "CNOT", "wires": [6, 0]}, {"name": "X", "wires": [5]}]
-    os.environ.pop("MLXQ_METAL_KERNELS", None)
+    os.environ.pop("METTLEQ_METAL_KERNELS", None)
     d1 = Device(n)
     d1.execute(ops)
     mx.eval(d1.sim.state)
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     d2 = Device(n)
     d2.execute(ops)
     mx.eval(d2.sim.state)
@@ -156,7 +156,7 @@ def test_metal_xor_affine_matches_mlx(metal_env):
 def test_xor_affine_composition_inverse():
     """compose_inverse_affine really inverts the block on random bases."""
     import numpy as np
-    from mlxq.shaders import compose_inverse_affine
+    from mettleq.shaders import compose_inverse_affine
     n = 6
     ops = ([{"name": "CNOT", "wires": [q, q + 1]} for q in range(n - 1)]
            + [{"name": "X", "wires": [3]}, {"name": "SWAP", "wires": [0, 5]},
@@ -196,11 +196,11 @@ def test_metal_u2_list_layer_matches_mlx(metal_env):
         ops.append({"name": "RZ", "wires": [q], "parameters": [0.2 - 0.03 * q]})
     for q in range(n):
         ops.append({"name": "CNOT", "wires": [q, (q + 1) % n]})
-    os.environ.pop("MLXQ_METAL_KERNELS", None)
+    os.environ.pop("METTLEQ_METAL_KERNELS", None)
     d1 = Device(n)
     d1.execute(ops)
     mx.eval(d1.sim.state)
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     d2 = Device(n)
     d2.execute(ops)
     mx.eval(d2.sim.state)
@@ -217,11 +217,11 @@ def test_u2_window_identity_collapse(metal_env):
         ops.append({"name": "H", "wires": [q]})
         ops.append({"name": "H", "wires": [q]})
     ops.append({"name": "CZ", "wires": [0, 1]})
-    os.environ.pop("MLXQ_METAL_KERNELS", None)
+    os.environ.pop("METTLEQ_METAL_KERNELS", None)
     d1 = Device(n)
     d1.execute(ops)
     mx.eval(d1.sim.state)
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     d2 = Device(n)
     d2.execute(ops)
     mx.eval(d2.sim.state)
@@ -237,11 +237,11 @@ def test_u2_window_small_angle_not_dropped(metal_env):
     ops = [{"name": "RZ", "wires": [q], "parameters": [theta]}
            for q in range(n)]
     ops = ops * 3  # 18 ops > n//2+1 so the product path engages
-    os.environ.pop("MLXQ_METAL_KERNELS", None)
+    os.environ.pop("METTLEQ_METAL_KERNELS", None)
     d1 = Device(n)
     d1.execute(ops)
     mx.eval(d1.sim.state)
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     d2 = Device(n)
     d2.execute(ops)
     mx.eval(d2.sim.state)
@@ -267,11 +267,11 @@ def test_metal_diag_weighted_qpe_matches_mlx(metal_env):
             ops.append({"name": "CPHASE", "wires": [kk, jj],
                         "parameters": [-math.pi / (2 ** (kk - jj))]})
         ops.append({"name": "H", "wires": [jj]})
-    os.environ.pop("MLXQ_METAL_KERNELS", None)
+    os.environ.pop("METTLEQ_METAL_KERNELS", None)
     d1 = Device(n)
     d1.execute(ops)
     mx.eval(d1.sim.state)
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     d2 = Device(n)
     d2.execute(ops)
     mx.eval(d2.sim.state)
@@ -287,11 +287,11 @@ def test_metal_xx_yy_layers_match_mlx(metal_env):
             for q in range(n - 1)]
     ops += [{"name": "YYPHASE", "wires": [q, q + 1], "parameters": [0.11]}
             for q in range(n - 1)]
-    os.environ.pop("MLXQ_METAL_KERNELS", None)
+    os.environ.pop("METTLEQ_METAL_KERNELS", None)
     d1 = Device(n)
     d1.execute(ops)
     mx.eval(d1.sim.state)
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     d2 = Device(n)
     d2.execute(ops)
     mx.eval(d2.sim.state)
@@ -307,11 +307,11 @@ def test_metal_zz_weighted_matches_mlx(metal_env):
         for b in range(a + 1, n):
             ops.append({"name": "ZZPHASE", "wires": [a, b],
                         "parameters": [0.3 / (b - a) ** 2]})
-    os.environ.pop("MLXQ_METAL_KERNELS", None)
+    os.environ.pop("METTLEQ_METAL_KERNELS", None)
     d1 = Device(n)
     d1.execute(ops)
     mx.eval(d1.sim.state)
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     d2 = Device(n)
     d2.execute(ops)
     mx.eval(d2.sim.state)
@@ -330,11 +330,11 @@ def test_metal_diag_weighted_all_distinct_angles(metal_env):
     ops = [{"name": "CPHASE", "wires": [a, b],
             "parameters": [0.05 + 0.019 * k]}      # all distinct
            for k, (a, b) in enumerate(bonds)]
-    os.environ.pop("MLXQ_METAL_KERNELS", None)
+    os.environ.pop("METTLEQ_METAL_KERNELS", None)
     d1 = Device(n)
     d1.execute(ops)
     mx.eval(d1.sim.state)
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     d2 = Device(n)
     d2.execute(ops)
     mx.eval(d2.sim.state)
@@ -350,11 +350,11 @@ def test_metal_zz_weighted_all_distinct_angles(metal_env):
     ops = [{"name": "ZZPHASE", "wires": [a, b],
             "parameters": [-0.04 + 0.017 * k]}     # all distinct
            for k, (a, b) in enumerate(bonds)]
-    os.environ.pop("MLXQ_METAL_KERNELS", None)
+    os.environ.pop("METTLEQ_METAL_KERNELS", None)
     d1 = Device(n)
     d1.execute(ops)
     mx.eval(d1.sim.state)
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     d2 = Device(n)
     d2.execute(ops)
     mx.eval(d2.sim.state)
@@ -373,11 +373,11 @@ def test_metal_qft_stage_detector_matches_mlx(metal_env):
         for kk in range(jj + 1, n):
             ops.append({"name": "CPHASE", "wires": [kk, jj],
                         "parameters": [math.pi / (2 ** (kk - jj))]})
-    os.environ.pop("MLXQ_METAL_KERNELS", None)
+    os.environ.pop("METTLEQ_METAL_KERNELS", None)
     d1 = Device(n)
     d1.execute(ops)
     mx.eval(d1.sim.state)
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     d2 = Device(n)
     d2.execute(ops)
     mx.eval(d2.sim.state)
@@ -399,11 +399,11 @@ def test_metal_iqft_stage_detector_matches_mlx(metal_env):
             ops.append({"name": "CPHASE", "wires": [kk, jj],
                         "parameters": [-math.pi / (2 ** (kk - jj))]})
         ops.append({"name": "H", "wires": [jj]})
-    os.environ.pop("MLXQ_METAL_KERNELS", None)
+    os.environ.pop("METTLEQ_METAL_KERNELS", None)
     d1 = Device(n)
     d1.execute(ops)
     mx.eval(d1.sim.state)
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     d2 = Device(n)
     d2.execute(ops)
     mx.eval(d2.sim.state)

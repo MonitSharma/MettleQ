@@ -37,8 +37,8 @@ WL_LABELS = {
 }
 WL_ORDER = ["qft", "qaoa_ring", "tfim_trotter", "phase_estimation",
             "grover_proxy", "ghz"]
-BACKENDS = [("mlxq_metal", "Qupertino Metal", C_METAL),
-            ("mlxq", "Qupertino MLX", C_MLX),
+BACKENDS = [("mettleq_metal", "MettleQ Metal", C_METAL),
+            ("mettleq", "MettleQ MLX", C_MLX),
             ("aer", "Qiskit Aer CPU", C_AER),
             ("pennylane", "PennyLane", C_PL)]
 
@@ -76,7 +76,8 @@ def _read_summary(path):
     d = {}
     with open(path) as fh:
         for r in csv.DictReader(fh):
-            d[(r["benchmark"], int(r["qubits"]), r["backend"])] = float(r["mean_ms"])
+            backend = r["backend"].replace("mlxq", "mettleq")
+            d[(r["benchmark"], int(r["qubits"]), backend)] = float(r["mean_ms"])
     return d
 
 
@@ -90,7 +91,7 @@ def chart_4way(summary, out):
         vals = [summary[(wl, 25, key)] for wl in WL_ORDER]
         bars = ax.bar(x + (i - 1.5) * w, vals, w, label=label, color=color,
                       edgecolor=BG, linewidth=0.5)
-        if key == "mlxq_metal":
+        if key == "mettleq_metal":
             for b, v in zip(bars, vals):
                 ax.annotate(f"{v:.0f}" if v >= 10 else f"{v:.0f}",
                             (b.get_x() + b.get_width() / 2, v), ha="center",

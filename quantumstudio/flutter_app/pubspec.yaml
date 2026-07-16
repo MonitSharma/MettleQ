@@ -1,5 +1,5 @@
-name: quantum_studio
-description: "Qupertino - macOS quantum benchmark studio (MLX + Metal shaders)"
+name: mettleq_studio
+description: "MettleQ - macOS quantum benchmark studio (MLX + Metal shaders)"
 publish_to: 'none'
 version: 1.0.2+3
 

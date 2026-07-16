@@ -1,6 +1,6 @@
-QuantumStudio Binary Distribution — MIT License
+MettleQ Studio Binary Distribution — MIT License
 
-The compiled binary distribution of QuantumStudio (DMG and app bundles) is
+The compiled binary distribution of MettleQ Studio (DMG and app bundles) is
 distributed under the same MIT License as the source code. There is no
 separate or restricted binary license, and no purchase or license key is
 required.

@@ -1,7 +1,7 @@
 import os
 
-from mlxq.mlxQpretty import info, warn, success, table
-from mlxq.mlxQdevice import Device
+from mettleq.mlxQpretty import info, warn, success, table
+from mettleq.mlxQdevice import Device
 
 
 def _ghz_ops(n: int):
@@ -78,7 +78,7 @@ def _pl_counts(ops, shots: int):
 
 
 def test_measurement_parity_ghz_n3(tmp_path):
-    info("Measurement parity: GHZ(3) mlxQ vs PennyLane/QuTiP")
+    info("Measurement parity: GHZ(3) MettleQ vs PennyLane/QuTiP")
     n = 3
     shots = 1000
     ops = _ghz_ops(n)
@@ -96,15 +96,15 @@ def test_measurement_parity_ghz_n3(tmp_path):
     keys = sorted(set(list(p_mlx.keys()) + list(p_ref.keys())))
     for k in keys:
         rows.append((k, f"{p_mlx.get(k,0.0):.3f}", f"{p_ref.get(k,0.0):.3f}"))
-    table("GHZ(3) measurement parity (mlxQ vs ref)", ("bitstring","mlxQ","ref"), rows)
+    table("GHZ(3) measurement parity (MettleQ vs ref)", ("bitstring","MettleQ","ref"), rows)
     # Save side-by-side histogram if matplotlib is available
     try:
         import matplotlib.pyplot as plt  # type: ignore
         keys = sorted(set(list(c_mlx.keys()) + list(c_ref.keys())))
         fig, axes = plt.subplots(1, 2, figsize=(8, 3))
-        # mlxQ counts
+        # MettleQ counts
         axes[0].bar(keys, [c_mlx.get(k, 0) for k in keys], color='#6cc96c')
-        axes[0].set_title('mlxQ counts')
+        axes[0].set_title('MettleQ counts')
         axes[0].set_xlabel('bitstring'); axes[0].set_ylabel('counts')
         # ref counts
         axes[1].bar(keys, [c_ref.get(k, 0) for k in keys], color='#5ba0e0')

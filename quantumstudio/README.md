@@ -1,7 +1,8 @@
-# QuantumStudio
+# MettleQ Studio
 
 MLX Quantum Benchmarking Suite for Apple Silicon.
-License: Source code is licensed under Business Source License 1.1 (BSL-1.1), and binary distributions are licensed under the QuantumStudio Binary Distribution License. See LICENSE, BINARY-LICENSE.txt, and the website License page.
+License: Source code and binary distributions are covered by the MIT License.
+See `LICENSE`, `LICENSE.md`, and `BINARY-LICENSE.txt`.
 The codebase is cross-platform, but we currently provide [macOS binaries only](https://qneura.ai/apps.html).
 
 ## Quick Start
@@ -48,39 +49,37 @@ Example Claude Code config:
 
 ## License
 
-Source code is licensed under the [Business Source License 1.1](LICENSE).
-Compiled binaries are subject to the [Binary Distribution License](BINARY-LICENSE.txt).
-License overview is available in [LICENSE.md](LICENSE.md).
-Website legal pages: [privacy](../../../QuantumStudioWEB/privacy.html), [terms](../../../QuantumStudioWEB/terms.html), [license](../../../QuantumStudioWEB/license.html).
+Source code is licensed under the [MIT License](LICENSE).
+Compiled binaries use the same terms, as recorded in
+[BINARY-LICENSE.txt](BINARY-LICENSE.txt). The overview is in
+[LICENSE.md](LICENSE.md).
 
 ## Unsigned DMG / Gatekeeper
 
-As of February 21, 2026, the QuantumStudio DMG may be distributed without Apple notarization.
+As of February 21, 2026, the MettleQ Studio DMG may be distributed without Apple notarization.
 
-1. Open the DMG and drag QuantumStudio to `Applications`.
+1. Open the DMG and drag MettleQ to `Applications`.
 2. Remove the quarantine attribute by running one of these commands in Terminal:
    ```bash
    # If installed to /Applications (system-wide):
-   xattr -d com.apple.quarantine /Applications/QuantumStudio.app
+   xattr -d com.apple.quarantine /Applications/MettleQ.app
 
    # If installed to ~/Applications (user-only):
-   xattr -d com.apple.quarantine ~/Applications/QuantumStudio.app
+   xattr -d com.apple.quarantine ~/Applications/MettleQ.app
    ```
-3. In `Applications`, right-click `QuantumStudio.app` and select `Open`.
+3. In `Applications`, right-click `MettleQ.app` and select `Open`.
 4. If macOS still blocks launch, go to `System Settings -> Privacy & Security -> Open Anyway`, then confirm with password or Touch ID.
-
-For commercial licensing, contact solomon@qneura.ai.
 
 ## Screenshots
 
-### QuantumStudio UI
+### MettleQ Studio UI
 
-![QuantumStudio Circuits QASM](assets/screenshots/quantumstudio-circuits-qasm-2026-05-06.jpeg)
-![QuantumStudio Screen 1](assets/screenshots/screen001.png)
-![QuantumStudio Screen 2](assets/screenshots/screen002.png)
-![QuantumStudio Screen 3](assets/screenshots/screen003.png)
-![QuantumStudio Screen 4](assets/screenshots/screen004.png)
-![QuantumStudio Screen 5](assets/screenshots/screen005.png)
+![MettleQ Studio Circuits QASM](assets/screenshots/quantumstudio-circuits-qasm-2026-05-06.jpeg)
+![MettleQ Studio Screen 1](assets/screenshots/screen001.png)
+![MettleQ Studio Screen 2](assets/screenshots/screen002.png)
+![MettleQ Studio Screen 3](assets/screenshots/screen003.png)
+![MettleQ Studio Screen 4](assets/screenshots/screen004.png)
+![MettleQ Studio Screen 5](assets/screenshots/screen005.png)
 
 ### Key Benchmark Figures (Paper)
 

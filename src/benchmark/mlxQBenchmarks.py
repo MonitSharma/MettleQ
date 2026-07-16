@@ -3,12 +3,12 @@ import sys
 # Ensure local package path so `python3 python/tests/mlxQuantumBenchmarks.py` works
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from typing import List
-from mlxq.pretty import info, success, warn, error, table, console
-from mlxq.mlxQbench import (
+from mettleq.pretty import info, success, warn, error, table, console
+from mettleq.mlxQbench import (
     bench_gate_suite, run_qasm_suite, run_scaling_benchmark,
 )
-from mlxq.metrics import now_ms
-from mlxq.device import Device
+from mettleq.metrics import now_ms
+from mettleq.device import Device
 
 
 def _parse_qubits_env(var: str, default: List[int]) -> List[int]:

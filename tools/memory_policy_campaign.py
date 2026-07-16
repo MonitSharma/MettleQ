@@ -31,8 +31,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import mlx.core as mx  # noqa: E402
 
-from mlxq.device import Device  # noqa: E402
-from mlxq.execution import (  # noqa: E402
+from mettleq.device import Device  # noqa: E402
+from mettleq.execution import (  # noqa: E402
     METAL_CHECKPOINT_BUDGET_ENV,
     STATEVECTOR_UNSAFE_OVERRIDE_ENV,
     metal_memory_snapshot,
@@ -230,10 +230,10 @@ def _validate(
 ) -> List[Dict[str, Any]]:
     use_pure = n <= pure_reference_max_qubits
     if use_pure:
-        os.environ["MLXQ_METAL_KERNELS"] = "0"
+        os.environ["METTLEQ_METAL_KERNELS"] = "0"
         reference_label = "pure_mlx"
     else:
-        os.environ["MLXQ_METAL_KERNELS"] = "1"
+        os.environ["METTLEQ_METAL_KERNELS"] = "1"
         reference_label = "metal_lazy"
     reference = Device(n)
     reference.execute(operations)
@@ -241,7 +241,7 @@ def _validate(
 
     labels = POLICIES if use_pure else POLICIES[1:]
     rows: List[Dict[str, Any]] = []
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     for policy in labels:
         candidate = Device(
             n, metal_checkpoint_budget_bytes=_budget_bytes(policy, n)
@@ -584,7 +584,7 @@ def main() -> int:
 
     os.environ.pop(METAL_CHECKPOINT_BUDGET_ENV, None)
     os.environ.pop(STATEVECTOR_UNSAFE_OVERRIDE_ENV, None)
-    os.environ["MLXQ_METAL_KERNELS"] = "1"
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
     capabilities = {str(n): metal_runtime_status(n) for n in args.qubits}
     unusable = [report["reason"] for report in capabilities.values()
                 if not report["enabled"]]
@@ -686,7 +686,7 @@ def main() -> int:
     (outdir / "memory_policy_manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n"
     )
-    os.environ.pop("MLXQ_METAL_KERNELS", None)
+    os.environ.pop("METTLEQ_METAL_KERNELS", None)
     print(f"wrote {outdir}", flush=True)
     if not acceptance["numerical_parity_passed"]:
         return 2

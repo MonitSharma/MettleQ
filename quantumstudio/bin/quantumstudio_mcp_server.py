@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-QuantumStudio MCP Server
+MettleQ Studio MCP Server
 
 Model Context Protocol (MCP) server for Claude Code integration.
-Exposes QuantumStudio quantum benchmarking capabilities via MCP tools.
+Exposes MettleQ Studio quantum benchmarking capabilities via MCP tools.
 
 Usage:
     python3 quantumstudio_mcp_server.py [--port PORT] [--host HOST]
@@ -60,7 +60,7 @@ def _resolve_log_dir() -> Path:
 
     home = os.environ.get("HOME", "").strip()
     if home:
-        candidates.append(Path(home) / "Library" / "Logs" / "QuantumStudio")
+        candidates.append(Path(home) / "Library" / "Logs" / "MettleQ Studio")
 
     candidates.append(ROOT_DIR / "runs" / "logs")
 
@@ -106,7 +106,7 @@ logger.addHandler(console)
 MCP_TOOLS: List[Dict[str, Any]] = [
     {
         "name": "quantum_health_check",
-        "description": "Check if the QuantumStudio backend is running and healthy.",
+        "description": "Check if the MettleQ Studio backend is running and healthy.",
         "inputSchema": {
             "type": "object",
             "properties": {},
@@ -243,7 +243,7 @@ MCP_TOOLS: List[Dict[str, Any]] = [
 # ---------------------------------------------------------------------------
 
 def _call_backend(method: str, path: str, data: Optional[Dict] = None, timeout: int = 30) -> Dict[str, Any]:
-    """Call the QuantumStudio backend API."""
+    """Call the MettleQ Studio backend API."""
     url = f"{BACKEND_URL}{path}"
     headers = {"Content-Type": "application/json"}
     if API_TOKEN:
@@ -506,13 +506,13 @@ class MCPHandler(BaseHTTPRequestHandler):
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="QuantumStudio MCP Server")
+    parser = argparse.ArgumentParser(description="MettleQ Studio MCP Server")
     parser.add_argument("--host", default=DEFAULT_HOST, help="Host to bind to")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="Port to bind to")
     args = parser.parse_args()
 
     server = HTTPServer((args.host, args.port), MCPHandler)
-    logger.info(f"QuantumStudio MCP Server starting on http://{args.host}:{args.port}")
+    logger.info(f"MettleQ Studio MCP Server starting on http://{args.host}:{args.port}")
     logger.info(f"Backend URL: {BACKEND_URL}")
 
     try:

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Qupertino - DMG Installer Builder
+# MettleQ - DMG Installer Builder
 # =============================================================================
 
 set -euo pipefail
 
-APP_NAME="Qupertino"
+APP_NAME="MettleQ"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 FLUTTER_DIR="$ROOT_DIR/flutter_app"
@@ -180,9 +180,9 @@ VENV_DIR="$SCRIPT_DIR/venv"
 MLX_ROOT="$RESOURCES_DIR/mlx"
 
 HOME_DIR="${HOME:-$SCRIPT_DIR}"
-APP_SUPPORT_DIR="$HOME_DIR/Library/Application Support/QuantumStudio"
-APP_CACHE_DIR="$HOME_DIR/Library/Caches/QuantumStudio"
-APP_LOG_DIR="$HOME_DIR/Library/Logs/QuantumStudio"
+APP_SUPPORT_DIR="$HOME_DIR/Library/Application Support/MettleQ Studio"
+APP_CACHE_DIR="$HOME_DIR/Library/Caches/MettleQ Studio"
+APP_LOG_DIR="$HOME_DIR/Library/Logs/MettleQ Studio"
 HF_HOME_DIR="$APP_CACHE_DIR/huggingface"
 HF_HUB_DIR="$HF_HOME_DIR/hub"
 HF_TRANSFORMERS_DIR="$HF_HOME_DIR/transformers"
@@ -283,14 +283,14 @@ done
 if [ "$SMOKE_READY" -ne 1 ]; then
     echo "Bundled backend runtime smoke test failed." >&2
     cat "$SMOKE_STDOUT" >&2 || true
-    cat "$SMOKE_HOME/Library/Logs/QuantumStudio/backend.log" >&2 || true
+    cat "$SMOKE_HOME/Library/Logs/MettleQ Studio/backend.log" >&2 || true
     cleanup_smoke
     error "Bundled backend did not become healthy"
 fi
 
 curl -sf "http://127.0.0.1:$SMOKE_PORT/api/benchmarks" >/dev/null 2>&1 || {
     cat "$SMOKE_STDOUT" >&2 || true
-    cat "$SMOKE_HOME/Library/Logs/QuantumStudio/backend.log" >&2 || true
+    cat "$SMOKE_HOME/Library/Logs/MettleQ Studio/backend.log" >&2 || true
     cleanup_smoke
     error "Bundled backend runtime smoke test failed on /api/benchmarks"
 }

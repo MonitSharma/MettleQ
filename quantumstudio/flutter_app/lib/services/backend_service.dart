@@ -142,10 +142,10 @@ class BackendService {
         _backendProcess = process;
 
         process.stdout.transform(const SystemEncoding().decoder).listen((data) {
-          debugPrint('[QuantumStudio backend] $data');
+          debugPrint('[MettleQ Studio backend] $data');
         });
         process.stderr.transform(const SystemEncoding().decoder).listen((data) {
-          debugPrint('[QuantumStudio backend error] $data');
+          debugPrint('[MettleQ Studio backend error] $data');
         });
 
         final started = await _waitForBackend(
@@ -188,10 +188,10 @@ class BackendService {
       _backendProcess = process;
 
       process.stdout.transform(const SystemEncoding().decoder).listen((data) {
-        debugPrint('[QuantumStudio backend] $data');
+        debugPrint('[MettleQ Studio backend] $data');
       });
       process.stderr.transform(const SystemEncoding().decoder).listen((data) {
-        debugPrint('[QuantumStudio backend error] $data');
+        debugPrint('[MettleQ Studio backend error] $data');
       });
 
       final started = await _waitForBackend(
@@ -204,7 +204,7 @@ class BackendService {
       return started;
     } catch (e) {
       _lastStartupError = 'Failed to start bundled backend: $e';
-      debugPrint('[QuantumStudio backend start error] $e');
+      debugPrint('[MettleQ Studio backend start error] $e');
       return false;
     } finally {
       _isStarting = false;
@@ -297,14 +297,14 @@ class BackendService {
   }) {
     final home = Platform.environment['HOME'] ?? '';
     final appSupportDir = home.isNotEmpty
-        ? path.join(home, 'Library', 'Application Support', 'QuantumStudio')
-        : '/tmp/QuantumStudio';
+        ? path.join(home, 'Library', 'Application Support', 'MettleQ Studio')
+        : '/tmp/MettleQ Studio';
     final appCacheDir = home.isNotEmpty
-        ? path.join(home, 'Library', 'Caches', 'QuantumStudio')
-        : '/tmp/QuantumStudio/cache';
+        ? path.join(home, 'Library', 'Caches', 'MettleQ Studio')
+        : '/tmp/MettleQ Studio/cache';
     final appLogDir = home.isNotEmpty
-        ? path.join(home, 'Library', 'Logs', 'QuantumStudio')
-        : '/tmp/QuantumStudio/logs';
+        ? path.join(home, 'Library', 'Logs', 'MettleQ Studio')
+        : '/tmp/MettleQ Studio/logs';
 
     final runsDir = path.join(appSupportDir, 'runs');
     final benchDir = path.join(appSupportDir, 'bench');

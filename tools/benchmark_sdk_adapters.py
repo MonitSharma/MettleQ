@@ -27,8 +27,8 @@ import pennylane as qml
 from qiskit import QuantumCircuit
 from qiskit_aer import AerSimulator
 
-from mlxq.integrations.pennylane import QupertinoDevice
-from mlxq.integrations.qiskit import QupertinoBackend
+from mettleq.integrations.pennylane import MettleQDevice
+from mettleq.integrations.qiskit import MettleQBackend
 
 
 def _command_output(*command: str) -> str | None:
@@ -120,11 +120,11 @@ def main() -> int:
     qiskit_circuit = _qiskit_circuit(args.qubits, args.steps)
     aer_circuit = qiskit_circuit.copy()
     aer_circuit.save_statevector()
-    qupertino_backend = QupertinoBackend()
+    mettleq_backend = MettleQBackend()
     aer_backend = AerSimulator(method="statevector")
 
-    def run_qupertino_qiskit():
-        result = qupertino_backend.run(
+    def run_mettleq_qiskit():
+        result = mettleq_backend.run(
             qiskit_circuit, shots=1, return_statevector=True
         ).result()
         return np.asarray(result.data(0)["statevector"])
@@ -134,14 +134,14 @@ def main() -> int:
         return np.asarray(result.data(0)["statevector"])
 
     qiskit_rows, qiskit_values = _time_pairs(
-        {"qupertino": run_qupertino_qiskit, "qiskit_aer_cpu": run_aer},
+        {"mettleq": run_mettleq_qiskit, "qiskit_aer_cpu": run_aer},
         args.warmups,
         args.repeats,
         "qiskit",
     )
 
-    qupertino_qnode = _pennylane_qnode(
-        QupertinoDevice(wires=args.qubits), args.qubits, args.steps
+    mettleq_qnode = _pennylane_qnode(
+        MettleQDevice(wires=args.qubits), args.qubits, args.steps
     )
     default_qnode = _pennylane_qnode(
         qml.device("default.qubit", wires=args.qubits),
@@ -149,20 +149,20 @@ def main() -> int:
         args.steps,
     )
     pennylane_rows, pennylane_values = _time_pairs(
-        {"qupertino": qupertino_qnode, "pennylane_default_qubit": default_qnode},
+        {"mettleq": mettleq_qnode, "pennylane_default_qubit": default_qnode},
         args.warmups,
         args.repeats,
         "pennylane",
     )
 
     raw_rows = qiskit_rows + pennylane_rows
-    qiskit_qupertino_ms = _median(qiskit_rows, "qupertino")
+    qiskit_mettleq_ms = _median(qiskit_rows, "mettleq")
     qiskit_reference_ms = _median(qiskit_rows, "qiskit_aer_cpu")
-    pennylane_qupertino_ms = _median(pennylane_rows, "qupertino")
+    pennylane_mettleq_ms = _median(pennylane_rows, "mettleq")
     pennylane_reference_ms = _median(
         pennylane_rows, "pennylane_default_qubit"
     )
-    qiskit_actual = qiskit_values["qupertino"].astype(np.complex128)
+    qiskit_actual = qiskit_values["mettleq"].astype(np.complex128)
     qiskit_expected = qiskit_values["qiskit_aer_cpu"].astype(np.complex128)
 
     summary = {
@@ -174,11 +174,11 @@ def main() -> int:
         "paired_rotating_repeats": args.repeats,
         "qiskit": {
             "result_contract": "full statevector readback",
-            "qupertino_median_ms": qiskit_qupertino_ms,
+            "mettleq_median_ms": qiskit_mettleq_ms,
             "reference": "Qiskit Aer CPU statevector",
             "reference_median_ms": qiskit_reference_ms,
-            "reference_over_qupertino_speedup": (
-                qiskit_reference_ms / qiskit_qupertino_ms
+            "reference_over_mettleq_speedup": (
+                qiskit_reference_ms / qiskit_mettleq_ms
             ),
             "max_amplitude_error": float(
                 np.max(np.abs(qiskit_actual - qiskit_expected))
@@ -186,7 +186,7 @@ def main() -> int:
             "l2_state_error": float(
                 np.linalg.norm(qiskit_actual - qiskit_expected)
             ),
-            "qupertino_norm_error": float(
+            "mettleq_norm_error": float(
                 abs(
                     np.sqrt(
                         np.sum(np.abs(qiskit_actual) ** 2, dtype=np.float64)
@@ -197,15 +197,15 @@ def main() -> int:
         },
         "pennylane": {
             "result_contract": "analytic local Pauli-Z expectation",
-            "qupertino_median_ms": pennylane_qupertino_ms,
+            "mettleq_median_ms": pennylane_mettleq_ms,
             "reference": "PennyLane default.qubit",
             "reference_median_ms": pennylane_reference_ms,
-            "reference_over_qupertino_speedup": (
-                pennylane_reference_ms / pennylane_qupertino_ms
+            "reference_over_mettleq_speedup": (
+                pennylane_reference_ms / pennylane_mettleq_ms
             ),
             "absolute_expectation_error": float(
                 abs(
-                    complex(pennylane_values["qupertino"])
+                    complex(pennylane_values["mettleq"])
                     - complex(pennylane_values["pennylane_default_qubit"])
                 )
             ),
@@ -225,7 +225,7 @@ def main() -> int:
     validation["passed"] = bool(
         summary["qiskit"]["max_amplitude_error"]
         <= validation["qiskit_max_amplitude_atol"]
-        and summary["qiskit"]["qupertino_norm_error"]
+        and summary["qiskit"]["mettleq_norm_error"]
         <= validation["qiskit_norm_error_atol"]
         and summary["pennylane"]["absolute_expectation_error"]
         <= validation["pennylane_expectation_atol"]
@@ -252,7 +252,7 @@ def main() -> int:
         "pennylane": importlib.metadata.version("pennylane"),
         "mlx_default_device": str(mx.default_device()),
         "metal_available": bool(mx.metal.is_available()),
-        "mlxq_metal_kernels": os.environ.get("MLXQ_METAL_KERNELS"),
+        "mettleq_metal_kernels": os.environ.get("METTLEQ_METAL_KERNELS"),
     }
 
     raw_path = args.outdir / "sdk_adapter_timings.csv"

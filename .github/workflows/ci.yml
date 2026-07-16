@@ -25,7 +25,7 @@ jobs:
           fastapi==0.115.6 uvicorn==0.30.6 pydantic==2.8.2
           psutil httpx pytest
       - name: Compile Python sources
-        run: python -m compileall -q src/mlxq quantumstudio/backend quantumstudio/bin
+        run: python -m compileall -q src/mettleq src/mlxq quantumstudio/backend quantumstudio/bin
       - name: Verify backend test collection
         run: python -m pytest quantumstudio/tests --collect-only -q
       - name: Run backend tests
@@ -58,6 +58,6 @@ jobs:
       - name: Run all simulator and backend tests
         run: ./test.sh
       - name: Run coverage
-        run: python -m pytest --cov=mlxq --cov-report=term-missing
+        run: python -m pytest --cov=mettleq --cov-report=term-missing
       - name: Require a clean checkout
         run: test -z "$(git status --porcelain)"

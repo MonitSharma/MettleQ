@@ -3,9 +3,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-WEBSITE_DIR="$PROJECT_DIR/../../../QuantumStudioWEB"
-APP_NAME="Qupertino"
-REPO_SLUG="${GITHUB_REPO:-BoltzmannEntropy/Qupertino}"
+WEBSITE_DIR="$PROJECT_DIR/../../../MettleQWEB"
+APP_NAME="MettleQ"
+REPO_SLUG="${GITHUB_REPO:-MonitSharma/MettleQ}"
 
 UPLOAD_TO_GITHUB=false
 SYNC_WEBSITE=false
@@ -52,7 +52,7 @@ RELEASE_NOTES_ASSET="$DIST_DIR/${APP_NAME}-${VERSION}-RELEASE_NOTES.md"
 RELEASE_NOTES_SHA_PATH="$RELEASE_NOTES_ASSET.sha256"
 DOWNLOAD_URL="https://github.com/${REPO_SLUG}/releases/download/${TAG}/${DMG_NAME}"
 
-info "=== QuantumStudio Release Script ==="
+info "=== MettleQ Studio Release Script ==="
 info "Version: $VERSION"
 info "Upload to GitHub: $UPLOAD_TO_GITHUB"
 info "Sync website: $SYNC_WEBSITE"
@@ -144,7 +144,7 @@ if [ "$SYNC_WEBSITE" = true ]; then
 
     # Update release download URLs if already present.
     sed -i '' -E \
-        "s|https://github.com/[^\"']+/releases/download/v[0-9]+([.][0-9]+)*/QuantumStudio-[0-9]+([.][0-9]+)*-macos\\.dmg|${DOWNLOAD_URL}|g" \
+        "s|https://github.com/[^\"']+/releases/download/v[0-9]+([.][0-9]+)*/MettleQ-[0-9]+([.][0-9]+)*-macos\\.dmg|${DOWNLOAD_URL}|g" \
         "$local_index"
 
     # Update nav + hero download CTAs (id-based) to point to the direct DMG URL.
@@ -155,9 +155,9 @@ if [ "$SYNC_WEBSITE" = true ]; then
         "s|(<a id=\"download-link-hero\" href=\")[^\"]*(\" class=\"btn-primary\">)|\\1${DOWNLOAD_URL}\\2|g" \
         "$local_index"
 
-    # Keep the license line consistent with QuantumStudio naming.
+    # Keep the website license line consistent with the repository.
     sed -i '' -E \
-        "s|binary distributions are licensed under the osxQ Binary Distribution License|binary distributions are licensed under the QuantumStudio Binary Distribution License|g" \
+        "s|binary distributions are licensed under the osxQ Binary Distribution License|source and binary distributions are licensed under the MIT License|g" \
         "$local_index"
 
     cd "$WEBSITE_DIR"
@@ -165,7 +165,7 @@ if [ "$SYNC_WEBSITE" = true ]; then
         ok "No website updates needed"
     else
         git add index.html
-        git commit -m "Update QuantumStudio website links for v${VERSION}"
+        git commit -m "Update MettleQ Studio website links for v${VERSION}"
         git push
         ok "Website index updated, committed, and pushed"
     fi

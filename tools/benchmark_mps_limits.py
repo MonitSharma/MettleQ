@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Probe Qupertino MPS limits across qubit count and entanglement topology.
+"""Probe MettleQ MPS limits across qubit count and entanglement topology.
 
-Each circuit runs through ``QupertinoEstimatorV2`` in a fresh process. The
+Each circuit runs through ``MettleQEstimatorV2`` in a fresh process. The
 campaign distinguishes mere completion from trustworthy evidence by recording
 bond growth, local SVD truncation, discarded-weight telemetry, norm drift,
 runtime, and process peak RSS. Wide cases are not described as exact unless a
@@ -31,7 +31,7 @@ from qiskit import QuantumCircuit
 from qiskit.primitives import StatevectorEstimator
 from qiskit.quantum_info import SparsePauliOp
 
-from mlxq.integrations.qiskit import QupertinoEstimatorV2
+from mettleq.integrations.qiskit import MettleQEstimatorV2
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -175,7 +175,7 @@ def _worker(args: argparse.Namespace) -> int:
         for layer in range(args.worker_depth)
     )
     observable = SparsePauliOp("I" * (args.worker_qubits - 1) + "Z")
-    estimator = QupertinoEstimatorV2(
+    estimator = MettleQEstimatorV2(
         method="matrix_product_state",
         device=args.device,
         mps_max_bond_dimension=args.dmax,
@@ -446,7 +446,7 @@ def _plot(rows: list[dict], output: Path) -> None:
     axes[1].grid(True, which="both", alpha=0.25)
     handles, labels = axes[0].get_legend_handles_labels()
     figure.legend(handles, labels, loc="outside lower center", ncol=4)
-    figure.suptitle("Qupertino MPS scaling by entanglement topology")
+    figure.suptitle("MettleQ MPS scaling by entanglement topology")
     figure.tight_layout(rect=(0, 0.1, 1, 1))
     figure.savefig(output, dpi=180, bbox_inches="tight")
     plt.close(figure)

@@ -8,11 +8,11 @@ from qiskit.exceptions import QiskitError
 from qiskit.quantum_info import Statevector
 from qiskit.quantum_info import SparsePauliOp
 
-from mlxq.integrations.pennylane import QupertinoDevice
-from mlxq.integrations.qiskit import (
-    QupertinoBackend,
-    QupertinoEstimatorV2,
-    QupertinoSamplerV2,
+from mettleq.integrations.pennylane import MettleQDevice
+from mettleq.integrations.qiskit import (
+    MettleQBackend,
+    MettleQEstimatorV2,
+    MettleQSamplerV2,
 )
 
 
@@ -27,7 +27,7 @@ def test_qiskit_statevector_ordering_and_gate_parity():
     circuit.rzz(0.29, 2, 0)
     circuit.global_phase = 0.17
 
-    result = QupertinoBackend().run(
+    result = MettleQBackend().run(
         circuit, shots=16, return_statevector=True
     ).result()
     actual = np.asarray(result.data(0)["statevector"])
@@ -42,7 +42,7 @@ def test_qiskit_classical_bit_mapping_seed_and_opt_in_state_readback():
     circuit.measure(0, 2)
     circuit.measure(1, 1)
     circuit.measure(2, 0)
-    backend = QupertinoBackend()
+    backend = MettleQBackend()
 
     first = backend.run(circuit, shots=25, seed_simulator=9).result()
     second = backend.run(circuit, shots=25, seed_simulator=9).result()
@@ -56,7 +56,7 @@ def test_qiskit_dynamic_target_and_execution_evidence():
     circuit.h(0)
     circuit.cx(0, 1)
     circuit.measure_all()
-    backend = QupertinoBackend()
+    backend = MettleQBackend()
 
     compiled = transpile(circuit, backend)
     assert compiled.num_qubits == circuit.num_qubits
@@ -64,9 +64,9 @@ def test_qiskit_dynamic_target_and_execution_evidence():
         compiled, shots=32, seed_simulator=4, execution_report=True
     ).result()
     data = result.data(0)
-    assert data["qupertino_execution_plan"]["execution_status"] == "evaluated"
-    assert data["qupertino_statevector_preflight"]["decision"].startswith("allowed")
-    assert backend.last_execution_plans[0] == data["qupertino_execution_plan"]
+    assert data["mettleq_execution_plan"]["execution_status"] == "evaluated"
+    assert data["mettleq_statevector_preflight"]["decision"].startswith("allowed")
+    assert backend.last_execution_plans[0] == data["mettleq_execution_plan"]
 
 
 def test_qiskit_rejects_mid_circuit_measurement():
@@ -75,11 +75,11 @@ def test_qiskit_rejects_mid_circuit_measurement():
     circuit.measure(0, 0)
     circuit.x(0)
     with pytest.raises(QiskitError, match="final measurements only"):
-        QupertinoBackend().run(circuit)
+        MettleQBackend().run(circuit)
 
 
 def test_pennylane_registered_device_analytic_parity_and_wire_order():
-    device = qml.device("qupertino", wires=["left", "right"])
+    device = qml.device("mettleq", wires=["left", "right"])
     reference = qml.device("default.qubit", wires=["left", "right"])
 
     def build(dev):
@@ -105,7 +105,7 @@ def test_pennylane_registered_device_analytic_parity_and_wire_order():
 
 
 def test_pennylane_parameter_shift_gradient():
-    device = QupertinoDevice(wires=1)
+    device = MettleQDevice(wires=1)
 
     @qml.qnode(device, diff_method="parameter-shift")
     def circuit(theta):
@@ -118,7 +118,7 @@ def test_pennylane_parameter_shift_gradient():
 
 
 def test_pennylane_finite_shots_counts_samples_and_shot_vector():
-    device = QupertinoDevice(wires=2, seed=12)
+    device = MettleQDevice(wires=2, seed=12)
 
     @qml.set_shots([(40, 2), 20])
     @qml.qnode(device)
@@ -137,7 +137,7 @@ def test_pennylane_finite_shots_counts_samples_and_shot_vector():
 
 
 def test_pennylane_wide_pauli_sentence_avoids_dense_observable():
-    device = QupertinoDevice(wires=10, execution_report=True)
+    device = MettleQDevice(wires=10, execution_report=True)
 
     @qml.qnode(device)
     def circuit():
@@ -156,7 +156,7 @@ def test_qiskit_mps_method_counts_statevector_and_diagnostics():
     circuit.cx(0, 1)
     circuit.cx(1, 2)
     circuit.measure(range(3), range(3))
-    backend = QupertinoBackend(
+    backend = MettleQBackend(
         method="matrix_product_state",
         device="cpu",
         mps_max_bond_dimension=16,
@@ -175,13 +175,13 @@ def test_qiskit_mps_method_counts_statevector_and_diagnostics():
         [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5],
         atol=2e-6,
     )
-    selection = result.data(0)["qupertino_execution_selection"]
-    diagnostics = result.data(0)["qupertino_mps_diagnostics"]
+    selection = result.data(0)["mettleq_execution_selection"]
+    diagnostics = result.data(0)["mettleq_mps_diagnostics"]
     assert selection["selected_method"] == "matrix_product_state"
     assert selection["selected_device"] == "cpu"
     assert diagnostics["tensor_device"] == "cpu"
     assert diagnostics["svd_device"] == "cpu"
-    assert result.data(0)["qupertino_mps_accuracy"]["passed"] is True
+    assert result.data(0)["mettleq_mps_accuracy"]["passed"] is True
 
 
 def test_qiskit_sampler_v2_and_estimator_v2_native_contracts():
@@ -189,7 +189,7 @@ def test_qiskit_sampler_v2_and_estimator_v2_native_contracts():
     circuit.h(0)
     circuit.cx(0, 1)
 
-    estimator_result = QupertinoEstimatorV2(device="cpu").run(
+    estimator_result = MettleQEstimatorV2(device="cpu").run(
         [(circuit, [SparsePauliOp("ZZ"), SparsePauliOp("XX")])]
     ).result()[0]
     assert estimator_result.data.evs.shape == (2,)
@@ -197,7 +197,7 @@ def test_qiskit_sampler_v2_and_estimator_v2_native_contracts():
     assert np.all(estimator_result.data.stds == 0.0)
 
     measured = circuit.measure_all(inplace=False)
-    sampler_result = QupertinoSamplerV2(device="cpu").run(
+    sampler_result = MettleQSamplerV2(device="cpu").run(
         [measured], shots=64
     ).result()[0]
     counts = sampler_result.data.meas.get_counts()
@@ -213,7 +213,7 @@ def test_qiskit_estimator_reports_accuracy_and_automated_dmax_convergence():
         for second in range(first + 1, 6):
             circuit.rzz(0.38, first, second)
 
-    estimator = QupertinoEstimatorV2(
+    estimator = MettleQEstimatorV2(
         method="matrix_product_state",
         device="cpu",
         mps_max_bond_dimension=4,
@@ -221,8 +221,8 @@ def test_qiskit_estimator_reports_accuracy_and_automated_dmax_convergence():
         mps_convergence_atol=1e-3,
     )
     result = estimator.run([(circuit, SparsePauliOp("IIIIIZ"))]).result()[0]
-    accuracy = result.metadata["qupertino_mps_accuracy"][0]
-    convergence = result.metadata["qupertino_mps_convergence"]
+    accuracy = result.metadata["mettleq_mps_accuracy"][0]
+    convergence = result.metadata["mettleq_mps_convergence"]
 
     assert accuracy["classification"] == "threshold_exceeded"
     assert [run["dmax"] for run in convergence["runs"]] == [2, 4, 8]
@@ -231,7 +231,7 @@ def test_qiskit_estimator_reports_accuracy_and_automated_dmax_convergence():
 
 
 def test_qiskit_backend_batch_reuses_one_same_width_device(monkeypatch):
-    import mlxq.integrations._common as common
+    import mettleq.integrations._common as common
 
     original = common.Device
     constructed = []
@@ -247,14 +247,14 @@ def test_qiskit_backend_batch_reuses_one_same_width_device(monkeypatch):
     second = QuantumCircuit(2, 2)
     second.x(1)
     second.measure_all()
-    QupertinoBackend(device="cpu").run(
+    MettleQBackend(device="cpu").run(
         [first, second], shots=8, seed_simulator=3
     ).result()
     assert len(constructed) == 1
 
 
 def test_pennylane_mps_analytic_finite_shots_gradient_and_tracking():
-    device = QupertinoDevice(
+    device = MettleQDevice(
         wires=2,
         method="matrix_product_state",
         device="cpu",
@@ -292,7 +292,7 @@ def test_pennylane_mps_analytic_finite_shots_gradient_and_tracking():
 
 
 def test_pennylane_device_reports_accuracy_and_dmax_convergence():
-    device = QupertinoDevice(
+    device = MettleQDevice(
         wires=6,
         method="matrix_product_state",
         device="cpu",
@@ -321,7 +321,7 @@ def test_pennylane_device_reports_accuracy_and_dmax_convergence():
 
 
 def test_pennylane_capabilities_declare_supported_contract():
-    capabilities = QupertinoDevice.capabilities
+    capabilities = MettleQDevice.capabilities
     assert "CNOT" in capabilities.operations
     assert "Hamiltonian" in capabilities.observables
     assert "StateMP" in capabilities.measurement_processes

@@ -17,7 +17,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PAPER = ROOT / "paper" / "quantics-lncs-2026" / "mlxquantum_quantics2026_lncs.tex"
+PAPER = ROOT / "paper" / "quantics-lncs-2026" / "mettlequantum_quantics2026_lncs.tex"
 
 
 def _read_csv(path: Path) -> list[dict]:
@@ -49,7 +49,7 @@ def _contains_scientific(tex: str, value: float) -> bool:
 # tex comparison table (tab:pennylane-baseline) reports these three.
 _COMPARISON_QUBITS = {"15", "20", "25"}
 
-# mlxq timing summaries backing the comparison table, keyed by circuit type.
+# mettleq timing summaries backing the comparison table, keyed by circuit type.
 _MLX_COMPARISON_CIRCUITS = (
     "qft", "qaoa", "hamiltonian_simulation", "phase_estimation",
     "grover", "ghz", "qft_fft_primitive",
@@ -152,7 +152,7 @@ def _check_interleaved_comparison(tex: str, evidence: Path) -> list[dict]:
         for n, rec in json.loads(fft.read_text(encoding="utf-8")).items():
             value_s = float(rec["mean_ms"]) / 1000.0
             checks.append({
-                "claim": f"mlxq qft_fft_primitive {n}q mean",
+                "claim": f"mettleq qft_fft_primitive {n}q mean",
                 "artifact": "evidence_artifacts/interleaved_campaign_20260702/qft_fft_primitive_n10.json",
                 "value": value_s,
                 "present_in_tex": _tolerant_match(tex, value_s),
@@ -254,7 +254,7 @@ def _check_required_sections(tex: str) -> list[dict]:
     return [
         {
             "claim": label,
-            "artifact": "mlxquantum_quantics2026_lncs.tex",
+            "artifact": "mettlequantum_quantics2026_lncs.tex",
             "present_in_tex": re.search(pattern, tex, re.IGNORECASE) is not None,
         }
         for label, pattern in required

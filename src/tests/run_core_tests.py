@@ -7,7 +7,7 @@ import os
 # Ensure local package path so direct execution works without PYTHONPATH
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from mlxq.pretty import console, info, success, warn, error, table
+from mettleq.pretty import console, info, success, warn, error, table
 
 import importlib.util
 
