@@ -41,7 +41,7 @@ acceleration.
 | Circuit inputs | Native Python operations, strict unitary OpenQASM 2.0, Qiskit circuits, and PennyLane QNodes |
 | Workloads | QFT, phase estimation, Grover, QAOA, VQE, QCBM, QNN, random circuits, and spin dynamics |
 | Trust model | Pre-allocation statevector checks, capability-gated dispatch, recoverable SVDs, MPS accuracy thresholds and convergence reports, explicit plans, numerical parity tests, synchronized benchmarks, and safe fallbacks |
-| Current test suite | **363 tests** across the simulator, SDK adapters, planner, algorithms, MPS/MPO, peaked circuits, QASM, Metal dispatch, campaign analysis, and MettleQ Studio backend |
+| Current test suite | **365 tests** across the simulator, SDK adapters, planner, algorithms, MPS/MPO, peaked circuits, QASM, Metal dispatch, campaign analysis, and MettleQ Studio backend |
 | Desktop product | MettleQ Studio orchestration, monitoring, plotting, and export |
 | SDK adapters | Native Qiskit backend and registered PennyLane device, plus the original internal `mettleq.qml` teaching wrapper |
 
@@ -1017,8 +1017,9 @@ auditable. This fork adds explicit evidence at each layer:
   attempts instead of allowing MLX `sgesvdx` to terminate the process; explicit
   canonicalization and renormalization guard finite norm.
 - **Recoverable midpoint-MPO numerics:** the isolated worker bypasses Quimb's
-  process-killing native/`gesvd` path, tries unscaled NumPy first to preserve
-  its numerical trajectory, and reports every scaled or eigensolver fallback.
+  process-killing native path, tries unscaled NumPy first, then contains the
+  Quimb-compatible SciPy `gesvd` fallback in a killable child process. Every
+  child failure, scaled retry, and eigensolver fallback is reported.
 - **MPS trust policy:** both SDKs attach local discarded-weight and norm
   classifications, can warn or raise on configured thresholds, and can rerun
   analytic results across requested bond dimensions.
@@ -1044,7 +1045,7 @@ auditable. This fork adds explicit evidence at each layer:
 | Quantum-computing examples and algorithms | 41 |
 | Internal consistency and measurement parity | 21 |
 | MPS backend and correctness | 22 |
-| Midpoint-MPO API, isolated worker, safe SVD, and convergence policy | 7 |
+| Midpoint-MPO API, isolated worker, safe SVD, and convergence policy | 9 |
 | QML wrapper, QFT, and subset semantics | 10 |
 | Strict OpenQASM and silent-risk checks | 7 |
 | QPE energy estimation | 2 |
@@ -1054,7 +1055,7 @@ auditable. This fork adds explicit evidence at each layer:
 | Execution plans, memory policy, planner, and capability reporting | 33 |
 | Native Qiskit and PennyLane integrations and rebrand compatibility | 18 |
 | MettleQ Studio backend and MCP API | 18 |
-| **Total** | **363** |
+| **Total** | **365** |
 
 Run everything with:
 

@@ -16,6 +16,7 @@ import argparse
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 import json
+import multiprocessing
 import os
 from pathlib import Path
 import platform
@@ -34,6 +35,9 @@ VENDORED_SOLVER_COMMIT = "3bcdc1e5bfd6abb9425f71bd43e560d2b27f45c1"
 _QUIMB_SVD_TELEMETRY = {
     "calls": 0,
     "unscaled_numpy_failures": 0,
+    "isolated_scipy_gesvd_calls": 0,
+    "isolated_scipy_gesvd_successes": 0,
+    "isolated_scipy_gesvd_failures": 0,
     "rescaled_calls": 0,
     "numpy_complex128_failures": 0,
     "scipy_gesdd_failures": 0,
@@ -55,6 +59,10 @@ class MidpointMPODependencyError(ImportError):
 
 class MidpointMPOWorkerError(MidpointMPOError):
     """Raised when the isolated pinned midpoint-MPO worker fails."""
+
+
+class _IsolatedSVDProcessError(RuntimeError):
+    """Raised when the killable SciPy SVD child cannot return factors."""
 
 
 def _reset_quimb_safe_svd_telemetry() -> None:
@@ -91,6 +99,69 @@ def _eigh_svd(matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     if np.any(~nonzero):
         right_h[~nonzero, :] = 0.0
     return left, singular, right_h
+
+
+def _scipy_gesvd_child(connection, matrix: np.ndarray) -> None:
+    """Run the Quimb-compatible fallback outside the simulation process."""
+
+    try:
+        from scipy.linalg import svd
+
+        factors = svd(
+            matrix,
+            full_matrices=False,
+            lapack_driver="gesvd",
+            check_finite=False,
+        )
+        connection.send(("ok", factors))
+    except BaseException as error:
+        connection.send(("error", f"{type(error).__name__}: {error}"))
+    finally:
+        connection.close()
+
+
+def _isolated_scipy_gesvd(
+    matrix: np.ndarray,
+    *,
+    timeout_seconds: float = 120.0,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Contain SciPy ``gesvd`` so a native failure cannot kill the worker."""
+
+    context = multiprocessing.get_context("spawn")
+    receiver, sender = context.Pipe(duplex=False)
+    process = context.Process(
+        target=_scipy_gesvd_child,
+        args=(sender, np.asarray(matrix)),
+        daemon=True,
+    )
+    process.start()
+    sender.close()
+    try:
+        if not receiver.poll(timeout_seconds):
+            raise _IsolatedSVDProcessError(
+                f"isolated scipy gesvd exceeded {timeout_seconds:g} seconds"
+            )
+        try:
+            status, payload = receiver.recv()
+        except EOFError as error:
+            process.join(timeout=5.0)
+            raise _IsolatedSVDProcessError(
+                f"isolated scipy gesvd exited {process.exitcode} without a result"
+            ) from error
+    finally:
+        receiver.close()
+        if process.is_alive():
+            process.join(timeout=5.0)
+        if process.is_alive():
+            process.terminate()
+        process.join(timeout=5.0)
+    if process.exitcode != 0:
+        raise _IsolatedSVDProcessError(
+            f"isolated scipy gesvd exited {process.exitcode}"
+        )
+    if status != "ok":
+        raise _IsolatedSVDProcessError(f"isolated scipy gesvd failed: {payload}")
+    return payload
 
 
 def _install_quimb_safe_svd() -> None:
@@ -139,11 +210,18 @@ def _install_quimb_safe_svd() -> None:
                 absorb,
                 renorm,
             )
-            if trim_supports_error:
-                return decomp._trim_and_renorm_svd_result_numba(
-                    *arguments, calc_error=calc_error
-                )
-            return decomp._trim_and_renorm_svd_result_numba(*arguments)
+            try:
+                if trim_supports_error:
+                    return decomp._trim_and_renorm_svd_result_numba(
+                        *arguments, calc_error=calc_error
+                    )
+                return decomp._trim_and_renorm_svd_result_numba(*arguments)
+            except ValueError as error:
+                # Quimb catches ValueError outside this function and enters
+                # its unsafe in-process ``gesvd`` fallback.
+                raise MidpointMPOError(
+                    f"midpoint-MPO singular-value trimming failed: {error}"
+                ) from error
 
         # Quimb's Numba wrapper can terminate inside native LAPACK before a
         # Python exception exists. Calling NumPy directly preserves the
@@ -159,6 +237,22 @@ def _install_quimb_safe_svd() -> None:
             _QUIMB_SVD_TELEMETRY["unscaled_numpy_failures"] += 1
         else:
             return trim(*unscaled_factors)
+
+        # Quimb normally enters scipy ``gesvd`` here. Preserve that numerical
+        # path, but run it in a fresh child because the native driver has been
+        # observed terminating the long-lived simulation process.
+        _QUIMB_SVD_TELEMETRY["isolated_scipy_gesvd_calls"] += 1
+        try:
+            isolated_factors = require_finite(
+                *_isolated_scipy_gesvd(array),
+                "isolated_scipy_gesvd",
+            )
+        except Exception as error:
+            attempts.append(f"isolated_scipy_gesvd: {error}")
+            _QUIMB_SVD_TELEMETRY["isolated_scipy_gesvd_failures"] += 1
+        else:
+            _QUIMB_SVD_TELEMETRY["isolated_scipy_gesvd_successes"] += 1
+            return trim(*isolated_factors)
 
         scale = float(np.max(np.abs(array))) if array.size else 0.0
         if not np.isfinite(scale):

@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from types import SimpleNamespace
 import sys
@@ -6,6 +7,7 @@ import sys
 import numpy as np
 import pytest
 
+import mettleq.midpoint_mpo as midpoint_mpo
 from mettleq.midpoint_mpo import (
     IsolatedMidpointMPOSimulator,
     MidpointMPOError,
@@ -17,6 +19,10 @@ from mettleq.midpoint_mpo import (
     _QUIMB_SVD_TELEMETRY,
     _reset_quimb_safe_svd_telemetry,
 )
+
+
+def _crash_svd_child(_connection, _matrix):
+    os._exit(23)
 
 
 def _result(*, max_bond, cutoff, fraction, matches=True):
@@ -194,6 +200,7 @@ def test_midpoint_mpo_svd_uses_recoverable_eigh_fallback(monkeypatch):
     _reset_quimb_safe_svd_telemetry()
     matrix = np.arange(12, dtype=np.float64).reshape(4, 3).astype(np.complex128)
 
+    monkeypatch.setattr(midpoint_mpo, "_isolated_scipy_gesvd", fail)
     monkeypatch.setattr(np.linalg, "svd", fail)
     monkeypatch.setattr(scipy_linalg, "svd", fail)
     left, singular, right = decomp.svd_truncated(
@@ -202,9 +209,26 @@ def test_midpoint_mpo_svd_uses_recoverable_eigh_fallback(monkeypatch):
     reconstructed = left @ np.diag(singular) @ right
     assert reconstructed == pytest.approx(matrix, abs=1e-8)
     assert _QUIMB_SVD_TELEMETRY["unscaled_numpy_failures"] == 1
+    assert _QUIMB_SVD_TELEMETRY["isolated_scipy_gesvd_calls"] == 1
+    assert _QUIMB_SVD_TELEMETRY["isolated_scipy_gesvd_failures"] == 1
     assert _QUIMB_SVD_TELEMETRY["numpy_complex128_failures"] == 1
     assert _QUIMB_SVD_TELEMETRY["scipy_gesdd_failures"] == 1
     assert _QUIMB_SVD_TELEMETRY["eigh_fallbacks"] == 1
+
+
+def test_isolated_scipy_gesvd_reconstructs_matrix():
+    matrix = np.arange(12, dtype=np.float64).reshape(4, 3).astype(np.complex128)
+    left, singular, right = midpoint_mpo._isolated_scipy_gesvd(matrix)
+    assert left @ np.diag(singular) @ right == pytest.approx(matrix, abs=1e-8)
+
+
+def test_isolated_scipy_gesvd_contains_native_process_failure(monkeypatch):
+    monkeypatch.setattr(midpoint_mpo, "_scipy_gesvd_child", _crash_svd_child)
+    with pytest.raises(
+        midpoint_mpo._IsolatedSVDProcessError,
+        match="exited 23 without a result",
+    ):
+        midpoint_mpo._isolated_scipy_gesvd(np.eye(2))
 
 
 def test_priority_campaign_schedules_balance_pairwise_order():
