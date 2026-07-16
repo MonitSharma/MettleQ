@@ -1,6 +1,13 @@
+import json
+from pathlib import Path
+from types import SimpleNamespace
+import sys
+
 import pytest
 
 from mettleq.midpoint_mpo import (
+    IsolatedMidpointMPOSimulator,
+    MidpointMPOError,
     MidpointMPOOptions,
     MidpointMPOResult,
     MidpointMPOSimulator,
@@ -100,3 +107,88 @@ def test_midpoint_mpo_exact_qiskit_smoke():
     assert result.matches_expected_bitstring is True
     assert result.diagnostics["termination_reason"] == "completed"
     assert result.diagnostics["vendor_reference_commit"]
+
+
+def test_isolated_midpoint_mpo_roundtrips_qiskit2_result_contract(
+    tmp_path, monkeypatch
+):
+    qiskit = pytest.importorskip("qiskit")
+    circuit = qiskit.QuantumCircuit(3)
+    circuit.x(0)
+    circuit.x(2)
+    output_dir = tmp_path / "worker-output"
+
+    def fake_run(command, **kwargs):
+        assert Path(command[0]).samefile(sys.executable)
+        assert kwargs["env"]["PYTHONPATH"]
+        worker_output = command[command.index("--output-dir") + 1]
+        assert str(worker_output) == str(output_dir)
+        assert "OPENQASM 2.0" in (output_dir / "input.qasm").read_text()
+        summary = {
+            "method": "midpoint_mpo_unswapping",
+            "shots": 4,
+            "predicted_bitstring": "101",
+            "expected_bitstring": "101",
+            "expected_peak_count": 4,
+            "expected_peak_fraction": 1.0,
+            "matches_expected_bitstring": True,
+            "compression_time_s": 1.0,
+            "materialize_time_s": 0.1,
+            "sampling_time_s": 0.2,
+            "measurement_permutation": [0, 1, 2],
+            "diagnostics": {
+                "termination_reason": "completed",
+                "options": {"max_bond": 8, "cutoff": 0.0},
+            },
+            "counts": {"101": 4},
+        }
+        (output_dir / "summary.json").write_text(json.dumps(summary))
+        (output_dir / "stats.json").write_text(
+            json.dumps([{"stage": "termination", "termination_reason": "completed"}])
+        )
+        (output_dir / "samples.tsv").write_text(
+            "raw\tpermuted\n101\t101\n101\t101\n101\t101\n101\t101\n"
+        )
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr("mettleq.midpoint_mpo.subprocess.run", fake_run)
+    simulator = IsolatedMidpointMPOSimulator(
+        MidpointMPOOptions(max_bond=8, cutoff=0.0),
+        worker_python=sys.executable,
+    )
+    result = simulator.run(
+        circuit,
+        shots=4,
+        expected_bitstring="101",
+        output_dir=output_dir,
+    )
+    assert result.counts == {"101": 4}
+    assert result.matches_expected_bitstring is True
+    assert result.diagnostics["execution_mode"] == "isolated_worker"
+    assert result.diagnostics["caller_qiskit_version"] == qiskit.__version__
+
+
+def test_isolated_midpoint_mpo_rejects_dynamic_circuit_before_worker(tmp_path):
+    qiskit = pytest.importorskip("qiskit")
+    circuit = qiskit.QuantumCircuit(1, 1)
+    circuit.measure(0, 0)
+    simulator = IsolatedMidpointMPOSimulator(
+        worker_python=sys.executable,
+    )
+    with pytest.raises(MidpointMPOError, match="unsupported operations: measure"):
+        simulator.run(circuit, output_dir=tmp_path)
+
+
+def test_priority_campaign_schedules_balance_every_position():
+    from tools.benchmark_midpoint_mpo_priority_phase import (
+        MAIN_ARMS,
+        _cutoff_schedule,
+        _main_schedule,
+    )
+
+    main = _main_schedule(3)
+    for arm in MAIN_ARMS:
+        assert sorted(row["position"] for row in main if row["arm"] == arm) == [0, 1, 2]
+    cutoff = _cutoff_schedule(2)
+    for arm in {row["arm"] for row in cutoff}:
+        assert sorted(row["position"] for row in cutoff if row["arm"] == arm) == [0, 1]

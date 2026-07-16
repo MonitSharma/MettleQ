@@ -22,17 +22,20 @@ __all__ = [
     "info", "success", "warn", "error", "table",
     "circuit_ascii", "circuit_mpl", "schedule_columns", "random_circuit",
     "circuit_to_quantikz", "write_quantikz_tex",
-    "MidpointMPODependencyError", "MidpointMPOError",
+    "MidpointMPODependencyError", "MidpointMPOError", "MidpointMPOWorkerError",
     "MidpointMPOOptions", "MidpointMPOResult", "MidpointMPOSimulator",
+    "IsolatedMidpointMPOSimulator",
     "build_midpoint_mpo_convergence_report",
 ]
 
 _MIDPOINT_MPO_EXPORTS = {
     "MidpointMPODependencyError",
     "MidpointMPOError",
+    "MidpointMPOWorkerError",
     "MidpointMPOOptions",
     "MidpointMPOResult",
     "MidpointMPOSimulator",
+    "IsolatedMidpointMPOSimulator",
     "build_midpoint_mpo_convergence_report",
 }
 

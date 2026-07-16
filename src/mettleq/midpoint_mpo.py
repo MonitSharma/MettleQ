@@ -16,8 +16,11 @@ import argparse
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 import json
+import os
 from pathlib import Path
 import platform
+import subprocess
+import tempfile
 import time
 from typing import Any, Callable, Iterable, Mapping, Optional, Sequence
 
@@ -40,6 +43,10 @@ class MidpointMPOError(RuntimeError):
 
 class MidpointMPODependencyError(ImportError):
     """Raised when the optional tensor-network dependencies are unavailable."""
+
+
+class MidpointMPOWorkerError(MidpointMPOError):
+    """Raised when the isolated pinned midpoint-MPO worker fails."""
 
 
 @dataclass(frozen=True)
@@ -360,6 +367,259 @@ class MidpointMPOSimulator:
         return result
 
 
+class IsolatedMidpointMPOSimulator:
+    """Run midpoint MPO in a pinned interpreter from a normal Qiskit process.
+
+    Qiskit 2.x remains loaded only in the caller. The circuit crosses the
+    process boundary as OpenQASM 2, while the worker imports the independently
+    pinned Qiskit/Quimb stack and returns MettleQ's ordinary result schema.
+    """
+
+    method = "isolated_midpoint_mpo_unswapping"
+
+    def __init__(
+        self,
+        options: Optional[MidpointMPOOptions] = None,
+        *,
+        worker_python: Optional[os.PathLike[str] | str] = None,
+        timeout_seconds: Optional[float] = None,
+    ) -> None:
+        self.options = options or MidpointMPOOptions()
+        configured_python = worker_python or os.environ.get("METTLEQ_MPO_PYTHON")
+        if configured_python is None:
+            candidate = Path(__file__).resolve().parents[2] / ".venv-mpo/bin/python"
+            configured_python = candidate if candidate.exists() else None
+        if configured_python is None:
+            raise MidpointMPODependencyError(
+                "No isolated midpoint-MPO interpreter was configured. Create "
+                "`.venv-mpo` from tools/requirements-midpoint-mpo-p9.txt or set "
+                "METTLEQ_MPO_PYTHON."
+            )
+        # Preserve a virtual environment's interpreter symlink: resolving it
+        # would bypass pyvenv.cfg and silently lose the pinned site-packages.
+        self.worker_python = Path(
+            os.path.abspath(os.fspath(Path(configured_python).expanduser()))
+        )
+        if not self.worker_python.exists():
+            raise MidpointMPODependencyError(
+                f"isolated midpoint-MPO interpreter does not exist: {self.worker_python}"
+            )
+        if timeout_seconds is not None and timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive or None")
+        self.timeout_seconds = timeout_seconds
+        self.last_result: Optional[MidpointMPOResult] = None
+
+    @staticmethod
+    def _validate_circuit(circuit: Any) -> tuple[Any, Any]:
+        try:
+            import qiskit
+            from qiskit import QuantumCircuit, qasm2
+        except ImportError as error:
+            raise MidpointMPODependencyError(
+                "Qiskit is required in the caller to export the worker circuit"
+            ) from error
+        if not isinstance(circuit, QuantumCircuit):
+            raise TypeError("isolated midpoint-MPO input must be a qiskit.QuantumCircuit")
+        if circuit.parameters:
+            raise MidpointMPOError(
+                "isolated midpoint-MPO input must bind all circuit parameters"
+            )
+        unsupported = []
+        for instruction in circuit.data:
+            operation = getattr(instruction, "operation", None)
+            if operation is None:
+                operation = instruction[0]
+            if operation.name in {
+                "measure",
+                "reset",
+                "delay",
+                "initialize",
+                "store",
+            } or getattr(operation, "condition", None) is not None:
+                unsupported.append(operation.name)
+        if unsupported:
+            names = ", ".join(sorted(set(unsupported)))
+            raise MidpointMPOError(
+                "isolated midpoint-MPO accepts unitary circuits without dynamic "
+                f"semantics; unsupported operations: {names}"
+            )
+        return qiskit, qasm2
+
+    def _command(
+        self,
+        *,
+        qasm_path: Path,
+        output_dir: Path,
+        shots: int,
+        expected_bitstring: Optional[str],
+    ) -> list[str]:
+        options = self.options
+        command = [
+            str(self.worker_python),
+            "-m",
+            "mettleq.midpoint_mpo",
+            "--qasm",
+            str(qasm_path),
+            "--output-dir",
+            str(output_dir),
+            "--shots",
+            str(shots),
+            "--max-bond",
+            str(options.max_bond),
+            "--cutoff",
+            str(options.cutoff),
+            "--unswap-threshold",
+            str(options.unswap_threshold),
+            "--center-ratio",
+            str(options.center_ratio),
+            "--max-unswap-iterations",
+            str(options.max_unswap_iterations),
+            "--seed",
+            str(options.seed),
+            "--sabre-trials",
+            str(options.sabre_trials),
+            "--post-sabre-trials",
+            str(options.post_sabre_trials),
+            "--swap-gate-representation",
+            options.swap_gate_representation,
+        ]
+        if expected_bitstring is not None:
+            command.extend(["--expected-bitstring", expected_bitstring])
+        if options.abort_after_no_progress_unswap_cycles is not None:
+            command.extend(
+                [
+                    "--no-progress-limit",
+                    str(options.abort_after_no_progress_unswap_cycles),
+                ]
+            )
+        else:
+            command.append("--allow-unbounded-no-progress")
+        if options.max_unswap_cycles is not None:
+            command.extend(["--max-unswap-cycles", str(options.max_unswap_cycles)])
+        if options.max_work_gates is not None:
+            command.extend(["--max-work-gates", str(options.max_work_gates)])
+        if not options.reuse_full_swap_probe:
+            command.append("--no-reuse-full-swap-probe")
+        if options.parallel_rewire:
+            command.append("--parallel-rewire")
+        if options.parallel_absorb_probes:
+            command.append("--parallel-absorb-probes")
+        return command
+
+    @staticmethod
+    def _read_result(output_dir: Path) -> MidpointMPOResult:
+        summary = json.loads((output_dir / "summary.json").read_text())
+        stats = json.loads((output_dir / "stats.json").read_text())
+        raw_samples = []
+        samples = []
+        with (output_dir / "samples.tsv").open() as handle:
+            next(handle, None)
+            for line in handle:
+                raw, permuted = line.rstrip("\n").split("\t", 1)
+                raw_samples.append(raw)
+                samples.append(permuted)
+        return MidpointMPOResult(
+            counts={str(key): int(value) for key, value in summary["counts"].items()},
+            shots=int(summary["shots"]),
+            predicted_bitstring=summary.get("predicted_bitstring"),
+            expected_bitstring=summary.get("expected_bitstring"),
+            expected_peak_count=summary.get("expected_peak_count"),
+            expected_peak_fraction=summary.get("expected_peak_fraction"),
+            matches_expected_bitstring=summary.get("matches_expected_bitstring"),
+            compression_time_s=float(summary["compression_time_s"]),
+            materialize_time_s=float(summary["materialize_time_s"]),
+            sampling_time_s=float(summary["sampling_time_s"]),
+            measurement_permutation=[
+                int(value) for value in summary["measurement_permutation"]
+            ],
+            samples=samples,
+            raw_samples=raw_samples,
+            diagnostics=dict(summary["diagnostics"]),
+            stats=[dict(row) for row in stats],
+        )
+
+    def run(
+        self,
+        circuit: Any,
+        *,
+        shots: int = 1000,
+        expected_bitstring: Optional[str] = None,
+        output_dir: Optional[os.PathLike[str] | str] = None,
+    ) -> MidpointMPOResult:
+        if shots < 1:
+            raise ValueError("shots must be positive")
+        caller_qiskit, qasm2 = self._validate_circuit(circuit)
+        temporary = None
+        if output_dir is None:
+            temporary = tempfile.TemporaryDirectory(prefix="mettleq-mpo-worker-")
+            worker_dir = Path(temporary.name)
+        else:
+            worker_dir = Path(output_dir).expanduser().resolve()
+            worker_dir.mkdir(parents=True, exist_ok=True)
+        qasm_path = worker_dir / "input.qasm"
+        with qasm_path.open("w") as handle:
+            qasm2.dump(circuit, handle)
+        command = self._command(
+            qasm_path=qasm_path,
+            output_dir=worker_dir,
+            shots=shots,
+            expected_bitstring=expected_bitstring,
+        )
+        log_path = worker_dir / "worker.log"
+        source_root = Path(__file__).resolve().parents[1]
+        env = dict(os.environ)
+        existing_pythonpath = env.get("PYTHONPATH")
+        env["PYTHONPATH"] = os.pathsep.join(
+            value
+            for value in (str(source_root), existing_pythonpath)
+            if value
+        )
+        started = time.perf_counter()
+        try:
+            with log_path.open("w") as log:
+                completed = subprocess.run(
+                    command,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    env=env,
+                    timeout=self.timeout_seconds,
+                    check=False,
+                )
+        except subprocess.TimeoutExpired as error:
+            raise MidpointMPOWorkerError(
+                f"isolated midpoint-MPO worker exceeded {self.timeout_seconds}s",
+                diagnostics={"command": command, "worker_log": str(log_path)},
+            ) from error
+        worker_wall_time_s = time.perf_counter() - started
+        if completed.returncode != 0:
+            tail = "\n".join(log_path.read_text(errors="replace").splitlines()[-30:])
+            raise MidpointMPOWorkerError(
+                f"isolated midpoint-MPO worker exited {completed.returncode}:\n{tail}",
+                diagnostics={"command": command, "worker_log": str(log_path)},
+            )
+        try:
+            result = self._read_result(worker_dir)
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+            raise MidpointMPOWorkerError(
+                "isolated midpoint-MPO worker returned an invalid result bundle",
+                diagnostics={"command": command, "worker_log": str(log_path)},
+            ) from error
+        result.diagnostics.update(
+            {
+                "execution_mode": "isolated_worker",
+                "caller_qiskit_version": caller_qiskit.__version__,
+                "worker_python": str(self.worker_python),
+                "worker_wall_time_s": worker_wall_time_s,
+                "worker_output_dir": str(worker_dir) if output_dir is not None else None,
+            }
+        )
+        self.last_result = result
+        if temporary is not None:
+            temporary.cleanup()
+        return result
+
+
 def build_convergence_report(
     results: Sequence[MidpointMPOResult],
     *,
@@ -504,10 +764,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--max-bond", type=int, default=512)
     parser.add_argument("--cutoff", type=float, default=6e-4)
     parser.add_argument("--unswap-threshold", type=float, default=500_000.0)
+    parser.add_argument("--center-ratio", type=float, default=0.5)
+    parser.add_argument("--max-unswap-iterations", type=int, default=20)
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--sabre-trials", type=int, default=90)
     parser.add_argument("--post-sabre-trials", type=int, default=50)
     parser.add_argument("--no-progress-limit", type=int, default=20)
+    parser.add_argument("--allow-unbounded-no-progress", action="store_true")
+    parser.add_argument("--max-unswap-cycles", type=int, default=None)
+    parser.add_argument("--max-work-gates", type=int, default=None)
+    parser.add_argument(
+        "--swap-gate-representation",
+        choices=("current", "cx", "block"),
+        default="current",
+    )
+    parser.add_argument("--no-reuse-full-swap-probe", action="store_true")
+    parser.add_argument("--parallel-rewire", action="store_true")
+    parser.add_argument("--parallel-absorb-probes", action="store_true")
     args = parser.parse_args(argv)
     try:
         from qiskit import qasm2
@@ -520,10 +793,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         max_bond=args.max_bond,
         cutoff=args.cutoff,
         unswap_threshold=args.unswap_threshold,
+        center_ratio=args.center_ratio,
+        max_unswap_iterations=args.max_unswap_iterations,
         seed=args.seed,
         sabre_trials=args.sabre_trials,
         post_sabre_trials=args.post_sabre_trials,
-        abort_after_no_progress_unswap_cycles=args.no_progress_limit,
+        abort_after_no_progress_unswap_cycles=(
+            None if args.allow_unbounded_no_progress else args.no_progress_limit
+        ),
+        max_unswap_cycles=args.max_unswap_cycles,
+        max_work_gates=args.max_work_gates,
+        swap_gate_representation=args.swap_gate_representation,
+        reuse_full_swap_probe=not args.no_reuse_full_swap_probe,
+        parallel_rewire=args.parallel_rewire,
+        parallel_absorb_probes=args.parallel_absorb_probes,
     )
 
     def progress(row: dict[str, Any]) -> None:
@@ -552,9 +835,11 @@ __all__ = [
     "PUBLISHED_P9_EXPECTED_BITSTRING",
     "MidpointMPODependencyError",
     "MidpointMPOError",
+    "MidpointMPOWorkerError",
     "MidpointMPOOptions",
     "MidpointMPOResult",
     "MidpointMPOSimulator",
+    "IsolatedMidpointMPOSimulator",
     "build_convergence_report",
 ]
 
