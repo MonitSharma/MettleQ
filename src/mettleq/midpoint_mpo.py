@@ -35,6 +35,7 @@ VENDORED_SOLVER_COMMIT = "3bcdc1e5bfd6abb9425f71bd43e560d2b27f45c1"
 _QUIMB_SVD_TELEMETRY = {
     "calls": 0,
     "unscaled_numpy_failures": 0,
+    "unscaled_failure_details": [],
     "isolated_scipy_gesvd_calls": 0,
     "isolated_scipy_gesvd_successes": 0,
     "isolated_scipy_gesvd_failures": 0,
@@ -66,8 +67,11 @@ class _IsolatedSVDProcessError(RuntimeError):
 
 
 def _reset_quimb_safe_svd_telemetry() -> None:
-    for key in _QUIMB_SVD_TELEMETRY:
-        _QUIMB_SVD_TELEMETRY[key] = 0
+    for key, value in _QUIMB_SVD_TELEMETRY.items():
+        if isinstance(value, list):
+            value.clear()
+        else:
+            _QUIMB_SVD_TELEMETRY[key] = 0
 
 
 def _eigh_svd(matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -235,6 +239,15 @@ def _install_quimb_safe_svd() -> None:
         except Exception as error:
             attempts.append(f"numpy_unscaled: {error}")
             _QUIMB_SVD_TELEMETRY["unscaled_numpy_failures"] += 1
+            failure = {
+                "call": _QUIMB_SVD_TELEMETRY["calls"],
+                "shape": [int(size) for size in array.shape],
+                "dtype": str(array.dtype),
+                "max_abs": float(np.max(np.abs(array))) if array.size else 0.0,
+                "error": f"{type(error).__name__}: {error}",
+            }
+            _QUIMB_SVD_TELEMETRY["unscaled_failure_details"].append(failure)
+            print(f"[safe-svd] unscaled failure {failure}", flush=True)
         else:
             return trim(*unscaled_factors)
 

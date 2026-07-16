@@ -209,6 +209,7 @@ def test_midpoint_mpo_svd_uses_recoverable_eigh_fallback(monkeypatch):
     reconstructed = left @ np.diag(singular) @ right
     assert reconstructed == pytest.approx(matrix, abs=1e-8)
     assert _QUIMB_SVD_TELEMETRY["unscaled_numpy_failures"] == 1
+    assert _QUIMB_SVD_TELEMETRY["unscaled_failure_details"][0]["shape"] == [4, 3]
     assert _QUIMB_SVD_TELEMETRY["isolated_scipy_gesvd_calls"] == 1
     assert _QUIMB_SVD_TELEMETRY["isolated_scipy_gesvd_failures"] == 1
     assert _QUIMB_SVD_TELEMETRY["numpy_complex128_failures"] == 1
