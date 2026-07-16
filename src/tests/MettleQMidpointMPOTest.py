@@ -41,17 +41,36 @@ def test_midpoint_mpo_options_reject_invalid_trust_controls():
 def test_midpoint_mpo_convergence_requires_peak_recovery_and_stability():
     report = build_convergence_report(
         [
-            _result(max_bond=64, cutoff=1e-3, fraction=0.10),
+            _result(max_bond=64, cutoff=6e-4, fraction=0.10),
             _result(max_bond=128, cutoff=6e-4, fraction=0.12),
         ],
         peak_fraction_atol=0.03,
     )
     assert report["classification"] == "converged"
     assert report["expected_peak_fraction_spread"] == pytest.approx(0.02)
+    assert report["convergence_axes"] == ["bond"]
+
+    cutoff = build_convergence_report(
+        [
+            _result(max_bond=128, cutoff=1e-3, fraction=0.10),
+            _result(max_bond=128, cutoff=6e-4, fraction=0.11),
+        ]
+    )
+    assert cutoff["classification"] == "converged"
+    assert cutoff["convergence_axes"] == ["cutoff"]
+
+    confounded = build_convergence_report(
+        [
+            _result(max_bond=64, cutoff=1e-3, fraction=0.10),
+            _result(max_bond=128, cutoff=6e-4, fraction=0.10),
+        ]
+    )
+    assert confounded["classification"] == "not_converged"
+    assert confounded["qualified_comparison_count"] == 0
 
     failed = build_convergence_report(
         [
-            _result(max_bond=64, cutoff=1e-3, fraction=0.10),
+            _result(max_bond=64, cutoff=6e-4, fraction=0.10),
             _result(max_bond=128, cutoff=6e-4, fraction=0.10, matches=False),
         ]
     )

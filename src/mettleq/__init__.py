@@ -15,14 +15,6 @@ except Exception:  # source tree without installed package metadata
 from .pretty import info, success, warn, error, table
 from .draw import circuit_ascii, circuit_mpl, schedule_columns, random_circuit
 from .quantikz import circuit_to_quantikz, write_quantikz_tex
-from .midpoint_mpo import (
-    MidpointMPODependencyError,
-    MidpointMPOError,
-    MidpointMPOOptions,
-    MidpointMPOResult,
-    MidpointMPOSimulator,
-    build_convergence_report as build_midpoint_mpo_convergence_report,
-)
 
 __all__ = [
     # Always available utilities
@@ -34,6 +26,25 @@ __all__ = [
     "MidpointMPOOptions", "MidpointMPOResult", "MidpointMPOSimulator",
     "build_midpoint_mpo_convergence_report",
 ]
+
+_MIDPOINT_MPO_EXPORTS = {
+    "MidpointMPODependencyError",
+    "MidpointMPOError",
+    "MidpointMPOOptions",
+    "MidpointMPOResult",
+    "MidpointMPOSimulator",
+    "build_midpoint_mpo_convergence_report",
+}
+
+
+def __getattr__(name):
+    if name not in _MIDPOINT_MPO_EXPORTS:
+        raise AttributeError(name)
+    from . import midpoint_mpo as _midpoint_mpo
+
+    if name == "build_midpoint_mpo_convergence_report":
+        return _midpoint_mpo.build_convergence_report
+    return getattr(_midpoint_mpo, name)
 
 # Detect MLX safely without importing it (to avoid side effects in non-MLX envs)
 _HAS_MLX = False

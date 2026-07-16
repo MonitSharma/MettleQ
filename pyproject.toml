@@ -16,11 +16,11 @@ dependencies = [
 
 [project.optional-dependencies]
 tensor-network = [
-  "cotengra>=0.7.5,<0.9",
+  "cotengra==0.7.5",
   "numba>=0.65,<0.67",
   "qiskit>=2.0,<3",
-  "qiskit-quimb>=0.0.10,<0.1",
-  "quimb>=1.11.2,<2",
+  "qiskit-quimb==0.0.10",
+  "quimb==1.11.2",
 ]
 plot = [
   "matplotlib>=3.7.0",

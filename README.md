@@ -37,11 +37,11 @@ acceleration.
 | Area | Current capability |
 | --- | --- |
 | Accelerated engine | MLX on Apple Silicon, plus opt-in hand-written Metal kernels |
-| Simulation backends | Exact statevector (`sv`) and matrix-product state (`mps`) |
+| Simulation backends | Exact statevector (`sv`), forward matrix-product state (`mps`), and explicit midpoint-MPO/TNO plus unswapping |
 | Circuit inputs | Native Python operations, strict unitary OpenQASM 2.0, Qiskit circuits, and PennyLane QNodes |
 | Workloads | QFT, phase estimation, Grover, QAOA, VQE, QCBM, QNN, random circuits, and spin dynamics |
 | Trust model | Pre-allocation statevector checks, capability-gated dispatch, recoverable SVDs, MPS accuracy thresholds and convergence reports, explicit plans, numerical parity tests, synchronized benchmarks, and safe fallbacks |
-| Current test suite | **356 tests** across the simulator, SDK adapters, planner, algorithms, MPS, peaked circuits, QASM, Metal dispatch, campaign analysis, and MettleQ Studio backend |
+| Current test suite | **359 tests** across the simulator, SDK adapters, planner, algorithms, MPS/MPO, peaked circuits, QASM, Metal dispatch, campaign analysis, and MettleQ Studio backend |
 | Desktop product | MettleQ Studio orchestration, monitoring, plotting, and export |
 | SDK adapters | Native Qiskit backend and registered PennyLane device, plus the original internal `mettleq.qml` teaching wrapper |
 
@@ -66,7 +66,8 @@ account and does not open pull requests against upstream.
 | **Step 6 adaptive statevector/MPS revision** | Fork commit `3f40a47` |
 | **Step 7 MPS limit campaign revision** | Fork commit `7b3d2ff` |
 | **Step 8 reliable/routed MPS engine revision** | Fork commit `0691674` |
-| **MettleQ 0.2 rename, peaked benchmark, and batched sampling** | This revision |
+| **MettleQ 0.2 rename, peaked benchmark, and batched sampling** | Fork commit `be67897` |
+| **Midpoint-MPO/TNO, CPU MPS optimization, and GPU phase gate** | Fork commit `72582c7` |
 
 Original authorship, licensing, and citation information are retained at the
 end of this README.
@@ -116,6 +117,26 @@ For an SDK-focused install without the development and desktop extras:
 python -m pip install -e '.[sdk]'
 ```
 
+The explicit midpoint-MPO method has optional tensor-network dependencies:
+
+```bash
+python -m pip install -e '.[tensor-network]'
+```
+
+The full published 56-qubit P9 result is currently qualified only in its
+isolated, pinned Python 3.10 environment. Keep this separate from the normal
+Qiskit 2.x SDK environment:
+
+```bash
+uv venv --python 3.10 .venv-mpo
+uv pip install --python .venv-mpo/bin/python \
+  -r tools/requirements-midpoint-mpo-p9.txt
+```
+
+Qiskit 2.x circuit input works for the method API, but the Qiskit 2.5 / Quimb
+1.14 P9 compression trajectory was not competitive in this phase. MettleQ
+does not silently downgrade or replace the user's main SDK environment.
+
 Version 0.2 makes `mettleq` and the PennyLane device name `mettleq` canonical.
 The former `mlxq` import namespace, `qupertino` PennyLane entry point, and
 `Qupertino*` adapter class aliases remain available as migration shims; new
@@ -150,6 +171,32 @@ estimator = MettleQEstimatorV2(backend=backend)
 Pass `return_statevector=True` only when the caller needs a full state readback.
 `execution_report=True` adds the execution plan and statevector preflight to
 the native Qiskit result data.
+
+For circuits that specifically benefit from midpoint cancellation, opt into
+the separate MPO/TNO method instead of selecting ordinary forward MPS:
+
+```python
+from qiskit import QuantumCircuit
+from mettleq.midpoint_mpo import MidpointMPOOptions, MidpointMPOSimulator
+
+circuit = QuantumCircuit(8)
+circuit.h(0)
+for qubit in range(7):
+    circuit.cx(qubit, qubit + 1)
+
+simulator = MidpointMPOSimulator(
+    MidpointMPOOptions(max_bond=512, cutoff=6e-4, seed=123)
+)
+result = simulator.run(circuit, shots=1000)
+print(result.counts)
+print(result.diagnostics)
+```
+
+This API accepts a Qiskit `QuantumCircuit`, but it is deliberately not hidden
+behind `method="matrix_product_state"`: midpoint MPO has different routing,
+approximation, runtime, and trust controls. PennyLane exposure is not included
+yet because the method's current contract is finite-shot, whole-circuit
+sampling rather than general differentiable observables.
 
 ### Use MettleQ from PennyLane
 
@@ -188,6 +235,10 @@ Qiskit and PennyLane accept the same policy vocabulary:
 | `mps_routing_strategy="lookahead"` | Persist a logical-to-MPS layout when preflight predicts no more swaps than immediate restoration |
 | `mps_accuracy_policy="report"` | Attach threshold evidence; use `"warn"` or `"error"` for stricter enforcement |
 | `mps_convergence_bond_dimensions=(32, 64, 128)` | Rerun analytic SDK results and report successive-`Dmax` agreement |
+
+`MidpointMPOSimulator` is an additional explicit method with its own
+`max_bond`, `cutoff`, unswapping, seeded-sampling, and expected-peak evidence;
+it is not an `automatic` planner target.
 
 Approximate automatic fallback is opt-in:
 
@@ -323,6 +374,7 @@ is opt-in; unset preserves fully lazy execution.
 ```mermaid
 flowchart TB
     QISKIT["Qiskit circuits and PUBs"] --> QAPI["BackendV2 · SamplerV2 · EstimatorV2"]
+    QISKIT --> MPOAPI["Explicit MidpointMPOSimulator<br/>whole-circuit finite-shot method"]
     PL["PennyLane QNodes and tapes"] --> PAPI["PennyLane mettleq device"]
     QAPI --> IR["Validated canonical circuit IR"]
     PAPI --> IR
@@ -337,14 +389,20 @@ flowchart TB
     ROUTE --> MPSGPU["Bounded MPS · GPU tensors<br/>explicit experimental path"]
     MPSCPU --> SPLIT["Recoverable CPU SVD ladder<br/>truncate · canonicalize · renormalize"]
     MPSGPU --> SPLIT
+    MPOAPI --> MIDPOINT["Consolidate and split at midpoint<br/>left/right linear Sabre routing"]
+    MIDPOINT --> UNSWAP["MPO/TNO cancellation<br/>greedy unswapping + rerouting"]
+    UNSWAP --> MPOSAMPLE["Materialize bounded MPS<br/>seeded sequential sampling"]
     PLAN -. future .-> STAB["Stabilizer · CPU<br/>not implemented"]
 
     SVCPU --> MEASURE["Native probabilities, sampling, counts, expectations"]
     SVGPU --> MEASURE
     SPLIT --> MEASURE
+    MPOSAMPLE --> MEASURE
     MEASURE --> RESULTS["Qiskit Result/DataBin/BitArray or PennyLane results"]
     SPLIT --> TRUST["Accuracy threshold policy<br/>optional Dmax convergence"]
+    UNSWAP --> MPOTRUST["Cutoff/bond contract<br/>expected-peak convergence"]
     TRUST --> RESULTS
+    MPOTRUST --> RESULTS
     PLAN --> EVIDENCE["Selection reason · preflight · dispatch · routing/SVD evidence"]
 ```
 
@@ -355,7 +413,9 @@ Statevector sampling remains on the selected MLX device until shot bits are
 returned. MPS marginals, local expectations, and sequential samples contract
 the tensor network without constructing a dense `2**n` state. CPU and GPU are
 alternative numerical paths, not additive acceleration; the planner keeps MPS
-on CPU until matched evidence establishes a real GPU crossover.
+on CPU until matched evidence establishes a real GPU crossover. Midpoint MPO
+is a separate opt-in Qiskit-circuit method and does not pass through the
+statevector/forward-MPS automatic dispatcher.
 
 ## Performance
 
@@ -777,29 +837,60 @@ The raw rows, exact commands, clean-engine manifests, summaries, and plotted
 source data are frozen in
 [`fork-m3pro-20260716-step8-mps-reliability/`](assets/benchmarks-frozen/fork-m3pro-20260716-step8-mps-reliability/).
 
-### Peaked-circuit boundary: useful benchmark, different required algorithm
+### Published 56-qubit P9: midpoint MPO/TNO now recovers the peak
 
 Quantum Advantage Tracker issue
 [#153](https://github.com/quantum-advantage-tracker/quantum-advantage-tracker.github.io/issues/153)
 uses the 56-qubit `peaked_circuit_P9_Hqap_56x1917` circuit: 3,890 `u` gates
-and 1,917 `rzz` gates. The successful reference is not ordinary left-to-right
-MPS. It consolidates the circuit, builds from the midpoint as an MPO, and uses
-greedy unswapping. MettleQ therefore treats P9 as a research benchmark for a
-future MPO/TNO method, while also running an explicitly labeled forward-MPS
-boundary probe.
+and 1,917 `rzz` gates. The successful algorithm is not ordinary left-to-right
+MPS. It consolidates the circuit, builds from the midpoint as an MPO/TNO,
+absorbs routed layers from both sides, and uses greedy unswapping plus
+rerouting. MettleQ now exposes that algorithm as the separate
+`MidpointMPOSimulator` method.
 
 The exact published QASM and expected bitstring are vendored with Apache-2.0
-attribution and a SHA-256 integrity test. On this M3 Pro, current forward MPS
-at `Dmax=64`, `eps=1e-10`, and 100 shots completed all 5,807 gates in
-**111.52 s**, but returned the published peak **0 times**. It saturated the
-bond cap, accumulated `190.68` relative local discarded-weight sum, and thus
-did not produce a trustworthy P9 answer. Routing still mattered: 25,524 actual
-swaps versus a 68,342 restore-routing baseline, a reduction of 42,818 swaps.
+attribution and SHA-256
+`cff3496c45d9133c1f1693f1d3b0cf1fc2da338f13cd7b339db330a4762d0f35`.
+The matched M3 Pro runs below used Python 3.10.16, Qiskit 1.4.5, Quimb 1.11.2,
+NumPy 2.2.6, SciPy 1.15.3, cutoff `6e-4`, routing and sampling seed 123,
+90/50 initial/post-unswap Sabre trials, no parallel rewiring, and 1,000 shots.
 
-This is not a speed comparison with the reference laptop solver. That method,
-cutoff, sampling procedure, and result contract differ. A 250-operation P9
-prefix completed in 5.75 s and is useful only as a throughput/telemetry probe;
-it has no published-peak accuracy contract.
+| Same-Mac P9 arm | Max bond | End-to-end | Expected peak | Result |
+| --- | ---: | ---: | ---: | --- |
+| MettleQ midpoint MPO | 512 | 1,252.92 s | 100/1,000 | Recovered |
+| MettleQ midpoint MPO | 768 | **958.84 s** | 103/1,000 | Recovered |
+| Published [`p9solver`](https://github.com/alexgalda-m/peaked-mpo-solver) core | 512 | 1,184.16 s | 100/1,000 | Recovered |
+
+The D=512 MettleQ and published-core arms executed the same algorithm and
+identical contract. MettleQ was 5.8% slower in this single ordered pair, so the
+classification is **performance parity**, not a speedup. D=768 changed the
+greedy trajectory, reduced MettleQ time by 23.5% versus D=512 (1.31×), and
+preserved the expected-peak fraction within 0.003. The automated bond report
+therefore classifies D=512/768 as converged at a 0.03 tolerance.
+
+The published-core arm imported the published repository's
+`p9solver.pipeline` directly and ran it through the same in-memory telemetry
+and seeded sampler as MettleQ. This excludes the published CLI's per-cycle
+checkpoint-file overhead from both sides of the compute comparison. A separate
+published-CLI attempt was externally interrupted and is retained as partial
+evidence, not reported as a completed timing.
+
+Cutoff convergence is not yet established. A matched cutoff `1e-3` arm reached
+only 197/1,885 consolidated work gates after 501 seconds and was stopped as an
+operationally impractical trajectory; MettleQ makes no peak claim for that arm.
+The full result is therefore trustworthy at the tested `6e-4` contract, not a
+claim of cutoff-independent convergence.
+
+<div align="center">
+  <img src="assets/benchmarks-frozen/fork-m3pro-20260716-step11-midpoint-mpo/midpoint_mpo_phase.png" alt="MettleQ midpoint-MPO P9 runtime, expected peak, and CPU GPU MPS phase-gate evidence" width="1120"/>
+  <br/><em>Same-Mac P9 results, seeded expected-peak evidence, and the measured reason native GPU MPS remains disabled.</em>
+</div>
+
+For contrast, the historical forward-MPS boundary run at `Dmax=64`,
+`eps=1e-10`, and 100 shots completed all 5,807 source gates in 111.52 s but
+returned the published peak 0 times, saturated its bond cap, and accumulated
+190.68 relative local discarded-weight sum. Its shorter runtime is not a
+usable result and is not compared as an alternative P9 solution.
 
 For CI and matched timing, MettleQ also includes a deterministic mirrored
 peaked family. A seeded `u`/`rzz`/permutation body and its inverse create
@@ -825,14 +916,11 @@ Peak recovery was unchanged. Current MettleQ timings span
   <br/><em>Current end-to-end 1,024-shot result: correctness passes, but Aer remains faster on these small circuits.</em>
 </div>
 
-The viable next algorithmic step is a separate midpoint-MPO/TNO execution
-method that reuses MettleQ's Qiskit translation, trust reports, and benchmark
-protocol. Increasing forward-MPS `Dmax` alone is not a credible route to P9:
-it raises SVD and memory cost while the observed truncation evidence is already
-far outside the configured trust envelope.
-
-The raw matched rows, before/after summary, full P9 attempt, diagnostics,
+The new full MPO summaries, every sample, tensor-network stats, the interrupted
+cutoff and published-CLI arms, matched published-core result, CPU/GPU profile,
 manifest, and plots are frozen in
+[`step11-midpoint-mpo/`](assets/benchmarks-frozen/fork-m3pro-20260716-step11-midpoint-mpo/).
+The earlier forward-MPS and mirrored-family evidence remains frozen in
 [`step9-mettleq-peaked/`](assets/benchmarks-frozen/fork-m3pro-20260716-step9-mettleq-peaked/)
 and
 [`step10-batched-mps-sampling/`](assets/benchmarks-frozen/fork-m3pro-20260716-step10-batched-mps-sampling/).
@@ -927,6 +1015,11 @@ auditable. This fork adds explicit evidence at each layer:
 - **Bounded MPS sampling:** finite shots contract the MPS directly in adaptive
   batches instead of materializing `2**n` probabilities or looping one shot at
   a time; the batch ceiling scales down with `Dmax²` temporary storage.
+- **Explicit MPO trust contract:** midpoint-MPO results record cutoff, bond
+  cap, complete gate consumption, peak tensor footprint, measurement
+  permutation, routing/sampling seeds, expected-peak count, and automated
+  convergence classification. Bond comparisons hold cutoff fixed and cutoff
+  comparisons hold bond fixed, so confounded diagonal points cannot pass.
 - **Hermetic tests:** generated files use temporary directories, and successful
   tests leave the checkout unchanged.
 
@@ -938,6 +1031,7 @@ auditable. This fork adds explicit evidence at each layer:
 | Quantum-computing examples and algorithms | 41 |
 | Internal consistency and measurement parity | 21 |
 | MPS backend and correctness | 22 |
+| Midpoint-MPO API, exact smoke test, and convergence policy | 3 |
 | QML wrapper, QFT, and subset semantics | 10 |
 | Strict OpenQASM and silent-risk checks | 7 |
 | QPE energy estimation | 2 |
@@ -947,7 +1041,7 @@ auditable. This fork adds explicit evidence at each layer:
 | Execution plans, memory policy, planner, and capability reporting | 33 |
 | Native Qiskit and PennyLane integrations and rebrand compatibility | 18 |
 | MettleQ Studio backend and MCP API | 18 |
-| **Total** | **356** |
+| **Total** | **359** |
 
 Run everything with:
 
@@ -970,14 +1064,21 @@ Silicon runner labeled `macOS` and `ARM64`.
   locality/depth checks. Threshold success should be paired with `Dmax`
   convergence or an independent reference for important results.
 - Stable MPS SVD currently moves each two-site matrix through a CPU LAPACK path.
-  This prevents the former process-aborting failure but adds overhead to shallow
-  low-bond circuits. The matched M3 Pro campaign found no GPU-tensor crossover,
-  and Aer remained faster on six of seven schedules.
-- The published 56-qubit P9 peaked circuit needs a midpoint-MPO/TNO plus
-  unswapping strategy. MettleQ forward MPS can execute it approximately, but
-  its failed peak recovery and accumulated truncation explicitly fail the
-  trust contract; P9 support is not complete until a matched method recovers
-  the expected peak with convergence evidence.
+  Direct LAPACK dispatch and NumPy-native two-site contractions improved the
+  matched CPU micro-workload by 1.116× and reduced recorded SVD time from
+  56.06 ms to 45.30 ms. At D=64, SVD still represented 97.8% of measured
+  contraction-plus-SVD time.
+- Native GPU MPS remains disabled by evidence. On this M3 Pro, MLX GPU
+  contraction was slower than NumPy CPU contraction at every tested bond from
+  8 through 128, with no resident or GPU-to-CPU round-trip crossover. GPU MPS
+  should be revisited only after SVD/truncation can remain resident on GPU.
+- Full P9 midpoint-MPO support is qualified in the isolated pinned Python 3.10
+  environment in `tools/requirements-midpoint-mpo-p9.txt`. The normal Qiskit
+  2.x API accepts the method, but the measured Qiskit 2.5 / Quimb 1.14 P9
+  trajectory was not competitive and is not the basis of the published result.
+- The midpoint-MPO API currently targets whole-circuit finite-shot Qiskit
+  inputs. It is not yet exposed as a Qiskit `BackendV2`, Estimator, or PennyLane
+  differentiable device method.
 - The bundled strict importer accepts 33 of 42 OpenQASM files. It rejects reset,
   classical control, mid-circuit measurement, opaque gates, arbitrary includes,
   and malformed declarations.
@@ -1005,6 +1106,7 @@ Silicon runner labeled `macOS` and `ARM64`.
 | `mettleq.qml` | Available, internal wrapper | PennyLane-like tapes, measurements, templates, and parameter-shift gradients |
 | Qiskit `BackendV2` | Available: statevector + MPS | Transpile and run unitary circuits; receive native `Result`, device-sampled counts/memory, optional statevector, accuracy classification, and execution evidence |
 | Qiskit SamplerV2 / EstimatorV2 | Available | Use PUB batching, native `BitArray` samples, device-resident Pauli expectations, and optional analytic `Dmax` convergence reports |
+| Qiskit `MidpointMPOSimulator` | Available, explicit finite-shot method | Pass a `QuantumCircuit`; receive seeded counts/samples plus routing, cutoff, bond, tensor-footprint, and expected-peak evidence |
 | PennyLane `mettleq` device | Available: statevector + MPS | Use a normal QNode with analytic or finite-shot measurements, threshold policy, analytic `Dmax` convergence, tracking, and parameter-shift gradients |
 | Other SDKs | Out of scope for the current phase | Qiskit and PennyLane are the only active integration targets |
 
@@ -1092,7 +1194,47 @@ for MettleQ CPU routed, CPU restore, GPU tensors, and Qiskit Aer CPU MPS. Run
 it only on an otherwise idle machine; implementation order rotates and every
 case starts in a fresh process.
 
-### Run the peaked-circuit protocol
+### Run the full midpoint-MPO P9 protocol
+
+Create the isolated environment shown in [Install](#install), then run:
+
+```bash
+PYTHONPATH=src caffeinate -i .venv-mpo/bin/python -m mettleq.midpoint_mpo \
+  --qasm src/mettleq/datasets/peaked_circuit_P9_Hqap_56x1917.qasm \
+  --output-dir bench/runs/midpoint-mpo-p9 \
+  --shots 1000 \
+  --expected-bitstring 01101110111001100000100000001010011100101101010111110111 \
+  --max-bond 768 --cutoff 0.0006 --seed 123 \
+  --sabre-trials 90 --post-sabre-trials 50 --no-progress-limit 20
+```
+
+This is a long CPU run. It writes `summary.json`, `stats.json`, and
+`samples.tsv`; success requires `termination_reason="completed"`, all 1,885
+consolidated work gates consumed, and the expected bitstring recovered as the
+sample mode. Use `tools/benchmark_midpoint_mpo.py` and
+`tools/summarize_midpoint_mpo_phase.py` for multi-point evidence campaigns.
+
+To reproduce the same-Mac published-core arm, check out the recorded upstream
+solver revision and keep the same pinned environment and sampling contract:
+
+```bash
+git clone https://github.com/alexgalda-m/peaked-mpo-solver \
+  /tmp/peaked-mpo-solver-reference
+git -C /tmp/peaked-mpo-solver-reference checkout \
+  3bcdc1e5bfd6abb9425f71bd43e560d2b27f45c1
+
+PYTHONPATH=src:/tmp/peaked-mpo-solver-reference \
+  caffeinate -i .venv-mpo/bin/python \
+  tools/run_published_peaked_solver_direct.py \
+  --qasm src/mettleq/datasets/peaked_circuit_P9_Hqap_56x1917.qasm \
+  --output-dir bench/runs/published-p9-direct \
+  --shots 1000 \
+  --expected-bitstring 01101110111001100000100000001010011100101101010111110111 \
+  --max-bond 512 --cutoff 0.0006 --seed 123 \
+  --sabre-trials 90 --post-sabre-trials 50 --no-progress-limit 20
+```
+
+### Run the forward-MPS peaked regressions
 
 ```bash
 PYTHONPATH=src caffeinate -i .venv/bin/python \
@@ -1105,10 +1247,10 @@ PYTHONPATH=src caffeinate -i .venv/bin/python \
   --published-prefix-operations 250 --published-timeout-s 120
 ```
 
-`--published-mode full` runs the exact 56-qubit QASM in a killable child
-process. Its result is labeled `mettleq_forward_mps` and
-`algorithm_matched=false`; use the mirrored family for CI and the full input to
-develop and validate the future midpoint-MPO/TNO method.
+`--published-mode full` retains the historical forward-MPS boundary probe in a
+killable child. Its result is labeled `mettleq_forward_mps` and
+`algorithm_matched=false`; use the mirrored family for CI and the explicit
+`MidpointMPOSimulator` command above for a trustworthy full P9 result.
 
 ### Statevector or MPS backend
 
@@ -1186,6 +1328,13 @@ completed full P9 forward-MPS boundary run, and its negative peak-recovery
 evidence. Step 10 repeats the same 12-cell protocol after batched MPS sampling
 under
 [`fork-m3pro-20260716-step10-batched-mps-sampling/`](assets/benchmarks-frozen/fork-m3pro-20260716-step10-batched-mps-sampling/).
+
+The Step 11 midpoint-MPO evidence is frozen under
+[`fork-m3pro-20260716-step11-midpoint-mpo/`](assets/benchmarks-frozen/fork-m3pro-20260716-step11-midpoint-mpo/).
+It contains two full MettleQ P9 runs, the same-Mac published-core arm, all
+3,000 seeded samples, full tensor-network stats, bond convergence, the retained
+cutoff/Qiskit-2/CLI failure arms, CPU two-site/SVD before-after profiling, and
+the evidence-based decision to keep native GPU MPS disabled.
 
 Pre-rename raw evidence retains its original schema and is not rewritten.
 Current README-facing plots with MettleQ labels are reproducibly rendered from
@@ -1299,7 +1448,8 @@ Build local UI artifacts with:
 
 | Path | Purpose |
 | --- | --- |
-| `src/mettleq/` | Simulator, gates, statevector, MPS, QASM, QML wrapper, execution plans, and Metal shaders |
+| `src/mettleq/` | Simulator, gates, statevector, forward MPS, midpoint-MPO API, QASM, QML wrapper, execution plans, and Metal shaders |
+| `src/mettleq/_vendor/peaked_mpo/` | Attributed Apache-2.0 midpoint-MPO/unswapping core derived from the published solver |
 | `src/mettleq/integrations/` | Shared adapter layer, Qiskit `BackendV2`, and PennyLane device plugin |
 | `src/mettleq/datasets/` | Published peaked-circuit input, integrity metadata, attribution, and third-party license |
 | `src/tests/` | Simulator, algorithm, correctness, protocol, and Metal tests |
@@ -1367,4 +1517,6 @@ MettleQ / MettleQ Studio is free and open source under the [MIT License](LICENSE
 The source and compiled macOS binaries may be used, modified, and redistributed,
 including commercially, under the license terms. The vendored P9 benchmark
 input is covered separately by the Apache License 2.0 and attribution stored in
-[`src/mettleq/datasets/`](src/mettleq/datasets/).
+[`src/mettleq/datasets/`](src/mettleq/datasets/). The derived midpoint-MPO core
+retains its Apache-2.0 license and source notice under
+[`src/mettleq/_vendor/peaked_mpo/`](src/mettleq/_vendor/peaked_mpo/).

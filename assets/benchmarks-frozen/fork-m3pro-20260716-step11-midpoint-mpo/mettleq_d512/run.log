@@ -1,0 +1,200 @@
+/Users/monitsharma/.local/share/uv/python/cpython-3.10.16-macos-aarch64-none/lib/python3.10/runpy.py:126: RuntimeWarning: 'mettleq.midpoint_mpo' found in sys.modules after import of package 'mettleq', but prior to execution of 'mettleq.midpoint_mpo'; this may result in unpredictable behaviour
+  warn(RuntimeWarning(msg))
+[cycle 1] 8/1885 work gates after 21s
+[cycle 2] 13/1885 work gates after 37s
+[cycle 3] 15/1885 work gates after 50s
+[cycle 4] 30/1885 work gates after 65s
+[cycle 5] 38/1885 work gates after 84s
+[cycle 6] 57/1885 work gates after 98s
+[cycle 7] 68/1885 work gates after 111s
+[cycle 8] 72/1885 work gates after 128s
+[cycle 9] 76/1885 work gates after 141s
+[cycle 10] 83/1885 work gates after 157s
+[cycle 11] 87/1885 work gates after 169s
+[cycle 12] 123/1885 work gates after 190s
+[cycle 13] 141/1885 work gates after 206s
+[cycle 14] 146/1885 work gates after 220s
+[cycle 15] 156/1885 work gates after 234s
+[cycle 16] 166/1885 work gates after 248s
+[cycle 17] 179/1885 work gates after 266s
+[cycle 18] 191/1885 work gates after 281s
+/tmp/peaked-mpo-solver-reference-20260716/.venv/lib/python3.10/site-packages/quimb/tensor/decomp.py:363: UserWarning: Got: Internal algorithm failed to converge., falling back to scipy gesvd driver.
+  warnings.warn(f"Got: {e}, falling back to scipy gesvd driver.")
+[cycle 19] 197/1885 work gates after 297s
+[cycle 20] 199/1885 work gates after 310s
+[cycle 21] 201/1885 work gates after 322s
+[cycle 22] 203/1885 work gates after 339s
+[cycle 23] 229/1885 work gates after 385s
+[cycle 24] 239/1885 work gates after 403s
+[cycle 25] 244/1885 work gates after 421s
+[cycle 26] 250/1885 work gates after 439s
+[cycle 27] 264/1885 work gates after 460s
+[cycle 28] 271/1885 work gates after 472s
+[cycle 29] 279/1885 work gates after 488s
+[cycle 30] 289/1885 work gates after 506s
+[cycle 31] 304/1885 work gates after 521s
+[cycle 32] 328/1885 work gates after 537s
+[cycle 33] 385/1885 work gates after 555s
+[cycle 34] 418/1885 work gates after 573s
+[cycle 35] 441/1885 work gates after 603s
+[cycle 36] 460/1885 work gates after 616s
+[cycle 37] 498/1885 work gates after 645s
+[cycle 38] 561/1885 work gates after 672s
+[cycle 39] 593/1885 work gates after 688s
+[cycle 40] 662/1885 work gates after 717s
+[cycle 41] 702/1885 work gates after 741s
+[cycle 42] 758/1885 work gates after 759s
+[cycle 43] 798/1885 work gates after 773s
+[cycle 44] 873/1885 work gates after 794s
+[cycle 45] 924/1885 work gates after 810s
+[cycle 46] 970/1885 work gates after 827s
+[cycle 47] 991/1885 work gates after 842s
+[cycle 48] 1024/1885 work gates after 862s
+[cycle 49] 1053/1885 work gates after 882s
+[cycle 50] 1098/1885 work gates after 900s
+[cycle 51] 1197/1885 work gates after 931s
+[cycle 52] 1235/1885 work gates after 951s
+[cycle 53] 1260/1885 work gates after 969s
+[cycle 54] 1329/1885 work gates after 991s
+[cycle 55] 1367/1885 work gates after 1004s
+[cycle 56] 1416/1885 work gates after 1021s
+[cycle 57] 1498/1885 work gates after 1038s
+[cycle 58] 1547/1885 work gates after 1058s
+[cycle 59] 1561/1885 work gates after 1074s
+[cycle 60] 1608/1885 work gates after 1104s
+[cycle 61] 1641/1885 work gates after 1126s
+[cycle 62] 1668/1885 work gates after 1139s
+[cycle 63] 1721/1885 work gates after 1163s
+[cycle 64] 1795/1885 work gates after 1199s
+[cycle 65] 1851/1885 work gates after 1214s
+[cycle 66] 1873/1885 work gates after 1235s
+/tmp/peaked-mpo-solver-reference-20260716/.venv/lib/python3.10/site-packages/cotengra/hyperoptimizers/hyper.py:55: UserWarning: Couldn't find `optuna`, `cmaes`, or `nevergrad` so will use completely random sampling in place of hyper-optimization. It is recommended to install one of these libraries for higher quality contraction paths.
+  warnings.warn(
+{
+  "method": "midpoint_mpo_unswapping",
+  "shots": 1000,
+  "predicted_bitstring": "01101110111001100000100000001010011100101101010111110111",
+  "expected_bitstring": "01101110111001100000100000001010011100101101010111110111",
+  "expected_peak_count": 100,
+  "expected_peak_fraction": 0.1,
+  "matches_expected_bitstring": true,
+  "compression_time_s": 1236.8491407919937,
+  "materialize_time_s": 0.022731291988748126,
+  "sampling_time_s": 16.049432833009632,
+  "total_time_s": 1252.921304916992,
+  "measurement_permutation": [
+    9,
+    55,
+    6,
+    23,
+    38,
+    44,
+    52,
+    14,
+    46,
+    3,
+    34,
+    28,
+    36,
+    13,
+    50,
+    26,
+    41,
+    43,
+    32,
+    2,
+    45,
+    8,
+    16,
+    31,
+    17,
+    25,
+    21,
+    1,
+    5,
+    42,
+    35,
+    29,
+    53,
+    18,
+    7,
+    22,
+    27,
+    37,
+    10,
+    11,
+    47,
+    33,
+    30,
+    40,
+    12,
+    15,
+    19,
+    48,
+    54,
+    4,
+    51,
+    20,
+    49,
+    24,
+    0,
+    39
+  ],
+  "diagnostics": {
+    "termination_reason": "completed",
+    "termination_detail": null,
+    "stall_mode": null,
+    "work_gates_consumed": 1885,
+    "total_work_gates": 1885,
+    "peak_max_bond": 512.0,
+    "peak_total_elements": 1012992.0,
+    "stage_rows": {
+      "rewiring": 134,
+      "absorbing": 2995,
+      "unswapping": 3114,
+      "unswap_cycle_summary": 66,
+      "cycle_progress": 66,
+      "termination": 1,
+      "timing_summary": 1
+    },
+    "initial_rewire_time_s": 2.817010250000749,
+    "initial_rewire_wall_time_s": 2.8170680420007557,
+    "post_unswap_rewire_time_s": 194.8027108310198,
+    "post_unswap_rewire_wall_time_s": 194.810067706072,
+    "absorb_probe_time_s": 494.08169329438533,
+    "absorb_probe_wall_time_s": 496.70516104444687,
+    "absorb_lookahead_time_s": 0.0,
+    "unswap_time_s": 536.2199706249812,
+    "rewire_time_s": 197.61972108102054,
+    "accounted_time_s": 1230.5448527504486,
+    "rewire_wall_time_s": 197.62713574807276,
+    "accounted_wall_time_s": 1230.5522674175008,
+    "source_operation_count": 5807,
+    "consolidated_operation_count": 1885,
+    "final_max_bond": 16,
+    "final_tensor_elements": 3344,
+    "options": {
+      "max_bond": 512,
+      "cutoff": 0.0006,
+      "unswap_threshold": 500000.0,
+      "center_ratio": 0.5,
+      "max_unswap_iterations": 20,
+      "sabre_trials": 90,
+      "post_sabre_trials": 50,
+      "seed": 123,
+      "abort_after_no_progress_unswap_cycles": 20,
+      "max_unswap_cycles": null,
+      "max_work_gates": null,
+      "swap_gate_representation": "current",
+      "reuse_full_swap_probe": true,
+      "parallel_rewire": false,
+      "parallel_absorb_probes": false
+    },
+    "implementation": "mettleq.midpoint_mpo",
+    "vendor_reference_commit": "3bcdc1e5bfd6abb9425f71bd43e560d2b27f45c1",
+    "qiskit_version": "1.4.5",
+    "quimb_version": "1.11.2",
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "python": "3.10.16"
+  }
+}

@@ -1,0 +1,199 @@
+[cycle 1] 8/1885 after 16s
+[cycle 2] 13/1885 after 32s
+[cycle 3] 15/1885 after 43s
+[cycle 4] 30/1885 after 57s
+[cycle 5] 38/1885 after 76s
+[cycle 6] 57/1885 after 89s
+[cycle 7] 68/1885 after 102s
+[cycle 8] 72/1885 after 117s
+[cycle 9] 76/1885 after 129s
+[cycle 10] 83/1885 after 145s
+[cycle 11] 87/1885 after 155s
+[cycle 12] 123/1885 after 176s
+[cycle 13] 141/1885 after 192s
+[cycle 14] 146/1885 after 204s
+[cycle 15] 156/1885 after 217s
+[cycle 16] 166/1885 after 231s
+[cycle 17] 179/1885 after 248s
+[cycle 18] 191/1885 after 261s
+/tmp/peaked-mpo-solver-reference-20260716/.venv/lib/python3.10/site-packages/quimb/tensor/decomp.py:363: UserWarning: Got: Internal algorithm failed to converge., falling back to scipy gesvd driver.
+  warnings.warn(f"Got: {e}, falling back to scipy gesvd driver.")
+[cycle 19] 197/1885 after 277s
+[cycle 20] 199/1885 after 291s
+[cycle 21] 201/1885 after 302s
+[cycle 22] 203/1885 after 319s
+[cycle 23] 229/1885 after 364s
+[cycle 24] 239/1885 after 381s
+[cycle 25] 244/1885 after 399s
+[cycle 26] 250/1885 after 415s
+[cycle 27] 264/1885 after 436s
+[cycle 28] 271/1885 after 448s
+[cycle 29] 279/1885 after 463s
+[cycle 30] 289/1885 after 479s
+[cycle 31] 304/1885 after 495s
+[cycle 32] 328/1885 after 507s
+[cycle 33] 385/1885 after 523s
+[cycle 34] 418/1885 after 542s
+[cycle 35] 441/1885 after 570s
+[cycle 36] 460/1885 after 583s
+[cycle 37] 498/1885 after 609s
+[cycle 38] 561/1885 after 636s
+[cycle 39] 593/1885 after 651s
+[cycle 40] 662/1885 after 680s
+[cycle 41] 702/1885 after 702s
+[cycle 42] 758/1885 after 720s
+[cycle 43] 798/1885 after 734s
+[cycle 44] 873/1885 after 753s
+[cycle 45] 924/1885 after 769s
+[cycle 46] 970/1885 after 785s
+[cycle 47] 991/1885 after 799s
+[cycle 48] 1024/1885 after 818s
+[cycle 49] 1053/1885 after 837s
+[cycle 50] 1098/1885 after 854s
+[cycle 51] 1197/1885 after 884s
+[cycle 52] 1235/1885 after 902s
+[cycle 53] 1260/1885 after 919s
+[cycle 54] 1329/1885 after 939s
+[cycle 55] 1367/1885 after 951s
+[cycle 56] 1416/1885 after 967s
+[cycle 57] 1498/1885 after 982s
+[cycle 58] 1547/1885 after 1000s
+[cycle 59] 1561/1885 after 1015s
+[cycle 60] 1608/1885 after 1043s
+[cycle 61] 1641/1885 after 1063s
+[cycle 62] 1668/1885 after 1076s
+[cycle 63] 1721/1885 after 1098s
+[cycle 64] 1795/1885 after 1133s
+[cycle 65] 1851/1885 after 1147s
+[cycle 66] 1873/1885 after 1167s
+/tmp/peaked-mpo-solver-reference-20260716/.venv/lib/python3.10/site-packages/cotengra/hyperoptimizers/hyper.py:55: UserWarning: Couldn't find `optuna`, `cmaes`, or `nevergrad` so will use completely random sampling in place of hyper-optimization. It is recommended to install one of these libraries for higher quality contraction paths.
+  warnings.warn(
+{
+  "method": "midpoint_mpo_unswapping",
+  "shots": 1000,
+  "predicted_bitstring": "01101110111001100000100000001010011100101101010111110111",
+  "expected_bitstring": "01101110111001100000100000001010011100101101010111110111",
+  "expected_peak_count": 100,
+  "expected_peak_fraction": 0.1,
+  "matches_expected_bitstring": true,
+  "compression_time_s": 1168.4255403330026,
+  "materialize_time_s": 0.023230291000800207,
+  "sampling_time_s": 15.70684720799909,
+  "total_time_s": 1184.1556178320025,
+  "measurement_permutation": [
+    9,
+    55,
+    6,
+    23,
+    38,
+    44,
+    52,
+    14,
+    46,
+    3,
+    34,
+    28,
+    36,
+    13,
+    50,
+    26,
+    41,
+    43,
+    32,
+    2,
+    45,
+    8,
+    16,
+    31,
+    17,
+    25,
+    21,
+    1,
+    5,
+    42,
+    35,
+    29,
+    53,
+    18,
+    7,
+    22,
+    27,
+    37,
+    10,
+    11,
+    47,
+    33,
+    30,
+    40,
+    12,
+    15,
+    19,
+    48,
+    54,
+    4,
+    51,
+    20,
+    49,
+    24,
+    0,
+    39
+  ],
+  "diagnostics": {
+    "termination_reason": "completed",
+    "termination_detail": null,
+    "stall_mode": null,
+    "work_gates_consumed": 1885,
+    "total_work_gates": 1885,
+    "peak_max_bond": 512.0,
+    "peak_total_elements": 1012992.0,
+    "stage_rows": {
+      "rewiring": 134,
+      "absorbing": 2995,
+      "unswapping": 3114,
+      "unswap_cycle_summary": 66,
+      "cycle_progress": 66,
+      "termination": 1,
+      "timing_summary": 1
+    },
+    "initial_rewire_time_s": 2.1940000830072677,
+    "initial_rewire_wall_time_s": 2.1940432080009487,
+    "post_unswap_rewire_time_s": 166.04788858594839,
+    "post_unswap_rewire_wall_time_s": 166.05370262703218,
+    "absorb_probe_time_s": 476.38226518122246,
+    "absorb_probe_wall_time_s": 478.70185609476175,
+    "absorb_lookahead_time_s": 0.0,
+    "unswap_time_s": 515.5800835410482,
+    "rewire_time_s": 168.24188866895565,
+    "accounted_time_s": 1162.5238283047656,
+    "rewire_wall_time_s": 168.24774583503313,
+    "accounted_wall_time_s": 1162.529685470843,
+    "source_operation_count": 5807,
+    "consolidated_operation_count": 1885,
+    "final_max_bond": 16,
+    "final_tensor_elements": 3344,
+    "options": {
+      "max_bond": 512,
+      "cutoff": 0.0006,
+      "unswap_threshold": 500000.0,
+      "center_ratio": 0.5,
+      "max_unswap_iterations": 20,
+      "sabre_trials": 90,
+      "post_sabre_trials": 50,
+      "seed": 123,
+      "abort_after_no_progress_unswap_cycles": 20,
+      "max_unswap_cycles": null,
+      "max_work_gates": null,
+      "swap_gate_representation": "current",
+      "reuse_full_swap_probe": true,
+      "parallel_rewire": false,
+      "parallel_absorb_probes": false
+    },
+    "implementation": "published_p9solver.pipeline_direct",
+    "vendor_reference_commit": "3bcdc1e5bfd6abb9425f71bd43e560d2b27f45c1",
+    "qiskit_version": "1.4.5",
+    "quimb_version": "1.11.2",
+    "published_solver_commit": "3bcdc1e5bfd6abb9425f71bd43e560d2b27f45c1",
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "python": "3.10.16"
+  }
+}

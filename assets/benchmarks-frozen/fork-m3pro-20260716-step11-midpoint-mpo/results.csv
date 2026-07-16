@@ -1,0 +1,4 @@
+status,label,implementation,max_bond,cutoff,shots,expected_peak_count,expected_peak_fraction,matches_expected_bitstring,compression_time_s,sampling_time_s,total_time_s,peak_max_bond,peak_total_elements,source
+complete,MettleQ D=512,mettleq_midpoint_mpo,512,0.0006,1000,100,0.1,True,1236.8491407919937,16.049432833009632,1252.921304916992,512.0,1012992.0,bench/runs/midpoint-mpo-phase11-pinned/mettleq/D512_cutoff6e-4
+complete,MettleQ D=768,mettleq_midpoint_mpo,768,0.0006,1000,103,0.103,True,947.2987317499937,11.523044041998219,958.8378919169918,512.0,1030972.0,bench/runs/midpoint-mpo-phase11-pinned/mettleq/D768_cutoff6e-4
+complete,Published core D=512,published_p9solver_core,512,0.0006,1000,100,0.1,True,1168.4255403330026,15.70684720799909,1184.1556178320025,512.0,1012992.0,bench/runs/midpoint-mpo-phase11-pinned/published_solver/direct

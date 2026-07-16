@@ -1,0 +1,37 @@
+/Users/monitsharma/.local/share/uv/python/cpython-3.10.16-macos-aarch64-none/lib/python3.10/runpy.py:126: RuntimeWarning: 'mettleq.midpoint_mpo' found in sys.modules after import of package 'mettleq', but prior to execution of 'mettleq.midpoint_mpo'; this may result in unpredictable behaviour
+  warn(RuntimeWarning(msg))
+[cycle 1] 8/1885 work gates after 16s
+[cycle 2] 13/1885 work gates after 31s
+[cycle 3] 15/1885 work gates after 42s
+[cycle 4] 30/1885 work gates after 56s
+[cycle 5] 38/1885 work gates after 74s
+[cycle 6] 57/1885 work gates after 87s
+/tmp/peaked-mpo-solver-reference-20260716/.venv/lib/python3.10/site-packages/quimb/tensor/decomp.py:363: UserWarning: Got: Internal algorithm failed to converge., falling back to scipy gesvd driver.
+  warnings.warn(f"Got: {e}, falling back to scipy gesvd driver.")
+[cycle 7] 69/1885 work gates after 102s
+[cycle 8] 75/1885 work gates after 118s
+[cycle 9] 79/1885 work gates after 132s
+[cycle 10] 94/1885 work gates after 152s
+[cycle 11] 104/1885 work gates after 178s
+[cycle 12] 112/1885 work gates after 189s
+[cycle 13] 125/1885 work gates after 202s
+[cycle 14] 132/1885 work gates after 216s
+[cycle 15] 136/1885 work gates after 228s
+[cycle 16] 138/1885 work gates after 241s
+[cycle 17] 138/1885 work gates after 258s
+[cycle 18] 145/1885 work gates after 273s
+[cycle 19] 149/1885 work gates after 290s
+[cycle 20] 153/1885 work gates after 305s
+[cycle 21] 160/1885 work gates after 320s
+[cycle 22] 167/1885 work gates after 341s
+[cycle 23] 168/1885 work gates after 356s
+[cycle 24] 168/1885 work gates after 369s
+[cycle 25] 173/1885 work gates after 385s
+[cycle 26] 176/1885 work gates after 402s
+[cycle 27] 179/1885 work gates after 413s
+[cycle 28] 179/1885 work gates after 429s
+[cycle 29] 184/1885 work gates after 441s
+[cycle 30] 187/1885 work gates after 455s
+[cycle 31] 194/1885 work gates after 470s
+[cycle 32] 196/1885 work gates after 485s
+[cycle 33] 197/1885 work gates after 501s

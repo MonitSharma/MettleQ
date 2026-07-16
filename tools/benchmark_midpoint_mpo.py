@@ -86,12 +86,54 @@ def _convergence(points: list[dict], tolerance: float) -> dict:
     recovered = bool(complete) and all(
         point.get("matches_expected_bitstring") is True for point in complete
     )
-    converged = (
-        len(complete) >= 2
-        and same_prediction
-        and recovered
-        and spread is not None
-        and spread <= tolerance
+    axis_reports = []
+
+    def add_axis_reports(axis: str, varied_key: str, fixed_key: str) -> None:
+        groups = {}
+        for point in complete:
+            groups.setdefault(point[fixed_key], []).append(point)
+        for fixed_value, group in groups.items():
+            varied_values = sorted({point[varied_key] for point in group})
+            if len(varied_values) < 2:
+                continue
+            group_fractions = [
+                point["expected_peak_fraction"]
+                for point in group
+                if point.get("expected_peak_fraction") is not None
+            ]
+            group_spread = (
+                max(group_fractions) - min(group_fractions)
+                if len(group_fractions) >= 2
+                else None
+            )
+            group_predictions = {
+                point.get("predicted_bitstring") for point in group
+            }
+            group_recovered = all(
+                point.get("matches_expected_bitstring") is True for point in group
+            )
+            group_converged = bool(
+                len(group_predictions) == 1
+                and group_recovered
+                and group_spread is not None
+                and group_spread <= tolerance
+            )
+            axis_reports.append(
+                {
+                    "axis": axis,
+                    "fixed_parameter": fixed_key,
+                    "fixed_value": fixed_value,
+                    "varied_parameter": varied_key,
+                    "varied_values": varied_values,
+                    "expected_peak_fraction_spread": group_spread,
+                    "converged": group_converged,
+                }
+            )
+
+    add_axis_reports("bond", "max_bond", "cutoff")
+    add_axis_reports("cutoff", "cutoff", "max_bond")
+    converged = bool(axis_reports) and all(
+        report["converged"] for report in axis_reports
     )
     return {
         "classification": "converged" if converged else "not_converged",
@@ -101,6 +143,9 @@ def _convergence(points: list[dict], tolerance: float) -> dict:
         "same_predicted_bitstring": same_prediction,
         "expected_peak_recovered_all_points": recovered,
         "complete_points": len(complete),
+        "qualified_comparison_count": len(axis_reports),
+        "convergence_axes": sorted({report["axis"] for report in axis_reports}),
+        "axis_reports": axis_reports,
         "points": points,
     }
 

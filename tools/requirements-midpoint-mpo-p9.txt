@@ -1,0 +1,10 @@
+# Reproducibility environment for the full published 56-qubit P9 circuit.
+# Use Python 3.10; do not merge this environment with the Qiskit 2.x SDK env.
+cotengra==0.7.5
+numba==0.65.0
+numpy==2.2.6
+qiskit==1.4.5
+qiskit-quimb==0.0.10
+quimb==1.11.2
+rich>=13.7
+scipy==1.15.3

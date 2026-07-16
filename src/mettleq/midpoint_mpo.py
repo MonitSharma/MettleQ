@@ -365,7 +365,12 @@ def build_convergence_report(
     *,
     peak_fraction_atol: float = 0.03,
 ) -> dict[str, Any]:
-    """Classify cutoff/bond convergence using expected-peak evidence."""
+    """Classify independent cutoff/bond convergence using peak evidence.
+
+    A qualified bond comparison holds cutoff fixed; a qualified cutoff
+    comparison holds maximum bond fixed. This prevents two diagonal points
+    that change both approximation controls from being called converged.
+    """
 
     if peak_fraction_atol <= 0:
         raise ValueError("peak_fraction_atol must be positive")
@@ -399,12 +404,65 @@ def build_convergence_report(
         if len(expected_fractions) >= 2
         else None
     )
-    converged = (
-        len(results) >= 2
-        and same_prediction
-        and expected_recovered
-        and spread is not None
-        and spread <= peak_fraction_atol
+    axis_reports = []
+
+    def add_axis_reports(
+        *,
+        axis: str,
+        varied_key: str,
+        fixed_key: str,
+    ) -> None:
+        groups: dict[Any, list[tuple[MidpointMPOResult, dict[str, Any]]]] = {}
+        for result, point in zip(results, points):
+            fixed_value = point[fixed_key]
+            varied_value = point[varied_key]
+            if fixed_value is None or varied_value is None:
+                continue
+            groups.setdefault(fixed_value, []).append((result, point))
+        for fixed_value, group in groups.items():
+            varied_values = sorted({point[varied_key] for _, point in group})
+            if len(varied_values) < 2:
+                continue
+            group_predictions = [result.predicted_bitstring for result, _ in group]
+            group_fractions = [
+                result.expected_peak_fraction
+                for result, _ in group
+                if result.expected_peak_fraction is not None
+            ]
+            group_spread = (
+                max(group_fractions) - min(group_fractions)
+                if len(group_fractions) >= 2
+                else None
+            )
+            group_same_prediction = len(set(group_predictions)) == 1
+            group_expected_recovered = all(
+                result.matches_expected_bitstring is True for result, _ in group
+            )
+            group_converged = bool(
+                group_same_prediction
+                and group_expected_recovered
+                and group_spread is not None
+                and group_spread <= peak_fraction_atol
+            )
+            axis_reports.append(
+                {
+                    "axis": axis,
+                    "fixed_parameter": fixed_key,
+                    "fixed_value": fixed_value,
+                    "varied_parameter": varied_key,
+                    "varied_values": varied_values,
+                    "point_count": len(group),
+                    "same_predicted_bitstring": group_same_prediction,
+                    "expected_peak_recovered_all_points": group_expected_recovered,
+                    "expected_peak_fraction_spread": group_spread,
+                    "converged": group_converged,
+                }
+            )
+
+    add_axis_reports(axis="bond", varied_key="max_bond", fixed_key="cutoff")
+    add_axis_reports(axis="cutoff", varied_key="cutoff", fixed_key="max_bond")
+    converged = bool(axis_reports) and all(
+        report["converged"] for report in axis_reports
     )
     return {
         "classification": "converged" if converged else "not_converged",
@@ -414,6 +472,9 @@ def build_convergence_report(
         "expected_peak_fraction_spread": spread,
         "same_predicted_bitstring": same_prediction,
         "expected_peak_recovered_all_points": expected_recovered,
+        "qualified_comparison_count": len(axis_reports),
+        "convergence_axes": sorted({report["axis"] for report in axis_reports}),
+        "axis_reports": axis_reports,
         "points": points,
     }
 
