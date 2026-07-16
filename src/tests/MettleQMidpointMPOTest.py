@@ -3,6 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import sys
 
+import numpy as np
 import pytest
 
 from mettleq.midpoint_mpo import (
@@ -12,6 +13,9 @@ from mettleq.midpoint_mpo import (
     MidpointMPOResult,
     MidpointMPOSimulator,
     build_convergence_report,
+    _install_quimb_safe_svd,
+    _QUIMB_SVD_TELEMETRY,
+    _reset_quimb_safe_svd_telemetry,
 )
 
 
@@ -179,16 +183,47 @@ def test_isolated_midpoint_mpo_rejects_dynamic_circuit_before_worker(tmp_path):
         simulator.run(circuit, output_dir=tmp_path)
 
 
-def test_priority_campaign_schedules_balance_every_position():
+def test_midpoint_mpo_svd_uses_recoverable_eigh_fallback(monkeypatch):
+    decomp = pytest.importorskip("quimb.tensor.decomp")
+    scipy_linalg = pytest.importorskip("scipy.linalg")
+    _install_quimb_safe_svd()
+    _reset_quimb_safe_svd_telemetry()
+    matrix = np.arange(12, dtype=np.float64).reshape(4, 3).astype(np.complex128)
+
+    def fail(*_args, **_kwargs):
+        raise np.linalg.LinAlgError("injected convergence failure")
+
+    monkeypatch.setattr(np.linalg, "svd", fail)
+    monkeypatch.setattr(scipy_linalg, "svd", fail)
+    left, singular, right = decomp.svd_truncated(
+        matrix, cutoff=0.0, max_bond=3, absorb=None
+    )
+    reconstructed = left @ np.diag(singular) @ right
+    assert reconstructed == pytest.approx(matrix, abs=1e-8)
+    assert _QUIMB_SVD_TELEMETRY["numpy_complex128_failures"] == 1
+    assert _QUIMB_SVD_TELEMETRY["scipy_gesdd_failures"] == 1
+    assert _QUIMB_SVD_TELEMETRY["eigh_fallbacks"] == 1
+
+
+def test_priority_campaign_schedules_balance_pairwise_order():
     from tools.benchmark_midpoint_mpo_priority_phase import (
         MAIN_ARMS,
         _cutoff_schedule,
         _main_schedule,
     )
 
-    main = _main_schedule(3)
-    for arm in MAIN_ARMS:
-        assert sorted(row["position"] for row in main if row["arm"] == arm) == [0, 1, 2]
+    main = _main_schedule(2)
+    for first_index, first in enumerate(MAIN_ARMS):
+        for second in MAIN_ARMS[first_index + 1 :]:
+            first_before_second = 0
+            second_before_first = 0
+            for repeat in (0, 1):
+                group = [row["arm"] for row in main if row["repeat"] == repeat]
+                if group.index(first) < group.index(second):
+                    first_before_second += 1
+                else:
+                    second_before_first += 1
+            assert first_before_second == second_before_first == 1
     cutoff = _cutoff_schedule(2)
     for arm in {row["arm"] for row in cutoff}:
         assert sorted(row["position"] for row in cutoff if row["arm"] == arm) == [0, 1]

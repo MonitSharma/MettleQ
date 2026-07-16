@@ -31,6 +31,13 @@ PUBLISHED_P9_EXPECTED_BITSTRING = (
     "01101110111001100000100000001010011100101101010111110111"
 )
 VENDORED_SOLVER_COMMIT = "3bcdc1e5bfd6abb9425f71bd43e560d2b27f45c1"
+_QUIMB_SVD_TELEMETRY = {
+    "calls": 0,
+    "rescaled_calls": 0,
+    "numpy_complex128_failures": 0,
+    "scipy_gesdd_failures": 0,
+    "eigh_fallbacks": 0,
+}
 
 
 class MidpointMPOError(RuntimeError):
@@ -47,6 +54,143 @@ class MidpointMPODependencyError(ImportError):
 
 class MidpointMPOWorkerError(MidpointMPOError):
     """Raised when the isolated pinned midpoint-MPO worker fails."""
+
+
+def _reset_quimb_safe_svd_telemetry() -> None:
+    for key in _QUIMB_SVD_TELEMETRY:
+        _QUIMB_SVD_TELEMETRY[key] = 0
+
+
+def _eigh_svd(matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Construct an SVD from a Hermitian eigensolve as a final safe fallback."""
+
+    rows, columns = matrix.shape
+    if rows >= columns:
+        values, vectors = np.linalg.eigh(matrix.conj().T @ matrix)
+        order = np.argsort(values)[::-1]
+        singular = np.sqrt(np.maximum(values[order], 0.0))
+        right_h = vectors[:, order].conj().T
+        left = matrix @ right_h.conj().T
+        nonzero = singular > np.finfo(singular.dtype).eps * max(
+            float(singular[0]) if singular.size else 0.0, 1.0
+        )
+        left[:, nonzero] /= singular[nonzero]
+        if np.any(~nonzero):
+            left[:, ~nonzero] = 0.0
+        return left, singular, right_h
+    values, vectors = np.linalg.eigh(matrix @ matrix.conj().T)
+    order = np.argsort(values)[::-1]
+    singular = np.sqrt(np.maximum(values[order], 0.0))
+    left = vectors[:, order]
+    right_h = left.conj().T @ matrix
+    nonzero = singular > np.finfo(singular.dtype).eps * max(
+        float(singular[0]) if singular.size else 0.0, 1.0
+    )
+    right_h[nonzero, :] /= singular[nonzero, None]
+    if np.any(~nonzero):
+        right_h[~nonzero, :] = 0.0
+    return left, singular, right_h
+
+
+def _install_quimb_safe_svd() -> None:
+    """Replace Quimb's unsafe ``gesvd`` fallback with a scaled safe ladder."""
+
+    from quimb.tensor import decomp
+    import inspect
+
+    if getattr(decomp, "_mettleq_safe_svd_installed", False):
+        return
+    trim_supports_error = "calc_error" in inspect.signature(
+        decomp._trim_and_renorm_svd_result_numba
+    ).parameters
+
+    def safe_svd_truncated(
+        matrix,
+        cutoff=-1.0,
+        cutoff_mode=4,
+        max_bond=-1,
+        absorb=0,
+        renorm=0,
+        calc_error=False,
+        **_ignored,
+    ):
+        array = np.asarray(matrix)
+        _QUIMB_SVD_TELEMETRY["calls"] += 1
+        scale = float(np.max(np.abs(array))) if array.size else 0.0
+        if not np.isfinite(scale):
+            raise MidpointMPOError("midpoint-MPO SVD input contains NaN or infinity")
+        if scale == 0.0:
+            scale = 1.0
+        else:
+            _QUIMB_SVD_TELEMETRY["rescaled_calls"] += 1
+        scaled = np.asarray(array / scale, dtype=np.complex128)
+        attempts = []
+
+        def require_finite(left, singular, right_h, driver):
+            if not (
+                np.all(np.isfinite(left))
+                and np.all(np.isfinite(singular))
+                and np.all(np.isfinite(right_h))
+            ):
+                raise np.linalg.LinAlgError(f"{driver} returned non-finite factors")
+            return left, singular, right_h
+
+        try:
+            left, singular, right_h = require_finite(
+                *np.linalg.svd(scaled, full_matrices=False),
+                "numpy_complex128",
+            )
+        except Exception as error:
+            attempts.append(f"numpy_complex128: {error}")
+            _QUIMB_SVD_TELEMETRY["numpy_complex128_failures"] += 1
+            try:
+                from scipy.linalg import svd
+
+                left, singular, right_h = require_finite(
+                    *svd(
+                        scaled,
+                        full_matrices=False,
+                        lapack_driver="gesdd",
+                        check_finite=False,
+                    ),
+                    "scipy_gesdd",
+                )
+            except Exception as error:
+                attempts.append(f"scipy_gesdd: {error}")
+                _QUIMB_SVD_TELEMETRY["scipy_gesdd_failures"] += 1
+                try:
+                    left, singular, right_h = require_finite(
+                        *_eigh_svd(scaled), "eigh"
+                    )
+                    _QUIMB_SVD_TELEMETRY["eigh_fallbacks"] += 1
+                except Exception as error:
+                    attempts.append(f"eigh: {error}")
+                    raise MidpointMPOError(
+                        "all recoverable midpoint-MPO SVD drivers failed: "
+                        + "; ".join(attempts)
+                    ) from error
+        singular = singular * scale
+        arguments = (
+            left,
+            singular,
+            right_h,
+            cutoff,
+            cutoff_mode,
+            max_bond,
+            absorb,
+            renorm,
+        )
+        if trim_supports_error:
+            return decomp._trim_and_renorm_svd_result_numba(
+                *arguments, calc_error=calc_error
+            )
+        return decomp._trim_and_renorm_svd_result_numba(*arguments)
+
+    # ``svd_truncated_numpy`` resolves this global on every call. Replacing it
+    # bypasses Quimb's ``gesvd`` fallback, which can terminate the worker before
+    # Python can report the numerical failure.
+    decomp.svd_truncated_numba = safe_svd_truncated
+    decomp._mettleq_safe_svd_installed = True
 
 
 @dataclass(frozen=True)
@@ -142,6 +286,7 @@ def _require_tensor_network() -> tuple[Any, Any, Any, Any]:
             mpo_compress_unswap,
             mpo_to_mps,
         )
+        _install_quimb_safe_svd()
     except ImportError as error:
         raise MidpointMPODependencyError(
             "The midpoint-MPO method needs MettleQ's optional tensor-network "
@@ -261,6 +406,7 @@ class MidpointMPOSimulator:
                 on_progress(item)
 
         options = self.options
+        _reset_quimb_safe_svd_telemetry()
         compression_started = time.perf_counter()
         mpo, layers_left, layers_right, returned_rows = compress(
             compiled,
@@ -345,6 +491,7 @@ class MidpointMPOSimulator:
             "vendor_reference_commit": VENDORED_SOLVER_COMMIT,
             "qiskit_version": qiskit.__version__,
             "quimb_version": quimb.__version__,
+            "quimb_safe_svd": dict(_QUIMB_SVD_TELEMETRY),
         }
         result = MidpointMPOResult(
             counts=counts,

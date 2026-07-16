@@ -61,8 +61,7 @@ def _worker_environment(worker_python: Path) -> dict:
 def _main_schedule(repeats: int) -> list[dict]:
     rows = []
     for repeat in range(repeats):
-        offset = repeat % len(MAIN_ARMS)
-        order = MAIN_ARMS[offset:] + MAIN_ARMS[:offset]
+        order = MAIN_ARMS if repeat % 2 == 0 else tuple(reversed(MAIN_ARMS))
         for position, arm in enumerate(order):
             rows.append(
                 {
@@ -391,7 +390,7 @@ def main() -> int:
         type=Path,
         default=Path("/tmp/peaked-mpo-solver-reference-20260716"),
     )
-    parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument("--repeats", type=int, default=2)
     parser.add_argument("--cutoff-repeats", type=int, default=2)
     parser.add_argument("--shots", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=123)
@@ -404,8 +403,8 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    if args.repeats < 3:
-        parser.error("--repeats must be at least 3 for three-position balance")
+    if args.repeats < 2 or args.repeats % 2:
+        parser.error("--repeats must be a positive even count for reversed order")
     if args.cutoff_repeats < 2:
         parser.error("--cutoff-repeats must be at least 2 for reversed order")
     output_dir = args.output_dir.resolve()
@@ -465,8 +464,8 @@ def main() -> int:
             "expected_bitstring": PUBLISHED_P9_EXPECTED_BITSTRING,
         },
         "ordering": (
-            "three-arm Latin rotation for main repeats; reversed two-arm "
-            "ordering for cutoff endpoints"
+            "forward/reverse three-arm ordering for pairwise main balance; "
+            "reversed two-arm ordering for cutoff endpoints"
         ),
         "plan": plan,
     }
