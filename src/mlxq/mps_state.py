@@ -488,6 +488,18 @@ class MPSState:
             2 * max(0, abs(first - second) - 1)
             for first, second in pairs
         )
+        if naive == 0:
+            self.routing_planned_lookahead_swaps = 0
+            self.routing_planned_restore_swaps = 0
+            self.routing_effective_strategy = "restore"
+            self.routing_selection_reason = "all_two_qubit_gates_are_adjacent"
+            return {
+                "configured_strategy": self.opts.routing_strategy,
+                "effective_strategy": self.routing_effective_strategy,
+                "selection_reason": self.routing_selection_reason,
+                "planned_lookahead_swaps": 0,
+                "planned_restore_swaps": 0,
+            }
         order = list(range(self.n))
         routed_swaps = 0
         for index, (first, second) in enumerate(pairs):

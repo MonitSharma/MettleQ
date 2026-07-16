@@ -265,6 +265,25 @@ def test_routing_preflight_refuses_a_swap_increase_for_grid_order():
     )
 
 
+def test_routing_preflight_short_circuits_an_all_adjacent_schedule():
+    simulator = Device(
+        100,
+        backend="mps",
+        execution_device="cpu",
+        mps_opts=MPSOptions(dmax=4),
+    ).sim
+    report = simulator.prepare_routing(
+        [(wire, wire + 1) for wire in range(99)]
+    )
+    assert report == {
+        "configured_strategy": "lookahead",
+        "effective_strategy": "restore",
+        "selection_reason": "all_two_qubit_gates_are_adjacent",
+        "planned_lookahead_swaps": 0,
+        "planned_restore_swaps": 0,
+    }
+
+
 def test_mps_accuracy_error_policy_rejects_excessive_local_loss():
     operations = [
         {"name": "H", "wires": [0], "parameters": []},
