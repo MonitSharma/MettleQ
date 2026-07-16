@@ -34,6 +34,15 @@ PUBLISHED_P9_EXPECTED_BITSTRING = (
 VENDORED_SOLVER_COMMIT = "3bcdc1e5bfd6abb9425f71bd43e560d2b27f45c1"
 _QUIMB_SVD_TELEMETRY = {
     "calls": 0,
+    "matrix_size_buckets": {
+        "le_256": 0,
+        "257_to_1024": 0,
+        "1025_to_4096": 0,
+        "4097_to_16384": 0,
+        "16385_to_65536": 0,
+        "65537_to_262144": 0,
+        "gt_262144": 0,
+    },
     "unscaled_numpy_failures": 0,
     "unscaled_failure_details": [],
     "isolated_scipy_gesvd_calls": 0,
@@ -70,8 +79,29 @@ def _reset_quimb_safe_svd_telemetry() -> None:
     for key, value in _QUIMB_SVD_TELEMETRY.items():
         if isinstance(value, list):
             value.clear()
+        elif isinstance(value, dict):
+            for item in value:
+                value[item] = 0
         else:
             _QUIMB_SVD_TELEMETRY[key] = 0
+
+
+def _record_svd_matrix_size(size: int) -> None:
+    buckets = _QUIMB_SVD_TELEMETRY["matrix_size_buckets"]
+    if size <= 256:
+        buckets["le_256"] += 1
+    elif size <= 1024:
+        buckets["257_to_1024"] += 1
+    elif size <= 4096:
+        buckets["1025_to_4096"] += 1
+    elif size <= 16_384:
+        buckets["4097_to_16384"] += 1
+    elif size <= 65_536:
+        buckets["16385_to_65536"] += 1
+    elif size <= 262_144:
+        buckets["65537_to_262144"] += 1
+    else:
+        buckets["gt_262144"] += 1
 
 
 def _eigh_svd(matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -192,6 +222,7 @@ def _install_quimb_safe_svd() -> None:
     ):
         array = np.asarray(matrix)
         _QUIMB_SVD_TELEMETRY["calls"] += 1
+        _record_svd_matrix_size(int(array.size))
         attempts = []
 
         def require_finite(left, singular, right_h, driver):
