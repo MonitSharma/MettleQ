@@ -13,6 +13,7 @@ convergence report, CLI, and benchmark contract around that core.
 from __future__ import annotations
 
 import argparse
+import atexit
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 import json
@@ -32,6 +33,7 @@ PUBLISHED_P9_EXPECTED_BITSTRING = (
     "01101110111001100000100000001010011100101101010111110111"
 )
 VENDORED_SOLVER_COMMIT = "3bcdc1e5bfd6abb9425f71bd43e560d2b27f45c1"
+DEFAULT_NATIVE_SVD_ISOLATION_MIN_ELEMENTS = 16_384
 _QUIMB_SVD_TELEMETRY = {
     "calls": 0,
     "matrix_size_buckets": {
@@ -43,8 +45,13 @@ _QUIMB_SVD_TELEMETRY = {
         "65537_to_262144": 0,
         "gt_262144": 0,
     },
-    "unscaled_numpy_failures": 0,
-    "unscaled_failure_details": [],
+    "native_in_process_calls": 0,
+    "native_service_min_elements": DEFAULT_NATIVE_SVD_ISOLATION_MIN_ELEMENTS,
+    "native_service_starts": 0,
+    "native_service_calls": 0,
+    "native_service_successes": 0,
+    "native_service_failures": 0,
+    "native_failure_details": [],
     "isolated_scipy_gesvd_calls": 0,
     "isolated_scipy_gesvd_successes": 0,
     "isolated_scipy_gesvd_failures": 0,
@@ -77,6 +84,8 @@ class _IsolatedSVDProcessError(RuntimeError):
 
 def _reset_quimb_safe_svd_telemetry() -> None:
     for key, value in _QUIMB_SVD_TELEMETRY.items():
+        if key == "native_service_min_elements":
+            continue
         if isinstance(value, list):
             value.clear()
         elif isinstance(value, dict):
@@ -154,6 +163,111 @@ def _scipy_gesvd_child(connection, matrix: np.ndarray) -> None:
         connection.close()
 
 
+def _native_svd_service_child(connection) -> None:
+    """Serve Quimb's original native SVD behind a killable boundary."""
+
+    from quimb.tensor import decomp
+    import inspect
+
+    original = decomp.svd_truncated_numba
+    supports_error = "calc_error" in inspect.signature(original).parameters
+    try:
+        while True:
+            request = connection.recv()
+            if request is None:
+                return
+            matrix, arguments, calc_error = request
+            try:
+                if supports_error:
+                    result = original(
+                        matrix,
+                        *arguments,
+                        calc_error=calc_error,
+                    )
+                else:
+                    result = original(matrix, *arguments)
+                connection.send(("ok", result))
+            except BaseException as error:
+                connection.send(("error", f"{type(error).__name__}: {error}"))
+    except (EOFError, BrokenPipeError):
+        return
+    finally:
+        connection.close()
+
+
+class _NativeSVDService:
+    """Persistent process boundary for numerically consequential native SVDs."""
+
+    def __init__(self, *, target=None, timeout_seconds: float = 120.0) -> None:
+        self.target = target or _native_svd_service_child
+        self.timeout_seconds = timeout_seconds
+        self.connection = None
+        self.process = None
+
+    def _start(self) -> None:
+        context = multiprocessing.get_context("spawn")
+        parent, child = context.Pipe(duplex=True)
+        process = context.Process(target=self.target, args=(child,), daemon=True)
+        process.start()
+        child.close()
+        self.connection = parent
+        self.process = process
+        _QUIMB_SVD_TELEMETRY["native_service_starts"] += 1
+
+    def _discard(self) -> Optional[int]:
+        process = self.process
+        connection = self.connection
+        self.process = None
+        self.connection = None
+        if connection is not None:
+            connection.close()
+        if process is None:
+            return None
+        if process.is_alive():
+            process.terminate()
+        process.join(timeout=5.0)
+        return process.exitcode
+
+    def run(
+        self,
+        matrix: np.ndarray,
+        arguments: tuple,
+        calc_error: bool,
+    ):
+        if self.process is None or not self.process.is_alive():
+            self._discard()
+            self._start()
+        try:
+            self.connection.send((np.asarray(matrix), arguments, calc_error))
+            if not self.connection.poll(self.timeout_seconds):
+                raise _IsolatedSVDProcessError(
+                    "native SVD service exceeded "
+                    f"{self.timeout_seconds:g} seconds"
+                )
+            status, payload = self.connection.recv()
+        except (EOFError, BrokenPipeError, OSError) as error:
+            exitcode = self._discard()
+            raise _IsolatedSVDProcessError(
+                f"native SVD service exited {exitcode} without a result"
+            ) from error
+        except BaseException:
+            self._discard()
+            raise
+        if status != "ok":
+            raise _IsolatedSVDProcessError(f"native SVD service failed: {payload}")
+        return payload
+
+    def close(self) -> None:
+        if self.connection is not None and self.process is not None:
+            try:
+                if self.process.is_alive():
+                    self.connection.send(None)
+                    self.process.join(timeout=5.0)
+            except (BrokenPipeError, EOFError, OSError):
+                pass
+        self._discard()
+
+
 def _isolated_scipy_gesvd(
     matrix: np.ndarray,
     *,
@@ -199,16 +313,38 @@ def _isolated_scipy_gesvd(
 
 
 def _install_quimb_safe_svd() -> None:
-    """Replace Quimb's native SVD with a recoverable userspace ladder."""
+    """Contain risky native SVD sizes and provide a recoverable ladder."""
 
     from quimb.tensor import decomp
     import inspect
 
     if getattr(decomp, "_mettleq_safe_svd_installed", False):
         return
+    original_svd_truncated = decomp.svd_truncated_numba
+    original_supports_error = "calc_error" in inspect.signature(
+        original_svd_truncated
+    ).parameters
     trim_supports_error = "calc_error" in inspect.signature(
         decomp._trim_and_renorm_svd_result_numba
     ).parameters
+    try:
+        isolation_min_elements = int(
+            os.environ.get(
+                "METTLEQ_MPO_SVD_ISOLATION_MIN_ELEMENTS",
+                DEFAULT_NATIVE_SVD_ISOLATION_MIN_ELEMENTS,
+            )
+        )
+    except ValueError as error:
+        raise MidpointMPOError(
+            "METTLEQ_MPO_SVD_ISOLATION_MIN_ELEMENTS must be an integer"
+        ) from error
+    if isolation_min_elements < 1:
+        raise MidpointMPOError(
+            "METTLEQ_MPO_SVD_ISOLATION_MIN_ELEMENTS must be positive"
+        )
+    _QUIMB_SVD_TELEMETRY["native_service_min_elements"] = isolation_min_elements
+    native_service = _NativeSVDService()
+    atexit.register(native_service.close)
 
     def safe_svd_truncated(
         matrix,
@@ -258,33 +394,55 @@ def _install_quimb_safe_svd() -> None:
                     f"midpoint-MPO singular-value trimming failed: {error}"
                 ) from error
 
-        # Quimb's Numba wrapper can terminate inside native LAPACK before a
-        # Python exception exists. Calling NumPy directly preserves the
-        # unscaled numerical trajectory while turning non-convergence into a
-        # catchable LinAlgError.
+        native_arguments = (
+            cutoff,
+            cutoff_mode,
+            max_bond,
+            absorb,
+            renorm,
+        )
+        use_service = array.size >= isolation_min_elements
+        if use_service:
+            _QUIMB_SVD_TELEMETRY["native_service_calls"] += 1
+        else:
+            _QUIMB_SVD_TELEMETRY["native_in_process_calls"] += 1
         try:
-            unscaled_factors = require_finite(
-                *np.linalg.svd(array, full_matrices=False),
-                "numpy_unscaled",
-            )
+            if use_service:
+                native_result = native_service.run(
+                    array,
+                    native_arguments,
+                    calc_error,
+                )
+            elif original_supports_error:
+                native_result = original_svd_truncated(
+                    array,
+                    *native_arguments,
+                    calc_error=calc_error,
+                )
+            else:
+                native_result = original_svd_truncated(array, *native_arguments)
         except Exception as error:
-            attempts.append(f"numpy_unscaled: {error}")
-            _QUIMB_SVD_TELEMETRY["unscaled_numpy_failures"] += 1
+            driver = "native_service" if use_service else "native_in_process"
+            attempts.append(f"{driver}: {error}")
+            if use_service:
+                _QUIMB_SVD_TELEMETRY["native_service_failures"] += 1
             failure = {
                 "call": _QUIMB_SVD_TELEMETRY["calls"],
                 "shape": [int(size) for size in array.shape],
                 "dtype": str(array.dtype),
                 "max_abs": float(np.max(np.abs(array))) if array.size else 0.0,
                 "error": f"{type(error).__name__}: {error}",
+                "driver": driver,
             }
-            _QUIMB_SVD_TELEMETRY["unscaled_failure_details"].append(failure)
-            print(f"[safe-svd] unscaled failure {failure}", flush=True)
+            _QUIMB_SVD_TELEMETRY["native_failure_details"].append(failure)
+            print(f"[safe-svd] native failure {failure}", flush=True)
         else:
-            return trim(*unscaled_factors)
+            if use_service:
+                _QUIMB_SVD_TELEMETRY["native_service_successes"] += 1
+            return native_result
 
-        # Quimb normally enters scipy ``gesvd`` here. Preserve that numerical
-        # path, but run it in a fresh child because the native driver has been
-        # observed terminating the long-lived simulation process.
+        # Preserve Quimb's scipy ``gesvd`` fallback, but run it in a fresh
+        # child because the driver can terminate a long-lived process.
         _QUIMB_SVD_TELEMETRY["isolated_scipy_gesvd_calls"] += 1
         try:
             isolated_factors = require_finite(

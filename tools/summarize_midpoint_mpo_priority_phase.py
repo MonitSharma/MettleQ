@@ -311,7 +311,11 @@ def main() -> int:
         key: sum(int(row.get(key, 0)) for row in safe_svd)
         for key in (
             "calls",
-            "unscaled_numpy_failures",
+            "native_in_process_calls",
+            "native_service_starts",
+            "native_service_calls",
+            "native_service_successes",
+            "native_service_failures",
             "isolated_scipy_gesvd_calls",
             "isolated_scipy_gesvd_successes",
             "isolated_scipy_gesvd_failures",
@@ -383,10 +387,11 @@ midpoint-MPO/TNO + unswapping worker. The normal caller used Qiskit
 - Fixed-D512 cutoff classification: **{cutoff['classification']}**; median
   expected-peak fraction spread across 5e-4, 6e-4, and 7e-4 is **{spread:.3f}**.
 - Safe-SVD telemetry across MettleQ arms: {fallback_totals['calls']} calls,
-  {fallback_totals['unscaled_numpy_failures']} intercepted unscaled failures, and
-  {fallback_totals['isolated_scipy_gesvd_successes']} successful killable
-  Quimb-compatible fallbacks; {fallback_totals['eigh_fallbacks']} calls reached
-  the final Hermitian-eigensolver fallback.
+  {fallback_totals['native_service_calls']} routed to the persistent killable
+  native service, {fallback_totals['native_service_failures']} service
+  failures, and {fallback_totals['isolated_scipy_gesvd_successes']} successful
+  fresh-process Quimb-compatible fallbacks; {fallback_totals['eigh_fallbacks']}
+  calls reached the final Hermitian-eigensolver fallback.
 
 `recovery-evidence/` preserves the unsafe Quimb `gesvd` process failure and the
 superseded all-scaled-SVD experiment. Raw contraction statistics are losslessly

@@ -25,6 +25,10 @@ def _crash_svd_child(_connection, _matrix):
     os._exit(23)
 
 
+def _crash_native_svd_service(_connection):
+    os._exit(23)
+
+
 def _result(*, max_bond, cutoff, fraction, matches=True):
     shots = 100
     count = round(shots * fraction)
@@ -196,6 +200,7 @@ def test_midpoint_mpo_svd_uses_recoverable_eigh_fallback(monkeypatch):
         raise np.linalg.LinAlgError("injected convergence failure")
 
     monkeypatch.setattr(decomp, "_mettleq_safe_svd_installed", False)
+    monkeypatch.setattr(decomp, "svd_truncated_numba", fail)
     _install_quimb_safe_svd()
     _reset_quimb_safe_svd_telemetry()
     matrix = np.arange(12, dtype=np.float64).reshape(4, 3).astype(np.complex128)
@@ -208,8 +213,7 @@ def test_midpoint_mpo_svd_uses_recoverable_eigh_fallback(monkeypatch):
     )
     reconstructed = left @ np.diag(singular) @ right
     assert reconstructed == pytest.approx(matrix, abs=1e-8)
-    assert _QUIMB_SVD_TELEMETRY["unscaled_numpy_failures"] == 1
-    assert _QUIMB_SVD_TELEMETRY["unscaled_failure_details"][0]["shape"] == [4, 3]
+    assert _QUIMB_SVD_TELEMETRY["native_failure_details"][0]["shape"] == [4, 3]
     assert _QUIMB_SVD_TELEMETRY["matrix_size_buckets"]["le_256"] == 1
     assert _QUIMB_SVD_TELEMETRY["isolated_scipy_gesvd_calls"] == 1
     assert _QUIMB_SVD_TELEMETRY["isolated_scipy_gesvd_failures"] == 1
@@ -231,6 +235,33 @@ def test_isolated_scipy_gesvd_contains_native_process_failure(monkeypatch):
         match="exited 23 without a result",
     ):
         midpoint_mpo._isolated_scipy_gesvd(np.eye(2))
+
+
+def test_native_svd_service_contains_process_failure():
+    service = midpoint_mpo._NativeSVDService(target=_crash_native_svd_service)
+    try:
+        with pytest.raises(
+            midpoint_mpo._IsolatedSVDProcessError,
+            match="exited 23 without a result",
+        ):
+            service.run(np.eye(128), (0.0, 4, 128, None, 0), False)
+    finally:
+        service.close()
+
+
+def test_native_svd_service_reconstructs_matrix():
+    matrix = np.arange(12, dtype=np.float64).reshape(4, 3).astype(np.complex128)
+    service = midpoint_mpo._NativeSVDService()
+    try:
+        result = service.run(
+            matrix,
+            (0.0, 4, 3, None, 0),
+            False,
+        )
+    finally:
+        service.close()
+    left, singular, right = result[:3]
+    assert left @ np.diag(singular) @ right == pytest.approx(matrix, abs=1e-8)
 
 
 def test_priority_campaign_schedules_balance_pairwise_order():
