@@ -33,6 +33,7 @@ PUBLISHED_P9_EXPECTED_BITSTRING = (
 VENDORED_SOLVER_COMMIT = "3bcdc1e5bfd6abb9425f71bd43e560d2b27f45c1"
 _QUIMB_SVD_TELEMETRY = {
     "calls": 0,
+    "original_failures": 0,
     "rescaled_calls": 0,
     "numpy_complex128_failures": 0,
     "scipy_gesdd_failures": 0,
@@ -100,6 +101,10 @@ def _install_quimb_safe_svd() -> None:
 
     if getattr(decomp, "_mettleq_safe_svd_installed", False):
         return
+    original_svd_truncated = decomp.svd_truncated_numba
+    original_supports_error = "calc_error" in inspect.signature(
+        original_svd_truncated
+    ).parameters
     trim_supports_error = "calc_error" in inspect.signature(
         decomp._trim_and_renorm_svd_result_numba
     ).parameters
@@ -116,13 +121,31 @@ def _install_quimb_safe_svd() -> None:
     ):
         array = np.asarray(matrix)
         _QUIMB_SVD_TELEMETRY["calls"] += 1
+        original_arguments = (
+            array,
+            cutoff,
+            cutoff_mode,
+            max_bond,
+            absorb,
+            renorm,
+        )
+        try:
+            if original_supports_error:
+                return original_svd_truncated(
+                    *original_arguments, calc_error=calc_error
+                )
+            return original_svd_truncated(*original_arguments)
+        except Exception:
+            # Quimb catches ValueError here and calls scipy ``gesvd``. That
+            # fallback can terminate the process, so recover before Quimb sees
+            # the exception while leaving every successful split unchanged.
+            _QUIMB_SVD_TELEMETRY["original_failures"] += 1
         scale = float(np.max(np.abs(array))) if array.size else 0.0
         if not np.isfinite(scale):
             raise MidpointMPOError("midpoint-MPO SVD input contains NaN or infinity")
         if scale == 0.0:
             scale = 1.0
-        else:
-            _QUIMB_SVD_TELEMETRY["rescaled_calls"] += 1
+        _QUIMB_SVD_TELEMETRY["rescaled_calls"] += 1
         scaled = np.asarray(array / scale, dtype=np.complex128)
         attempts = []
 
