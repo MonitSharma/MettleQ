@@ -33,7 +33,7 @@ PUBLISHED_P9_EXPECTED_BITSTRING = (
 VENDORED_SOLVER_COMMIT = "3bcdc1e5bfd6abb9425f71bd43e560d2b27f45c1"
 _QUIMB_SVD_TELEMETRY = {
     "calls": 0,
-    "original_failures": 0,
+    "unscaled_numpy_failures": 0,
     "rescaled_calls": 0,
     "numpy_complex128_failures": 0,
     "scipy_gesdd_failures": 0,
@@ -94,17 +94,13 @@ def _eigh_svd(matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
 
 def _install_quimb_safe_svd() -> None:
-    """Replace Quimb's unsafe ``gesvd`` fallback with a scaled safe ladder."""
+    """Replace Quimb's native SVD with a recoverable userspace ladder."""
 
     from quimb.tensor import decomp
     import inspect
 
     if getattr(decomp, "_mettleq_safe_svd_installed", False):
         return
-    original_svd_truncated = decomp.svd_truncated_numba
-    original_supports_error = "calc_error" in inspect.signature(
-        original_svd_truncated
-    ).parameters
     trim_supports_error = "calc_error" in inspect.signature(
         decomp._trim_and_renorm_svd_result_numba
     ).parameters
@@ -121,32 +117,6 @@ def _install_quimb_safe_svd() -> None:
     ):
         array = np.asarray(matrix)
         _QUIMB_SVD_TELEMETRY["calls"] += 1
-        original_arguments = (
-            array,
-            cutoff,
-            cutoff_mode,
-            max_bond,
-            absorb,
-            renorm,
-        )
-        try:
-            if original_supports_error:
-                return original_svd_truncated(
-                    *original_arguments, calc_error=calc_error
-                )
-            return original_svd_truncated(*original_arguments)
-        except Exception:
-            # Quimb catches ValueError here and calls scipy ``gesvd``. That
-            # fallback can terminate the process, so recover before Quimb sees
-            # the exception while leaving every successful split unchanged.
-            _QUIMB_SVD_TELEMETRY["original_failures"] += 1
-        scale = float(np.max(np.abs(array))) if array.size else 0.0
-        if not np.isfinite(scale):
-            raise MidpointMPOError("midpoint-MPO SVD input contains NaN or infinity")
-        if scale == 0.0:
-            scale = 1.0
-        _QUIMB_SVD_TELEMETRY["rescaled_calls"] += 1
-        scaled = np.asarray(array / scale, dtype=np.complex128)
         attempts = []
 
         def require_finite(left, singular, right_h, driver):
@@ -157,6 +127,46 @@ def _install_quimb_safe_svd() -> None:
             ):
                 raise np.linalg.LinAlgError(f"{driver} returned non-finite factors")
             return left, singular, right_h
+
+        def trim(left, singular, right_h):
+            arguments = (
+                left,
+                singular,
+                right_h,
+                cutoff,
+                cutoff_mode,
+                max_bond,
+                absorb,
+                renorm,
+            )
+            if trim_supports_error:
+                return decomp._trim_and_renorm_svd_result_numba(
+                    *arguments, calc_error=calc_error
+                )
+            return decomp._trim_and_renorm_svd_result_numba(*arguments)
+
+        # Quimb's Numba wrapper can terminate inside native LAPACK before a
+        # Python exception exists. Calling NumPy directly preserves the
+        # unscaled numerical trajectory while turning non-convergence into a
+        # catchable LinAlgError.
+        try:
+            unscaled_factors = require_finite(
+                *np.linalg.svd(array, full_matrices=False),
+                "numpy_unscaled",
+            )
+        except Exception as error:
+            attempts.append(f"numpy_unscaled: {error}")
+            _QUIMB_SVD_TELEMETRY["unscaled_numpy_failures"] += 1
+        else:
+            return trim(*unscaled_factors)
+
+        scale = float(np.max(np.abs(array))) if array.size else 0.0
+        if not np.isfinite(scale):
+            raise MidpointMPOError("midpoint-MPO SVD input contains NaN or infinity")
+        if scale == 0.0:
+            scale = 1.0
+        _QUIMB_SVD_TELEMETRY["rescaled_calls"] += 1
+        scaled = np.asarray(array / scale, dtype=np.complex128)
 
         try:
             left, singular, right_h = require_finite(
@@ -192,22 +202,7 @@ def _install_quimb_safe_svd() -> None:
                         "all recoverable midpoint-MPO SVD drivers failed: "
                         + "; ".join(attempts)
                     ) from error
-        singular = singular * scale
-        arguments = (
-            left,
-            singular,
-            right_h,
-            cutoff,
-            cutoff_mode,
-            max_bond,
-            absorb,
-            renorm,
-        )
-        if trim_supports_error:
-            return decomp._trim_and_renorm_svd_result_numba(
-                *arguments, calc_error=calc_error
-            )
-        return decomp._trim_and_renorm_svd_result_numba(*arguments)
+        return trim(left, singular * scale, right_h)
 
     # ``svd_truncated_numpy`` resolves this global on every call. Replacing it
     # bypasses Quimb's ``gesvd`` fallback, which can terminate the worker before

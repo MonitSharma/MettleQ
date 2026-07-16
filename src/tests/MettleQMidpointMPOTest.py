@@ -190,7 +190,6 @@ def test_midpoint_mpo_svd_uses_recoverable_eigh_fallback(monkeypatch):
         raise np.linalg.LinAlgError("injected convergence failure")
 
     monkeypatch.setattr(decomp, "_mettleq_safe_svd_installed", False)
-    monkeypatch.setattr(decomp, "svd_truncated_numba", fail)
     _install_quimb_safe_svd()
     _reset_quimb_safe_svd_telemetry()
     matrix = np.arange(12, dtype=np.float64).reshape(4, 3).astype(np.complex128)
@@ -202,7 +201,7 @@ def test_midpoint_mpo_svd_uses_recoverable_eigh_fallback(monkeypatch):
     )
     reconstructed = left @ np.diag(singular) @ right
     assert reconstructed == pytest.approx(matrix, abs=1e-8)
-    assert _QUIMB_SVD_TELEMETRY["original_failures"] == 1
+    assert _QUIMB_SVD_TELEMETRY["unscaled_numpy_failures"] == 1
     assert _QUIMB_SVD_TELEMETRY["numpy_complex128_failures"] == 1
     assert _QUIMB_SVD_TELEMETRY["scipy_gesdd_failures"] == 1
     assert _QUIMB_SVD_TELEMETRY["eigh_fallbacks"] == 1
