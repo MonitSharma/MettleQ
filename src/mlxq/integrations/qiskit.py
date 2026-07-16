@@ -44,6 +44,7 @@ from ._common import (
     sample_bits,
     statevector_numpy,
 )
+from ..mps_accuracy import build_convergence_report
 from .. import __version__
 from ..planning import (
     DEFAULT_AUTOMATIC_MPS_MIN_QUBITS,
@@ -130,6 +131,14 @@ class QupertinoBackend(BackendV2):
         allow_approximation: bool = False,
         mps_max_bond_dimension: int = 64,
         mps_truncation_threshold: float = 1e-10,
+        mps_svd_driver: str = "auto",
+        mps_routing_strategy: str = "lookahead",
+        mps_routing_lookahead: int = 8,
+        mps_accuracy_policy: str = "report",
+        mps_max_relative_discarded_weight: Optional[float] = 1e-6,
+        mps_max_norm_error: Optional[float] = 1e-5,
+        mps_convergence_bond_dimensions: Optional[Sequence[int]] = None,
+        mps_convergence_atol: float = 5e-5,
         statevector_gpu_min_qubits: int = DEFAULT_STATEVECTOR_GPU_MIN_QUBITS,
         mps_gpu_min_qubits: Optional[int] = DEFAULT_MPS_GPU_MIN_QUBITS,
         automatic_mps_min_qubits: int = DEFAULT_AUTOMATIC_MPS_MIN_QUBITS,
@@ -150,12 +159,45 @@ class QupertinoBackend(BackendV2):
         self._target = target
         method = normalize_method(method)
         device = normalize_device(device)
+        convergence_dimensions = tuple(
+            sorted(
+                {
+                    int(dimension)
+                    for dimension in (mps_convergence_bond_dimensions or ())
+                }
+            )
+        )
+        if convergence_dimensions and (
+            len(convergence_dimensions) < 2
+            or convergence_dimensions[0] < 1
+        ):
+            raise ValueError(
+                "MPS convergence needs at least two positive bond dimensions"
+            )
+        if mps_convergence_atol <= 0.0:
+            raise ValueError("MPS convergence tolerance must be positive")
         self.set_options(
             method=method,
             device=device,
             allow_approximation=bool(allow_approximation),
             mps_max_bond_dimension=int(mps_max_bond_dimension),
             mps_truncation_threshold=float(mps_truncation_threshold),
+            mps_svd_driver=str(mps_svd_driver),
+            mps_routing_strategy=str(mps_routing_strategy),
+            mps_routing_lookahead=int(mps_routing_lookahead),
+            mps_accuracy_policy=str(mps_accuracy_policy),
+            mps_max_relative_discarded_weight=(
+                None
+                if mps_max_relative_discarded_weight is None
+                else float(mps_max_relative_discarded_weight)
+            ),
+            mps_max_norm_error=(
+                None
+                if mps_max_norm_error is None
+                else float(mps_max_norm_error)
+            ),
+            mps_convergence_bond_dimensions=convergence_dimensions,
+            mps_convergence_atol=float(mps_convergence_atol),
             statevector_gpu_min_qubits=int(statevector_gpu_min_qubits),
             mps_gpu_min_qubits=(
                 None
@@ -170,6 +212,8 @@ class QupertinoBackend(BackendV2):
         self.last_statevector_preflights = []
         self.last_execution_selections = []
         self.last_mps_diagnostics = []
+        self.last_mps_accuracy_reports = []
+        self.last_mps_convergence_reports = []
 
     @classmethod
     def _default_options(cls):
@@ -184,6 +228,14 @@ class QupertinoBackend(BackendV2):
             allow_approximation=False,
             mps_max_bond_dimension=64,
             mps_truncation_threshold=1e-10,
+            mps_svd_driver="auto",
+            mps_routing_strategy="lookahead",
+            mps_routing_lookahead=8,
+            mps_accuracy_policy="report",
+            mps_max_relative_discarded_weight=1e-6,
+            mps_max_norm_error=1e-5,
+            mps_convergence_bond_dimensions=(),
+            mps_convergence_atol=5e-5,
             statevector_gpu_min_qubits=DEFAULT_STATEVECTOR_GPU_MIN_QUBITS,
             mps_gpu_min_qubits=DEFAULT_MPS_GPU_MIN_QUBITS,
             automatic_mps_min_qubits=DEFAULT_AUTOMATIC_MPS_MIN_QUBITS,
@@ -247,6 +299,8 @@ class QupertinoBackend(BackendV2):
         self.last_statevector_preflights = []
         self.last_execution_selections = []
         self.last_mps_diagnostics = []
+        self.last_mps_accuracy_reports = []
+        self.last_mps_convergence_reports = []
         execution_cache = {}
 
         start = time.perf_counter()
@@ -374,6 +428,20 @@ class QupertinoBackend(BackendV2):
             mps_truncation_threshold=float(
                 options["mps_truncation_threshold"]
             ),
+            mps_svd_driver=str(options["mps_svd_driver"]),
+            mps_routing_strategy=str(options["mps_routing_strategy"]),
+            mps_routing_lookahead=int(options["mps_routing_lookahead"]),
+            mps_accuracy_policy=str(options["mps_accuracy_policy"]),
+            mps_max_relative_discarded_weight=(
+                None
+                if options["mps_max_relative_discarded_weight"] is None
+                else float(options["mps_max_relative_discarded_weight"])
+            ),
+            mps_max_norm_error=(
+                None
+                if options["mps_max_norm_error"] is None
+                else float(options["mps_max_norm_error"])
+            ),
             statevector_gpu_min_qubits=int(
                 options["statevector_gpu_min_qubits"]
             ),
@@ -414,6 +482,8 @@ class QupertinoBackend(BackendV2):
             else None
         )
         self.last_mps_diagnostics.append(mps_diagnostics)
+        mps_accuracy = getattr(device, "mps_accuracy_report", None)
+        self.last_mps_accuracy_reports.append(mps_accuracy)
 
         data = {}
         memory = []
@@ -445,6 +515,7 @@ class QupertinoBackend(BackendV2):
                 device.execution_selection
             )
             data["qupertino_mps_diagnostics"] = mps_diagnostics
+            data["qupertino_mps_accuracy"] = mps_accuracy
 
         header = {
             "name": circuit.name,
@@ -504,7 +575,7 @@ class QupertinoSamplerV2(BackendSamplerV2):
 
 
 class QupertinoEstimatorV2(BaseEstimatorV2):
-    """Exact Qiskit EstimatorV2 using device-resident Pauli expectations."""
+    """Qiskit EstimatorV2 with exact statevector or bounded MPS execution."""
 
     def __init__(
         self,
@@ -523,6 +594,8 @@ class QupertinoEstimatorV2(BaseEstimatorV2):
         self._default_precision = float(default_precision)
         self.last_execution_selections = []
         self.last_mps_diagnostics = []
+        self.last_mps_accuracy_reports = []
+        self.last_mps_convergence_reports = []
 
     @property
     def backend(self) -> QupertinoBackend:
@@ -540,25 +613,18 @@ class QupertinoEstimatorV2(BaseEstimatorV2):
     def _run(self, pubs):
         self.last_execution_selections = []
         self.last_mps_diagnostics = []
+        self.last_mps_accuracy_reports = []
+        self.last_mps_convergence_reports = []
         return PrimitiveResult(
             [self._run_pub(pub) for pub in pubs],
             metadata={"version": 2, "backend": "qupertino"},
         )
 
-    def _run_pub(self, pub):
-        bound_circuits = pub.parameter_values.bind_all(pub.circuit)
-        circuits, observables = np.broadcast_arrays(
-            bound_circuits, pub.observables
-        )
+    def _evaluate_bound_pub(self, circuits, observables, options):
         evs = np.zeros(circuits.shape, dtype=np.float64)
-        stds = np.zeros(circuits.shape, dtype=np.float64)
-        options = {
-            name: getattr(self._backend.options, name)
-            for name in self._backend.options
-        }
-        options["execution_report"] = False
         selections = []
         diagnostics = []
+        accuracy_reports = []
         # Group broadcast observables by bound circuit. This executes each
         # parameter point once while retaining at most one simulator state at
         # a time, rather than keeping one exponential state per parameter set.
@@ -586,6 +652,9 @@ class QupertinoEstimatorV2(BaseEstimatorV2):
                 if device.backend == "mps"
                 else None
             )
+            accuracy_reports.append(
+                getattr(device, "mps_accuracy_report", None)
+            )
 
             for index in indices:
                 value = 0.0 + 0.0j
@@ -611,10 +680,67 @@ class QupertinoEstimatorV2(BaseEstimatorV2):
                 if abs(value.imag) > 5e-5 * max(1.0, abs(value.real)):
                     raise QiskitError("Estimator observable is not Hermitian")
                 evs[index] = value.real
+        return evs, selections, diagnostics, accuracy_reports
+
+    def _run_pub(self, pub):
+        bound_circuits = pub.parameter_values.bind_all(pub.circuit)
+        circuits, observables = np.broadcast_arrays(
+            bound_circuits, pub.observables
+        )
+        options = {
+            name: getattr(self._backend.options, name)
+            for name in self._backend.options
+        }
+        options["execution_report"] = False
+        evs, selections, diagnostics, accuracy_reports = (
+            self._evaluate_bound_pub(circuits, observables, options)
+        )
+        stds = np.zeros(circuits.shape, dtype=np.float64)
+
+        convergence = None
+        dimensions = tuple(options["mps_convergence_bond_dimensions"])
+        selected_mps = any(
+            selection["selected_method"] == "matrix_product_state"
+            for selection in selections
+        )
+        if dimensions and selected_mps:
+            base_dmax = int(options["mps_max_bond_dimension"])
+            dimensions = tuple(sorted(set(dimensions + (base_dmax,))))
+            runs = []
+            for dmax in dimensions:
+                if dmax == base_dmax:
+                    run_evs = evs
+                    run_diagnostics = diagnostics
+                    run_accuracy = accuracy_reports
+                else:
+                    convergence_options = dict(options)
+                    convergence_options["mps_max_bond_dimension"] = dmax
+                    convergence_options["mps_accuracy_policy"] = "report"
+                    (
+                        run_evs,
+                        _,
+                        run_diagnostics,
+                        run_accuracy,
+                    ) = self._evaluate_bound_pub(
+                        circuits, observables, convergence_options
+                    )
+                runs.append(
+                    {
+                        "dmax": dmax,
+                        "value": run_evs,
+                        "diagnostics": run_diagnostics,
+                        "accuracy": run_accuracy,
+                    }
+                )
+            convergence = build_convergence_report(
+                runs, atol=float(options["mps_convergence_atol"])
+            )
 
         data = DataBin(evs=evs, stds=stds, shape=evs.shape)
         self.last_execution_selections.extend(selections)
         self.last_mps_diagnostics.extend(diagnostics)
+        self.last_mps_accuracy_reports.extend(accuracy_reports)
+        self.last_mps_convergence_reports.append(convergence)
         return PubResult(
             data,
             metadata={
@@ -623,5 +749,7 @@ class QupertinoEstimatorV2(BaseEstimatorV2):
                 "circuit_metadata": pub.circuit.metadata,
                 "qupertino_execution_selections": selections,
                 "qupertino_mps_diagnostics": diagnostics,
+                "qupertino_mps_accuracy": accuracy_reports,
+                "qupertino_mps_convergence": convergence,
             },
         )

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Optional
 import math
+import time
 import numpy as np
 
 import mlx.core as mx
@@ -18,27 +19,86 @@ _SWAP_GATE = mx.array(
 class MPSOptions:
     dmax: int = 64
     eps: float = 1e-10
+    svd_driver: str = "auto"
+    routing_strategy: str = "lookahead"
+    routing_lookahead: int = 8
+    renormalize_splits: bool = True
 
 
-def _svd_truncate(M: mx.array, dmax: int, eps: float):
+class MPSNumericalError(RuntimeError):
+    """A recoverable numerical failure in compact MPS execution."""
+
+
+_SVD_DRIVERS = {"auto", "gesdd", "gesvd", "numpy"}
+_ROUTING_STRATEGIES = {"lookahead", "restore"}
+
+
+def _safe_cpu_svd(matrix: np.ndarray, driver: str):
+    """Run a catchable CPU SVD with a deterministic fallback ladder.
+
+    MLX 0.32's CPU ``sgesvdx`` can terminate the process before Python can
+    catch an exception. SciPy and NumPy expose LAPACK failures as Python
+    exceptions, which lets the SDK return a useful numerical error instead of
+    losing the whole process.
+    """
+    array = np.asarray(matrix, dtype=np.complex64)
+    if not np.all(np.isfinite(array)):
+        raise MPSNumericalError("MPS SVD input contains NaN or infinity")
+    scale = float(np.max(np.abs(array))) if array.size else 0.0
+    if not np.isfinite(scale) or scale <= 0.0:
+        raise MPSNumericalError("MPS SVD input has zero or invalid scale")
+    scaled = array / scale
+    attempts = []
+    if driver in ("auto", "gesdd", "gesvd"):
+        try:
+            from scipy import linalg as scipy_linalg
+
+            scipy_drivers = (
+                ("gesdd", "gesvd") if driver == "auto" else (driver,)
+            )
+            for scipy_driver in scipy_drivers:
+                try:
+                    U, S, Vh = scipy_linalg.svd(
+                        scaled,
+                        full_matrices=False,
+                        overwrite_a=True,
+                        check_finite=False,
+                        lapack_driver=scipy_driver,
+                    )
+                    return U, S * scale, Vh, f"scipy_{scipy_driver}", attempts
+                except Exception as error:
+                    attempts.append(f"scipy_{scipy_driver}: {error}")
+        except ImportError as error:
+            attempts.append(f"scipy_unavailable: {error}")
+    if driver in ("auto", "numpy") or attempts:
+        for dtype in (np.complex64, np.complex128):
+            try:
+                U, S, Vh = np.linalg.svd(
+                    scaled.astype(dtype, copy=False), full_matrices=False
+                )
+                return U, S * scale, Vh, f"numpy_{dtype.__name__}", attempts
+            except Exception as error:
+                attempts.append(f"numpy_{dtype.__name__}: {error}")
+    detail = "; ".join(attempts) or "no SVD driver was attempted"
+    raise MPSNumericalError(f"All recoverable MPS SVD drivers failed: {detail}")
+
+
+def _svd_truncate(
+    M: mx.array,
+    dmax: int,
+    eps: float,
+    *,
+    driver: str = "auto",
+    renormalize: bool = True,
+):
     # M shape: (a*2, 2*b) for two-site tensor; perform SVD and truncate
-    # MLX currently exposes SVD on CPU. Apple unified memory lets a GPU tensor
-    # be consumed by the CPU stream without first materializing a Python list;
-    # keep this fallback visible in diagnostics rather than calling it GPU SVD.
-    try:
-        U, S, Vh = mx.linalg.svd(M, stream=mx.cpu)
-        mx.eval(S)
-    except Exception:
-        # Last-resort compatibility path for older MLX releases.
-        Mn = np.asarray(M, dtype=np.complex128)
-        U_np, S_np, Vh_np = np.linalg.svd(Mn, full_matrices=False)
-        U = mx.array(U_np.astype(np.complex64), mx.complex64)
-        S = mx.array(S_np.astype(np.float32))
-        Vh = mx.array(Vh_np.astype(np.complex64), mx.complex64)
-    # Determine truncation rank
-    s_vals = mx.reshape(S, (-1,))
-    # Move to host to decide rank
-    s_list = [float(v) for v in s_vals.tolist()]
+    start = time.perf_counter_ns()
+    mx.eval(M)
+    U_np, S_np, Vh_np, used_driver, failed_attempts = _safe_cpu_svd(
+        np.asarray(M, dtype=np.complex64), driver
+    )
+    elapsed_ms = (time.perf_counter_ns() - start) / 1e6
+    s_list = [float(value) for value in np.asarray(S_np).reshape(-1)]
     r = len(s_list)
     # eps-based cutoff
     r_eps = r
@@ -48,6 +108,12 @@ def _svd_truncate(M: mx.array, dmax: int, eps: float):
     r_keep = min(r, max(1, min(dmax, r_eps)))
     total_weight = sum(value * value for value in s_list)
     discarded_weight = sum(value * value for value in s_list[r_keep:])
+    kept_weight = sum(value * value for value in s_list[:r_keep])
+    if not np.isfinite(kept_weight) or kept_weight <= np.finfo(float).tiny:
+        raise MPSNumericalError(
+            "MPS truncation retained a zero or non-finite singular spectrum"
+        )
+    normalization_factor = kept_weight ** 0.5 if renormalize else 1.0
     metadata = {
         "rank_before": r,
         "rank_kept": r_keep,
@@ -57,10 +123,17 @@ def _svd_truncate(M: mx.array, dmax: int, eps: float):
         ),
         "limited_by_dmax": dmax < r,
         "limited_by_eps": r_eps < r,
+        "svd_driver": used_driver,
+        "svd_failed_attempts": list(failed_attempts),
+        "svd_elapsed_ms": elapsed_ms,
+        "pre_normalization_norm": kept_weight ** 0.5,
+        "renormalized": bool(renormalize),
     }
-    U_t = U[:, :r_keep]
-    S_t = S[:r_keep]
-    Vh_t = Vh[:r_keep, :]
+    U_t = mx.array(U_np[:, :r_keep].astype(np.complex64), mx.complex64)
+    S_t = mx.array(
+        (S_np[:r_keep] / normalization_factor).astype(np.float32)
+    )
+    Vh_t = mx.array(Vh_np[:r_keep, :].astype(np.complex64), mx.complex64)
     return U_t, S_t, Vh_t, metadata
 
 
@@ -79,6 +152,16 @@ class MPSState:
             raise ValueError("MPS dmax must be at least 1")
         if self.opts.eps < 0.0:
             raise ValueError("MPS eps must be non-negative")
+        if self.opts.svd_driver not in _SVD_DRIVERS:
+            raise ValueError(
+                f"MPS svd_driver must be one of {sorted(_SVD_DRIVERS)}"
+            )
+        if self.opts.routing_strategy not in _ROUTING_STRATEGIES:
+            raise ValueError(
+                "MPS routing_strategy must be 'lookahead' or 'restore'"
+            )
+        if self.opts.routing_lookahead < 0:
+            raise ValueError("MPS routing_lookahead must be non-negative")
         # Bond diagnostics
         self.bonds: List[int] = [1] * max(0, self.n - 1)
         self.max_bond_ever: int = 1
@@ -104,7 +187,89 @@ class MPSState:
         self.trunc_events = 0
         self.local_discarded_weight_sum = 0.0
         self.local_discarded_weight_max = 0.0
+        self.relative_discarded_weight_sum = 0.0
+        self.relative_discarded_weight_max = 0.0
         self.last_truncation = None
+        self.canonical_center = 0
+        self.renormalization_count = 0
+        self.last_pre_normalization_norm = 1.0
+        self.svd_calls = 0
+        self.svd_total_ms = 0.0
+        self.svd_fallback_count = 0
+        self.svd_drivers_used: dict[str, int] = {}
+        self.site_to_logical = list(range(self.n))
+        self.logical_to_site = list(range(self.n))
+        self.routing_logical_gates = 0
+        self.routing_swaps = 0
+        self.routing_naive_restore_swaps = 0
+        self.routing_final_restore_swaps = 0
+
+    def _replace_tensor(self, index: int, value: np.ndarray) -> None:
+        self.A[index] = mx.array(
+            np.asarray(value, dtype=np.complex64), mx.complex64
+        )
+
+    def _refresh_bonds(self) -> None:
+        self.bonds = [int(tensor.shape[2]) for tensor in self.A[:-1]]
+        self.max_bond_ever = max(
+            self.max_bond_ever, max(self.bonds, default=1)
+        )
+
+    def _move_center_right(self, site: int) -> None:
+        tensor = np.asarray(self.A[site], dtype=np.complex64)
+        dl, physical, dr = tensor.shape
+        q, r = np.linalg.qr(
+            tensor.reshape(dl * physical, dr), mode="reduced"
+        )
+        next_tensor = np.asarray(self.A[site + 1], dtype=np.complex64)
+        absorbed = np.tensordot(r, next_tensor, axes=([1], [0]))
+        self._replace_tensor(site, q.reshape(dl, physical, q.shape[1]))
+        self._replace_tensor(site + 1, absorbed)
+        self.canonical_center = site + 1
+
+    def _move_center_left(self, site: int) -> None:
+        tensor = np.asarray(self.A[site], dtype=np.complex64)
+        dl, physical, dr = tensor.shape
+        q, r = np.linalg.qr(
+            tensor.reshape(dl, physical * dr).T, mode="reduced"
+        )
+        previous = np.asarray(self.A[site - 1], dtype=np.complex64)
+        absorbed = np.tensordot(previous, r.T, axes=([2], [0]))
+        self._replace_tensor(site - 1, absorbed)
+        self._replace_tensor(site, q.T.reshape(q.shape[1], physical, dr))
+        self.canonical_center = site - 1
+
+    def _move_center(self, target: int) -> None:
+        target = int(target)
+        if not 0 <= target < self.n:
+            raise ValueError("MPS canonical center is out of range")
+        while self.canonical_center < target:
+            self._move_center_right(self.canonical_center)
+        while self.canonical_center > target:
+            self._move_center_left(self.canonical_center)
+        self._refresh_bonds()
+
+    def renormalize(self) -> float:
+        """Normalize the mixed-canonical center without a full contraction."""
+        center = np.asarray(
+            self.A[self.canonical_center], dtype=np.complex128
+        )
+        norm = float(np.linalg.norm(center.reshape(-1)))
+        if not np.isfinite(norm) or norm <= np.finfo(float).tiny:
+            raise MPSNumericalError(
+                "Cannot renormalize an MPS with zero or non-finite norm"
+            )
+        self.A[self.canonical_center] = (
+            self.A[self.canonical_center] / norm
+        )
+        self.renormalization_count += 1
+        self.last_pre_normalization_norm = norm
+        return norm
+
+    def canonicalize(self, center: int = 0, *, normalize: bool = True) -> float:
+        """Move the explicit orthogonality center and optionally normalize."""
+        self._move_center(center)
+        return self.renormalize() if normalize else self.norm()
 
     # -------------- internal helpers --------------
     def _two_site_tensor(self, i: int) -> mx.array:
@@ -121,7 +286,23 @@ class MPSState:
     def _split_two_site(self, T: mx.array, bond: int) -> tuple[mx.array, mx.array]:
         Dl, d1, d2, Dr2 = T.shape
         M = mx.reshape(mx.transpose(T, (0,1,2,3)), (Dl*d1, d2*Dr2))
-        U, S, Vh, metadata = _svd_truncate(M, self.opts.dmax, self.opts.eps)
+        U, S, Vh, metadata = _svd_truncate(
+            M,
+            self.opts.dmax,
+            self.opts.eps,
+            driver=self.opts.svd_driver,
+            renormalize=self.opts.renormalize_splits,
+        )
+        self.svd_calls += 1
+        self.svd_total_ms += float(metadata["svd_elapsed_ms"])
+        self.svd_fallback_count += len(metadata["svd_failed_attempts"])
+        driver = str(metadata["svd_driver"])
+        self.svd_drivers_used[driver] = self.svd_drivers_used.get(driver, 0) + 1
+        if metadata["renormalized"]:
+            self.renormalization_count += 1
+            self.last_pre_normalization_norm = float(
+                metadata["pre_normalization_norm"]
+            )
         r = int(U.shape[1])
         # Truncation detection (due to dmax or eps)
         if r < metadata["rank_before"]:
@@ -131,6 +312,11 @@ class MPSState:
             self.local_discarded_weight_sum += discarded
             self.local_discarded_weight_max = max(
                 self.local_discarded_weight_max, discarded
+            )
+            relative = float(metadata["relative_discarded_weight"])
+            self.relative_discarded_weight_sum += relative
+            self.relative_discarded_weight_max = max(
+                self.relative_discarded_weight_max, relative
             )
             self.last_truncation = {"bond": int(bond), **metadata}
         # reshape back
@@ -152,6 +338,7 @@ class MPSState:
         self.A[q] = mx.transpose(B, (1, 0, 2))   # (Dl, 2, Dr)
 
     def _apply_two_adjacent(self, U4: mx.array, i: int):
+        self._move_center(i)
         T = self._two_site_tensor(i)  # (Dl,2,2,Dr2)
         Dl, _, _, Dr2 = T.shape
         # merge physical legs (2,2)->4 and apply U
@@ -172,6 +359,7 @@ class MPSState:
             self.bonds[i] = r
         if r > self.max_bond_ever:
             self.max_bond_ever = r
+        self.canonical_center = i + 1
 
     def _apply_two_adjacent_zz(self, theta: float, i: int):
         """Apply exp(-i theta Z⊗Z) via MPO-like diagonal action without forming 4x4.
@@ -179,6 +367,7 @@ class MPSState:
         Uses decomposition U = c0 I⊗I + c3 Z⊗Z, with c0=(a+b)/2, c3=(a-b)/2,
         where a=e^{-iθ}, b=e^{iθ}. This avoids a 4x4 matmul over merged legs.
         """
+        self._move_center(i)
         # Two-site tensor T (Dl,2,2,Dr2)
         T = self._two_site_tensor(i)
         Dl, d1, d2, Dr2 = T.shape
@@ -203,6 +392,7 @@ class MPSState:
             self.bonds[i] = r
         if r > self.max_bond_ever:
             self.max_bond_ever = r
+        self.canonical_center = i + 1
 
     def _swap_adjacent(self, i: int):
         # Swap sites i and i+1 by applying SWAP gate U_swap to two-site tensor
@@ -232,6 +422,131 @@ class MPSState:
         while k > i:
             k -= 1
             self._swap_adjacent(k)
+
+    def apply_logical_single(self, U: mx.array, logical_wire: int) -> None:
+        """Apply a gate using the persistent routed logical-to-site layout."""
+        logical_wire = int(logical_wire)
+        if not 0 <= logical_wire < self.n:
+            raise ValueError("Qubit index out of range")
+        self.apply_single(U, self.logical_to_site[logical_wire])
+
+    @staticmethod
+    def _candidate_route_swaps(
+        first_site: int, second_site: int, move_first: bool
+    ) -> list[int]:
+        if first_site < second_site:
+            if move_first:
+                return list(range(first_site, second_site - 1))
+            return list(range(second_site - 1, first_site, -1))
+        if move_first:
+            return list(range(first_site - 1, second_site, -1))
+        return list(range(second_site, first_site - 1))
+
+    @staticmethod
+    def _simulate_layout_swaps(order: list[int], swaps: list[int]) -> list[int]:
+        candidate = list(order)
+        for site in swaps:
+            candidate[site], candidate[site + 1] = (
+                candidate[site + 1],
+                candidate[site],
+            )
+        return candidate
+
+    @staticmethod
+    def _lookahead_layout_cost(
+        order: list[int], lookahead: list[tuple[int, int]]
+    ) -> float:
+        positions = {logical: site for site, logical in enumerate(order)}
+        cost = 0.0
+        for index, (first, second) in enumerate(lookahead):
+            distance = abs(positions[int(first)] - positions[int(second)])
+            cost += max(0, distance - 1) / float(index + 1)
+        return cost
+
+    def _routing_swap(self, site: int, *, final_restore: bool = False) -> None:
+        self._swap_adjacent(site)
+        first = self.site_to_logical[site]
+        second = self.site_to_logical[site + 1]
+        self.site_to_logical[site], self.site_to_logical[site + 1] = (
+            second,
+            first,
+        )
+        self.logical_to_site[first] = site + 1
+        self.logical_to_site[second] = site
+        self.routing_swaps += 1
+        if final_restore:
+            self.routing_final_restore_swaps += 1
+
+    def apply_logical_two(
+        self,
+        U4: mx.array,
+        first: int,
+        second: int,
+        *,
+        lookahead: Optional[List[tuple[int, int]]] = None,
+    ) -> None:
+        """Apply a logical two-qubit gate with persistent lookahead routing."""
+        first, second = int(first), int(second)
+        if first == second:
+            raise ValueError("Control and target must differ")
+        if not (0 <= first < self.n and 0 <= second < self.n):
+            raise ValueError("Qubit index out of range")
+        first_site = self.logical_to_site[first]
+        second_site = self.logical_to_site[second]
+        distance = abs(first_site - second_site)
+        self.routing_logical_gates += 1
+        naive_swaps = 2 * max(0, abs(first - second) - 1)
+        self.routing_naive_restore_swaps += naive_swaps
+        if self.opts.routing_strategy == "restore":
+            self.apply_two(U4, first_site, second_site)
+            self.routing_swaps += naive_swaps
+            return
+
+        lookahead = list(lookahead or [])[: self.opts.routing_lookahead]
+        first_swaps = self._candidate_route_swaps(
+            first_site, second_site, True
+        )
+        second_swaps = self._candidate_route_swaps(
+            first_site, second_site, False
+        )
+        first_order = self._simulate_layout_swaps(
+            self.site_to_logical, first_swaps
+        )
+        second_order = self._simulate_layout_swaps(
+            self.site_to_logical, second_swaps
+        )
+        first_score = self._lookahead_layout_cost(first_order, lookahead)
+        second_score = self._lookahead_layout_cost(second_order, lookahead)
+        selected_swaps = (
+            first_swaps if first_score <= second_score else second_swaps
+        )
+        for site in selected_swaps:
+            self._routing_swap(site)
+
+        first_site = self.logical_to_site[first]
+        second_site = self.logical_to_site[second]
+        if abs(first_site - second_site) != 1:
+            raise MPSNumericalError("MPS router failed to make operands adjacent")
+        left_site = min(first_site, second_site)
+        ordered_gate = U4
+        if self.site_to_logical[left_site] != first:
+            ordered_gate = mx.matmul(
+                _SWAP_GATE, mx.matmul(U4, _SWAP_GATE)
+            )
+        self._apply_two_adjacent(ordered_gate, left_site)
+
+    def restore_logical_order(self) -> None:
+        """Return routed tensors to logical wire order before measurement."""
+        for target_site in range(self.n):
+            current_site = self.logical_to_site[target_site]
+            while current_site > target_site:
+                self._routing_swap(current_site - 1, final_restore=True)
+                current_site -= 1
+            while current_site < target_site:
+                self._routing_swap(current_site, final_restore=True)
+                current_site += 1
+        if self.site_to_logical != list(range(self.n)):
+            raise MPSNumericalError("MPS router failed to restore logical order")
 
     # -------------- TEBD-style helpers --------------
     def apply_single_all(self, U2: mx.array):
@@ -299,16 +614,47 @@ class MPSState:
             "truncated": bool(self.truncated_any),
             "local_discarded_weight_sum": float(self.local_discarded_weight_sum),
             "local_discarded_weight_max": float(self.local_discarded_weight_max),
+            "relative_discarded_weight_sum": float(
+                self.relative_discarded_weight_sum
+            ),
+            "relative_discarded_weight_max": float(
+                self.relative_discarded_weight_max
+            ),
             "last_event": (
                 dict(self.last_truncation) if self.last_truncation is not None else None
             ),
             "tensor_device": self.tensor_device,
             "svd_device": self.svd_device,
+            "svd_requested_driver": self.opts.svd_driver,
+            "svd_drivers_used": dict(self.svd_drivers_used),
+            "svd_calls": int(self.svd_calls),
+            "svd_total_ms": float(self.svd_total_ms),
+            "svd_fallback_count": int(self.svd_fallback_count),
             "configured_max_bond_dimension": int(self.opts.dmax),
             "configured_truncation_threshold": float(self.opts.eps),
             "current_bond_dimension_max": int(current_bond_max),
             "current_bond_dimension_mean": float(self.bond_mean()),
             "maximum_bond_dimension_reached": int(self.max_bond_ever),
+            "canonical_center": int(self.canonical_center),
+            "renormalization_count": int(self.renormalization_count),
+            "last_pre_normalization_norm": float(
+                self.last_pre_normalization_norm
+            ),
+            "routing_strategy": self.opts.routing_strategy,
+            "routing_lookahead": int(self.opts.routing_lookahead),
+            "routing_logical_two_qubit_gates": int(
+                self.routing_logical_gates
+            ),
+            "routing_swaps": int(self.routing_swaps),
+            "routing_final_restore_swaps": int(
+                self.routing_final_restore_swaps
+            ),
+            "routing_naive_restore_swaps": int(
+                self.routing_naive_restore_swaps
+            ),
+            "routing_swap_reduction": int(
+                self.routing_naive_restore_swaps - self.routing_swaps
+            ),
             "state_norm": self.norm(),
             "approximation_warning": (
                 "local discarded weights are telemetry, not a global fidelity bound"
@@ -371,19 +717,13 @@ class MPSState:
         )
 
     def norm(self) -> float:
-        tensors = self._numpy_tensors()
-        environment = np.ones((1, 1), dtype=np.complex128)
-        identity = np.eye(2, dtype=np.complex128)
-        for tensor in tensors:
-            environment = self._transfer(environment, tensor, identity)
-        return float(max(0.0, environment.reshape(-1)[0].real) ** 0.5)
+        center = np.asarray(
+            self.A[self.canonical_center], dtype=np.complex128
+        )
+        return float(np.linalg.norm(center.reshape(-1)))
 
     def normalize(self) -> float:
-        norm = self.norm()
-        if norm <= 0.0:
-            raise RuntimeError("Cannot normalize a zero MPS state")
-        self.A[0] = self.A[0] / norm
-        return norm
+        return self.renormalize()
 
     def expectation_product(self, operators: dict[int, np.ndarray]) -> complex:
         """Expectation of a tensor product of local 2x2 operators."""

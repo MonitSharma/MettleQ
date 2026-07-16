@@ -305,7 +305,17 @@ class Device:
                 name = str(op_name or "").upper()
                 wires = list(op.get("wires", []))
                 params = list(op.get("parameters", []))
-                self._apply(name, wires, params)
+                lookahead = []
+                if self.backend == "mps" and len(wires) == 2:
+                    limit = int(getattr(self.sim.opts, "routing_lookahead", 0))
+                    if limit > 0:
+                        for future in optimized_operations[optimized_index + 1:]:
+                            future_wires = list(future.get("wires", []))
+                            if len(future_wires) == 2:
+                                lookahead.append(tuple(future_wires))
+                                if len(lookahead) >= limit:
+                                    break
+                self._apply(name, wires, params, mps_lookahead=lookahead)
 
             if checkpoint_enabled and dispatch is not None:
                 if (launch_observer is not None
@@ -335,6 +345,10 @@ class Device:
                         reason=reason,
                         adjacent_dispatch=dispatch,
                     )
+        if self.backend == "mps" and hasattr(
+            self.sim, "restore_logical_order"
+        ):
+            self.sim.restore_logical_order()
         if self.last_execution_plan is not None:
             mark_graph_built(
                 self.last_execution_plan,
@@ -833,7 +847,14 @@ class Device:
             return _CONST_GATES["FREDKIN"]
         raise ValueError(f"Unsupported op for dense ablation path: {name}")
 
-    def _apply(self, name: str, wires: List[int], params: List[float]):
+    def _apply(
+        self,
+        name: str,
+        wires: List[int],
+        params: List[float],
+        *,
+        mps_lookahead: Optional[List[tuple[int, int]]] = None,
+    ):
         # Ablation switch: MLXQ_DENSE_ONLY=1 routes every gate through the
         # generic dense reshape/transpose/matmul path (pre-dispatch behavior),
         # isolating the structured-kernel speedup from MLX GPU execution.
@@ -875,7 +896,10 @@ class Device:
                     gate = U3(params[0], params[1], params[2])
                 else:
                     raise ValueError(f"Unsupported single-qubit op: {name}")
-            self.sim.apply_single(gate, q)
+            if hasattr(self.sim, "apply_logical_single"):
+                self.sim.apply_logical_single(gate, q)
+            else:
+                self.sim.apply_single(gate, q)
             return
 
         if len(wires) == 2:
@@ -942,7 +966,12 @@ class Device:
                     gate = _pauli_pair_phase(name, params[0])
                 else:
                     raise ValueError(f"Unsupported two-qubit op: {name}")
-            self.sim.apply_two(gate, c, t)
+            if hasattr(self.sim, "apply_logical_two"):
+                self.sim.apply_logical_two(
+                    gate, c, t, lookahead=mps_lookahead
+                )
+            else:
+                self.sim.apply_two(gate, c, t)
             return
 
         if len(wires) == 3:

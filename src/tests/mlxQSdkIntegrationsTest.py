@@ -181,6 +181,7 @@ def test_qiskit_mps_method_counts_statevector_and_diagnostics():
     assert selection["selected_device"] == "cpu"
     assert diagnostics["tensor_device"] == "cpu"
     assert diagnostics["svd_device"] == "cpu"
+    assert result.data(0)["qupertino_mps_accuracy"]["passed"] is True
 
 
 def test_qiskit_sampler_v2_and_estimator_v2_native_contracts():
@@ -202,6 +203,31 @@ def test_qiskit_sampler_v2_and_estimator_v2_native_contracts():
     counts = sampler_result.data.meas.get_counts()
     assert sum(counts.values()) == 64
     assert set(counts) <= {"00", "11"}
+
+
+def test_qiskit_estimator_reports_accuracy_and_automated_dmax_convergence():
+    circuit = QuantumCircuit(6)
+    for wire in range(6):
+        circuit.h(wire)
+    for first in range(6):
+        for second in range(first + 1, 6):
+            circuit.rzz(0.38, first, second)
+
+    estimator = QupertinoEstimatorV2(
+        method="matrix_product_state",
+        device="cpu",
+        mps_max_bond_dimension=4,
+        mps_convergence_bond_dimensions=(2, 4, 8),
+        mps_convergence_atol=1e-3,
+    )
+    result = estimator.run([(circuit, SparsePauliOp("IIIIIZ"))]).result()[0]
+    accuracy = result.metadata["qupertino_mps_accuracy"][0]
+    convergence = result.metadata["qupertino_mps_convergence"]
+
+    assert accuracy["classification"] == "threshold_exceeded"
+    assert [run["dmax"] for run in convergence["runs"]] == [2, 4, 8]
+    assert convergence["converged"] is True
+    assert convergence["comparisons"][-1]["within_tolerance"] is True
 
 
 def test_qiskit_backend_batch_reuses_one_same_width_device(monkeypatch):
@@ -263,6 +289,35 @@ def test_pennylane_mps_analytic_finite_shots_gradient_and_tracking():
     counts = sampled()
     assert sum(counts.values()) == 50
     assert set(counts) <= {"00", "11"}
+
+
+def test_pennylane_device_reports_accuracy_and_dmax_convergence():
+    device = QupertinoDevice(
+        wires=6,
+        method="matrix_product_state",
+        device="cpu",
+        mps_max_bond_dimension=4,
+        mps_convergence_bond_dimensions=(2, 4, 8),
+        mps_convergence_atol=1e-3,
+    )
+
+    @qml.qnode(device)
+    def circuit():
+        for wire in range(6):
+            qml.Hadamard(wire)
+        for first in range(6):
+            for second in range(first + 1, 6):
+                qml.IsingZZ(0.38, wires=[first, second])
+        return qml.expval(qml.Z(0))
+
+    value = circuit()
+    report = device.last_mps_convergence_report
+    assert np.isfinite(value)
+    assert device.last_mps_accuracy_report["classification"] == (
+        "threshold_exceeded"
+    )
+    assert [run["dmax"] for run in report["runs"]] == [2, 4, 8]
+    assert report["converged"] is True
 
 
 def test_pennylane_capabilities_declare_supported_contract():

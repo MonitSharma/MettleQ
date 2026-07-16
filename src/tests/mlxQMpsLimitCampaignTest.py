@@ -3,6 +3,7 @@ import argparse
 import pytest
 
 from tools.benchmark_mps_limits import build_circuit, parse_case, topology_pairs
+from tools.benchmark_mps_phase8 import _rotate
 
 
 def test_line_and_ring_topologies_are_distinct():
@@ -36,3 +37,9 @@ def test_custom_limit_case_parser_validates_topology_shape_and_size():
     assert parse_case("rainbow:48:2") == ("rainbow", 48, 2)
     with pytest.raises(argparse.ArgumentTypeError, match="perfect-square"):
         parse_case("grid_2d:18:2")
+
+
+def test_phase8_campaign_rotates_implementation_order():
+    implementations = ["routed", "restore", "gpu", "aer"]
+    assert _rotate(implementations, 0) == implementations
+    assert _rotate(implementations, 1) == ["restore", "gpu", "aer", "routed"]

@@ -180,12 +180,16 @@ def _worker(args: argparse.Namespace) -> int:
         device=args.device,
         mps_max_bond_dimension=args.dmax,
         mps_truncation_threshold=args.eps,
+        mps_svd_driver=args.svd_driver,
+        mps_routing_strategy=args.routing_strategy,
+        mps_routing_lookahead=args.routing_lookahead,
     )
     start = time.perf_counter_ns()
     result = estimator.run([(circuit, observable)]).result()[0]
     execution_ms = (time.perf_counter_ns() - start) / 1e6
     expectation = float(np.asarray(result.data.evs))
     diagnostics = estimator.last_mps_diagnostics[0]
+    accuracy = estimator.last_mps_accuracy_reports[0]
 
     exact_expectation = None
     exact_error = None
@@ -223,6 +227,12 @@ def _worker(args: argparse.Namespace) -> int:
         "local_discarded_weight_max": diagnostics[
             "local_discarded_weight_max"
         ],
+        "relative_discarded_weight_sum": diagnostics[
+            "relative_discarded_weight_sum"
+        ],
+        "relative_discarded_weight_max": diagnostics[
+            "relative_discarded_weight_max"
+        ],
         "current_bond_dimension_max": diagnostics[
             "current_bond_dimension_max"
         ],
@@ -235,6 +245,19 @@ def _worker(args: argparse.Namespace) -> int:
         "state_norm": diagnostics["state_norm"],
         "tensor_device": diagnostics["tensor_device"],
         "svd_device": diagnostics["svd_device"],
+        "svd_drivers_used": json.dumps(diagnostics["svd_drivers_used"]),
+        "svd_calls": diagnostics["svd_calls"],
+        "svd_total_ms": diagnostics["svd_total_ms"],
+        "svd_fallback_count": diagnostics["svd_fallback_count"],
+        "renormalization_count": diagnostics["renormalization_count"],
+        "routing_strategy": diagnostics["routing_strategy"],
+        "routing_swaps": diagnostics["routing_swaps"],
+        "routing_naive_restore_swaps": diagnostics[
+            "routing_naive_restore_swaps"
+        ],
+        "routing_swap_reduction": diagnostics["routing_swap_reduction"],
+        "accuracy_passed": accuracy["passed"],
+        "accuracy_classification": accuracy["classification"],
         "peak_rss_bytes": _peak_rss_bytes(),
         "error": None,
         "trust_classification": (
@@ -306,12 +329,25 @@ def _empty_failure_row(family: str, qubits: int, depth: int, args) -> dict:
         "truncation_events": None,
         "local_discarded_weight_sum": None,
         "local_discarded_weight_max": None,
+        "relative_discarded_weight_sum": None,
+        "relative_discarded_weight_max": None,
         "current_bond_dimension_max": None,
         "current_bond_dimension_mean": None,
         "maximum_bond_dimension_reached": None,
         "state_norm": None,
         "tensor_device": None,
         "svd_device": None,
+        "svd_drivers_used": None,
+        "svd_calls": None,
+        "svd_total_ms": None,
+        "svd_fallback_count": None,
+        "renormalization_count": None,
+        "routing_strategy": args.routing_strategy,
+        "routing_swaps": None,
+        "routing_naive_restore_swaps": None,
+        "routing_swap_reduction": None,
+        "accuracy_passed": None,
+        "accuracy_classification": None,
         "peak_rss_bytes": None,
         "error": None,
         "trust_classification": "not_completed",
@@ -445,6 +481,12 @@ def _campaign(args: argparse.Namespace) -> int:
             str(args.dmax),
             "--eps",
             str(args.eps),
+            "--svd-driver",
+            args.svd_driver,
+            "--routing-strategy",
+            args.routing_strategy,
+            "--routing-lookahead",
+            str(args.routing_lookahead),
             "--exact-max-qubits",
             str(args.exact_max_qubits),
             "--exact-atol",
@@ -506,6 +548,9 @@ def _campaign(args: argparse.Namespace) -> int:
         "device": args.device,
         "dmax": args.dmax,
         "eps": args.eps,
+        "svd_driver": args.svd_driver,
+        "routing_strategy": args.routing_strategy,
+        "routing_lookahead": args.routing_lookahead,
         "exact_max_qubits": args.exact_max_qubits,
         "exact_atol": args.exact_atol,
         "timeout_seconds_per_case": args.timeout_seconds,
@@ -536,6 +581,13 @@ def main() -> int:
     parser.add_argument("--device", choices=("cpu", "gpu"), default="cpu")
     parser.add_argument("--dmax", type=int, default=64)
     parser.add_argument("--eps", type=float, default=1e-10)
+    parser.add_argument(
+        "--svd-driver", choices=("auto", "gesdd", "gesvd", "numpy"), default="auto"
+    )
+    parser.add_argument(
+        "--routing-strategy", choices=("lookahead", "restore"), default="lookahead"
+    )
+    parser.add_argument("--routing-lookahead", type=int, default=8)
     parser.add_argument("--timeout-seconds", type=float, default=60.0)
     parser.add_argument("--exact-max-qubits", type=int, default=20)
     parser.add_argument("--exact-atol", type=float, default=5e-5)
@@ -547,6 +599,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.dmax < 1 or args.eps < 0.0:
         parser.error("Dmax must be positive and epsilon non-negative")
+    if args.routing_lookahead < 0:
+        parser.error("routing lookahead must be non-negative")
     if args.timeout_seconds <= 0 or args.exact_max_qubits < 0:
         parser.error("timeout must be positive and exact limit non-negative")
     if args.exact_atol <= 0.0:

@@ -49,6 +49,7 @@ from ._common import (
     sample_bits,
     statevector_numpy,
 )
+from ..mps_accuracy import build_convergence_report
 from ..planning import (
     DEFAULT_AUTOMATIC_MPS_MIN_QUBITS,
     DEFAULT_MPS_GPU_MIN_QUBITS,
@@ -110,6 +111,14 @@ class QupertinoDevice(PennyLaneDevice):
         allow_approximation: bool = False,
         mps_max_bond_dimension: int = 64,
         mps_truncation_threshold: float = 1e-10,
+        mps_svd_driver: str = "auto",
+        mps_routing_strategy: str = "lookahead",
+        mps_routing_lookahead: int = 8,
+        mps_accuracy_policy: str = "report",
+        mps_max_relative_discarded_weight: Optional[float] = 1e-6,
+        mps_max_norm_error: Optional[float] = 1e-5,
+        mps_convergence_bond_dimensions=None,
+        mps_convergence_atol: float = 5e-5,
         statevector_gpu_min_qubits: int = DEFAULT_STATEVECTOR_GPU_MIN_QUBITS,
         mps_gpu_min_qubits: Optional[int] = DEFAULT_MPS_GPU_MIN_QUBITS,
         automatic_mps_min_qubits: int = DEFAULT_AUTOMATIC_MPS_MIN_QUBITS,
@@ -128,6 +137,38 @@ class QupertinoDevice(PennyLaneDevice):
         self._allow_approximation = bool(allow_approximation)
         self._mps_max_bond_dimension = int(mps_max_bond_dimension)
         self._mps_truncation_threshold = float(mps_truncation_threshold)
+        self._mps_svd_driver = str(mps_svd_driver)
+        self._mps_routing_strategy = str(mps_routing_strategy)
+        self._mps_routing_lookahead = int(mps_routing_lookahead)
+        self._mps_accuracy_policy = str(mps_accuracy_policy)
+        self._mps_max_relative_discarded_weight = (
+            None
+            if mps_max_relative_discarded_weight is None
+            else float(mps_max_relative_discarded_weight)
+        )
+        self._mps_max_norm_error = (
+            None
+            if mps_max_norm_error is None
+            else float(mps_max_norm_error)
+        )
+        self._mps_convergence_bond_dimensions = tuple(
+            sorted(
+                {
+                    int(dimension)
+                    for dimension in (mps_convergence_bond_dimensions or ())
+                }
+            )
+        )
+        if self._mps_convergence_bond_dimensions and (
+            len(self._mps_convergence_bond_dimensions) < 2
+            or self._mps_convergence_bond_dimensions[0] < 1
+        ):
+            raise DeviceError(
+                "MPS convergence needs at least two positive bond dimensions"
+            )
+        if mps_convergence_atol <= 0.0:
+            raise DeviceError("MPS convergence tolerance must be positive")
+        self._mps_convergence_atol = float(mps_convergence_atol)
         self._statevector_gpu_min_qubits = int(statevector_gpu_min_qubits)
         self._mps_gpu_min_qubits = (
             None
@@ -142,6 +183,8 @@ class QupertinoDevice(PennyLaneDevice):
         self.statevector_preflight = None
         self.last_execution_selection = None
         self.last_mps_diagnostics = None
+        self.last_mps_accuracy_report = None
+        self.last_mps_convergence_report = None
 
     @property
     def name(self) -> str:
@@ -159,6 +202,18 @@ class QupertinoDevice(PennyLaneDevice):
             "allow_approximation": self._allow_approximation,
             "mps_max_bond_dimension": self._mps_max_bond_dimension,
             "mps_truncation_threshold": self._mps_truncation_threshold,
+            "mps_svd_driver": self._mps_svd_driver,
+            "mps_routing_strategy": self._mps_routing_strategy,
+            "mps_routing_lookahead": self._mps_routing_lookahead,
+            "mps_accuracy_policy": self._mps_accuracy_policy,
+            "mps_max_relative_discarded_weight": (
+                self._mps_max_relative_discarded_weight
+            ),
+            "mps_max_norm_error": self._mps_max_norm_error,
+            "mps_convergence_bond_dimensions": (
+                self._mps_convergence_bond_dimensions
+            ),
+            "mps_convergence_atol": self._mps_convergence_atol,
             "statevector_gpu_min_qubits": self._statevector_gpu_min_qubits,
             "mps_gpu_min_qubits": self._mps_gpu_min_qubits,
             "automatic_mps_min_qubits": self._automatic_mps_min_qubits,
@@ -269,10 +324,100 @@ class QupertinoDevice(PennyLaneDevice):
         if not effective_shots and self.shots:
             effective_shots = self.shots
         default_shots = effective_shots.total_shots or 1000
-        device = execute_operations(
+        device = self._execute_operations(
+            operations,
+            execution_options,
+            default_shots,
+            execution_cache=execution_cache,
+        )
+        apply_global_phase(device, global_phase)
+        self.last_execution_plan = device.last_execution_plan
+        self.statevector_preflight = device.statevector_preflight
+        self.last_execution_selection = device.execution_selection
+        self.last_mps_diagnostics = (
+            device.sim.truncation_diagnostics()
+            if device.backend == "mps"
+            else None
+        )
+        self.last_mps_accuracy_report = getattr(
+            device, "mps_accuracy_report", None
+        )
+        self.last_mps_convergence_report = None
+
+        if effective_shots.has_partitioned_shots:
+            result = tuple(
+                self._measure_all(device, circuit.measurements, int(shots))
+                for shots in effective_shots
+            )
+            if execution_options["mps_convergence_bond_dimensions"]:
+                self.last_mps_convergence_report = {
+                    "schema_version": 1,
+                    "status": "not_run_for_partitioned_shots",
+                }
+            return result
+
+        shots = effective_shots.total_shots
+        result = self._measure_all(device, circuit.measurements, shots)
+        dimensions = tuple(
+            execution_options["mps_convergence_bond_dimensions"]
+        )
+        if dimensions and device.backend == "mps":
+            if shots is not None:
+                self.last_mps_convergence_report = {
+                    "schema_version": 1,
+                    "status": "not_run_for_finite_shots",
+                }
+            else:
+                base_dmax = int(execution_options["mps_max_bond_dimension"])
+                dimensions = tuple(sorted(set(dimensions + (base_dmax,))))
+                runs = []
+                for dmax in dimensions:
+                    if dmax == base_dmax:
+                        run_result = result
+                        run_device = device
+                    else:
+                        convergence_options = dict(execution_options)
+                        convergence_options["mps_max_bond_dimension"] = dmax
+                        convergence_options["mps_accuracy_policy"] = "report"
+                        run_device = self._execute_operations(
+                            operations,
+                            convergence_options,
+                            default_shots,
+                            execution_cache=execution_cache,
+                        )
+                        apply_global_phase(run_device, global_phase)
+                        run_result = self._measure_all(
+                            run_device, circuit.measurements, None
+                        )
+                    runs.append(
+                        {
+                            "dmax": dmax,
+                            "value": run_result,
+                            "diagnostics": (
+                                run_device.sim.truncation_diagnostics()
+                            ),
+                            "accuracy": getattr(
+                                run_device, "mps_accuracy_report", None
+                            ),
+                        }
+                    )
+                self.last_mps_convergence_report = build_convergence_report(
+                    runs, atol=float(execution_options["mps_convergence_atol"])
+                )
+        return result
+
+    def _execute_operations(
+        self,
+        operations,
+        execution_options,
+        shots,
+        *,
+        execution_cache=None,
+    ):
+        return execute_operations(
             len(self.wires),
             operations,
-            shots=default_shots,
+            shots=shots,
             report=self._execution_report,
             metal_checkpoint_budget_bytes=self._metal_checkpoint_budget_bytes,
             allow_unsafe_statevector=self._allow_unsafe_statevector,
@@ -287,6 +432,32 @@ class QupertinoDevice(PennyLaneDevice):
             mps_truncation_threshold=float(
                 execution_options["mps_truncation_threshold"]
             ),
+            mps_svd_driver=str(execution_options["mps_svd_driver"]),
+            mps_routing_strategy=str(
+                execution_options["mps_routing_strategy"]
+            ),
+            mps_routing_lookahead=int(
+                execution_options["mps_routing_lookahead"]
+            ),
+            mps_accuracy_policy=str(
+                execution_options["mps_accuracy_policy"]
+            ),
+            mps_max_relative_discarded_weight=(
+                None
+                if execution_options[
+                    "mps_max_relative_discarded_weight"
+                ] is None
+                else float(
+                    execution_options[
+                        "mps_max_relative_discarded_weight"
+                    ]
+                )
+            ),
+            mps_max_norm_error=(
+                None
+                if execution_options["mps_max_norm_error"] is None
+                else float(execution_options["mps_max_norm_error"])
+            ),
             statevector_gpu_min_qubits=int(
                 execution_options["statevector_gpu_min_qubits"]
             ),
@@ -300,23 +471,6 @@ class QupertinoDevice(PennyLaneDevice):
             ),
             execution_cache=execution_cache,
         )
-        apply_global_phase(device, global_phase)
-        self.last_execution_plan = device.last_execution_plan
-        self.statevector_preflight = device.statevector_preflight
-        self.last_execution_selection = device.execution_selection
-        self.last_mps_diagnostics = (
-            device.sim.truncation_diagnostics()
-            if device.backend == "mps"
-            else None
-        )
-
-        if effective_shots.has_partitioned_shots:
-            return tuple(
-                self._measure_all(device, circuit.measurements, int(shots))
-                for shots in effective_shots
-            )
-        shots = effective_shots.total_shots
-        return self._measure_all(device, circuit.measurements, shots)
 
     @staticmethod
     def _parameter(value, operation_name: str) -> float:

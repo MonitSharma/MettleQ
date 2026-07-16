@@ -10,6 +10,7 @@ import numpy as np
 
 from ..device import Device
 from ..execution import require_statevector_preflight
+from ..mps_accuracy import assess_mps_accuracy, enforce_mps_accuracy
 from ..mps_state import MPSOptions
 from ..planning import select_execution
 from ..planning import (
@@ -128,6 +129,12 @@ def execute_operations(
     allow_approximation: bool = False,
     mps_max_bond_dimension: int = 64,
     mps_truncation_threshold: float = 1e-10,
+    mps_svd_driver: str = "auto",
+    mps_routing_strategy: str = "lookahead",
+    mps_routing_lookahead: int = 8,
+    mps_accuracy_policy: str = "report",
+    mps_max_relative_discarded_weight: Optional[float] = 1e-6,
+    mps_max_norm_error: Optional[float] = 1e-5,
     statevector_gpu_min_qubits: int = DEFAULT_STATEVECTOR_GPU_MIN_QUBITS,
     mps_gpu_min_qubits: Optional[int] = DEFAULT_MPS_GPU_MIN_QUBITS,
     automatic_mps_min_qubits: int = DEFAULT_AUTOMATIC_MPS_MIN_QUBITS,
@@ -152,6 +159,9 @@ def execute_operations(
         MPSOptions(
             dmax=int(mps_max_bond_dimension),
             eps=float(mps_truncation_threshold),
+            svd_driver=str(mps_svd_driver),
+            routing_strategy=str(mps_routing_strategy),
+            routing_lookahead=int(mps_routing_lookahead),
         )
         if backend == "mps"
         else None
@@ -162,6 +172,9 @@ def execute_operations(
         selection.selected_device,
         int(mps_max_bond_dimension) if backend == "mps" else None,
         float(mps_truncation_threshold) if backend == "mps" else None,
+        str(mps_svd_driver) if backend == "mps" else None,
+        str(mps_routing_strategy) if backend == "mps" else None,
+        int(mps_routing_lookahead) if backend == "mps" else None,
     )
     device = (
         execution_cache.get(cache_key)
@@ -184,10 +197,36 @@ def execute_operations(
         device.shots = int(shots)
         device.reset()
     device.execute(list(operations), report=report)
+    device.mps_accuracy_report = None
+    if backend == "mps":
+        diagnostics = device.sim.truncation_diagnostics()
+        device.mps_accuracy_report = assess_mps_accuracy(
+            diagnostics,
+            policy=mps_accuracy_policy,
+            max_relative_discarded_weight=(
+                None
+                if mps_max_relative_discarded_weight is None
+                else float(mps_max_relative_discarded_weight)
+            ),
+            max_norm_error=(
+                None
+                if mps_max_norm_error is None
+                else float(mps_max_norm_error)
+            ),
+        )
+        enforce_mps_accuracy(device.mps_accuracy_report)
     device.execution_selection = selection.to_dict()
     if device.last_execution_plan is not None:
         device.last_execution_plan["sdk_execution_selection"] = (
             device.execution_selection
+        )
+        device.last_execution_plan["mps_accuracy"] = (
+            device.mps_accuracy_report
+        )
+        device.last_execution_plan["mps_diagnostics"] = (
+            device.sim.truncation_diagnostics()
+            if backend == "mps"
+            else None
         )
     return device
 

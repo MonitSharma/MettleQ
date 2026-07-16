@@ -5,6 +5,7 @@ import mlxq.planning as planning
 from mlxq.device import Device
 from mlxq.gates import CNOT, H
 from mlxq.integrations import _common
+from mlxq.mps_accuracy import MPSAccuracyError
 from mlxq.mps_state import MPSOptions
 
 
@@ -171,6 +172,73 @@ def test_mps_truncation_diagnostics_make_approximation_visible():
     assert diagnostics["maximum_bond_dimension_reached"] == 1
     assert diagnostics["local_discarded_weight_sum"] > 0.0
     assert diagnostics["approximation_warning"] is not None
+
+
+def test_lookahead_routing_reduces_nonlocal_swaps_and_preserves_state():
+    operations = [
+        {"name": "H", "wires": [wire], "parameters": []}
+        for wire in range(8)
+    ]
+    operations.extend(
+        {
+            "name": "ZZPHASE",
+            "wires": [first, second],
+            "parameters": [0.19],
+        }
+        for first in range(8)
+        for second in range(first + 1, 8)
+    )
+    restored = _common.execute_operations(
+        8,
+        operations,
+        method="matrix_product_state",
+        execution_device="cpu",
+        mps_max_bond_dimension=256,
+        mps_truncation_threshold=0.0,
+        mps_routing_strategy="restore",
+    )
+    routed = _common.execute_operations(
+        8,
+        operations,
+        method="matrix_product_state",
+        execution_device="cpu",
+        mps_max_bond_dimension=256,
+        mps_truncation_threshold=0.0,
+        mps_routing_strategy="lookahead",
+    )
+    restored_diagnostics = restored.sim.truncation_diagnostics()
+    routed_diagnostics = routed.sim.truncation_diagnostics()
+
+    np.testing.assert_allclose(
+        routed.sim.to_statevector(),
+        restored.sim.to_statevector(),
+        atol=8e-5,
+        rtol=0.0,
+    )
+    assert restored_diagnostics["routing_swaps"] == (
+        restored_diagnostics["routing_naive_restore_swaps"]
+    )
+    assert routed_diagnostics["routing_swaps"] < (
+        routed_diagnostics["routing_naive_restore_swaps"]
+    )
+    assert routed_diagnostics["svd_calls"] < restored_diagnostics["svd_calls"]
+
+
+def test_mps_accuracy_error_policy_rejects_excessive_local_loss():
+    operations = [
+        {"name": "H", "wires": [0], "parameters": []},
+        {"name": "CNOT", "wires": [0, 1], "parameters": []},
+    ]
+    with pytest.raises(MPSAccuracyError, match="threshold exceeded"):
+        _common.execute_operations(
+            2,
+            operations,
+            method="matrix_product_state",
+            execution_device="cpu",
+            mps_max_bond_dimension=1,
+            mps_accuracy_policy="error",
+            mps_max_relative_discarded_weight=1e-3,
+        )
 
 
 def test_mps_dense_state_request_applies_statevector_preflight(monkeypatch):

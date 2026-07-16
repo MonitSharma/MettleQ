@@ -139,12 +139,51 @@ def test_truncation_reports_local_discarded_weight():
     assert diagnostics["events"] == 1
     assert diagnostics["local_discarded_weight_sum"] == pytest.approx(0.5, abs=1e-6)
     assert diagnostics["local_discarded_weight_max"] == pytest.approx(0.5, abs=1e-6)
-    assert event == {
-        "bond": 0,
-        "rank_before": 2,
-        "rank_kept": 1,
-        "local_discarded_weight": pytest.approx(0.5, abs=1e-6),
-        "relative_discarded_weight": pytest.approx(0.5, abs=1e-6),
-        "limited_by_dmax": True,
-        "limited_by_eps": False,
-    }
+    assert event["bond"] == 0
+    assert event["rank_before"] == 2
+    assert event["rank_kept"] == 1
+    assert event["local_discarded_weight"] == pytest.approx(0.5, abs=1e-6)
+    assert event["relative_discarded_weight"] == pytest.approx(0.5, abs=1e-6)
+    assert event["limited_by_dmax"] is True
+    assert event["limited_by_eps"] is False
+    assert event["renormalized"] is True
+    assert diagnostics["state_norm"] == pytest.approx(1.0, abs=2e-6)
+
+
+def test_recoverable_svd_ladder_falls_back_without_losing_process(monkeypatch):
+    from scipy import linalg as scipy_linalg
+
+    monkeypatch.setattr(
+        scipy_linalg,
+        "svd",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            np.linalg.LinAlgError("forced LAPACK failure")
+        ),
+    )
+    mps = MPSState(2, MPSOptions(dmax=4, eps=0.0, svd_driver="auto"))
+    mps.apply_single(H(), 0)
+    mps.apply_two(CNOT(), 0, 1)
+    diagnostics = mps.truncation_diagnostics()
+
+    _assert_same_state(
+        np.array([2**-0.5, 0.0, 0.0, 2**-0.5], dtype=np.complex128),
+        _mps_statevector(mps),
+    )
+    assert diagnostics["svd_fallback_count"] == 2
+    assert diagnostics["svd_drivers_used"] == {"numpy_complex64": 1}
+
+
+def test_explicit_canonicalization_moves_center_and_preserves_norm():
+    mps = MPSState(5, MPSOptions(dmax=8, eps=1e-10))
+    for wire in range(5):
+        mps.apply_single(RY(0.13 * (wire + 1)), wire)
+    for first, second in ((0, 4), (1, 3), (0, 2), (2, 4)):
+        mps.apply_two(CNOT(), first, second)
+
+    before = mps.to_statevector()
+    mps.canonicalize(center=2)
+    after = mps.to_statevector()
+
+    _assert_mixed_canonical(mps, center=2)
+    np.testing.assert_allclose(after, before, atol=5e-5, rtol=0.0)
+    assert mps.norm() == pytest.approx(1.0, abs=2e-6)
