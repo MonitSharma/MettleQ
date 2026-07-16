@@ -40,8 +40,8 @@ acceleration.
 | Simulation backends | Exact statevector (`sv`) and matrix-product state (`mps`) |
 | Circuit inputs | Native Python operations, strict unitary OpenQASM 2.0, Qiskit circuits, and PennyLane QNodes |
 | Workloads | QFT, phase estimation, Grover, QAOA, VQE, QCBM, QNN, random circuits, and spin dynamics |
-| Trust model | Pre-allocation statevector checks, capability-gated dispatch, explicit cost/execution plans, numerical parity tests, synchronized benchmarks, and safe fallbacks |
-| Current test suite | **334 tests** across the simulator, SDK adapters, planner, algorithms, MPS, QASM, Metal dispatch, campaign analysis, and QuantumStudio backend |
+| Trust model | Pre-allocation statevector checks, capability-gated dispatch, recoverable SVDs, MPS accuracy thresholds and convergence reports, explicit plans, numerical parity tests, synchronized benchmarks, and safe fallbacks |
+| Current test suite | **343 tests** across the simulator, SDK adapters, planner, algorithms, MPS, QASM, Metal dispatch, campaign analysis, and QuantumStudio backend |
 | Desktop product | QuantumStudio orchestration, monitoring, plotting, and export |
 | SDK adapters | Native Qiskit backend and registered PennyLane device, plus the original internal `mlxq.qml` teaching wrapper |
 
@@ -64,6 +64,7 @@ against upstream.
 | **Step 5 native SDK engine revision** | Fork commit `0d01052` |
 | **Step 6 adaptive statevector/MPS revision** | Fork commit `3f40a47` |
 | **Step 7 MPS limit campaign revision** | Fork commit `7b3d2ff` |
+| **Step 8 reliable/routed MPS engine revision** | Fork commit `0691674` |
 
 Original authorship, licensing, and citation information are retained at the
 end of this README.
@@ -158,6 +159,10 @@ Qiskit and PennyLane accept the same policy vocabulary:
 | `method="matrix_product_state"` | Bounded MPS using `mps_max_bond_dimension` and `mps_truncation_threshold` |
 | `device="auto"` | Select one measured path: CPU below crossover, GPU above it |
 | `device="cpu"` / `"gpu"` | Force one numerical path for testing or a calibrated deployment |
+| `mps_svd_driver="auto"` | Recoverable CPU SVD ladder: SciPy `gesdd`, `gesvd`, then NumPy fallbacks |
+| `mps_routing_strategy="lookahead"` | Persist a logical-to-MPS layout when preflight predicts no more swaps than immediate restoration |
+| `mps_accuracy_policy="report"` | Attach threshold evidence; use `"warn"` or `"error"` for stricter enforcement |
+| `mps_convergence_bond_dimensions=(32, 64, 128)` | Rerun analytic SDK results and report successive-`Dmax` agreement |
 
 Approximate automatic fallback is opt-in:
 
@@ -168,16 +173,48 @@ backend = QupertinoBackend(
     allow_approximation=True,
     mps_max_bond_dimension=64,
     mps_truncation_threshold=1e-10,
+    mps_accuracy_policy="error",
+    mps_max_relative_discarded_weight=1e-6,
 )
 ```
 
 The current M3 Pro calibration selects statevector GPU execution from 14
-qubits. MPS tensor operations can be forced onto CPU or GPU, but MLX 0.32 SVD
-runs on CPU and no end-to-end MPS GPU crossover was observed through 32
-qubits. Therefore automatic MPS currently stays on CPU unless the caller
+qubits. MPS tensor operations can be forced onto CPU or GPU, while the stable
+SVD ladder runs on CPU. A matched seven-topology campaign found CPU faster than
+GPU tensors in every case, so automatic MPS stays on CPU unless the caller
 supplies a measured `mps_gpu_min_qubits` value. MPS diagnostics expose the
-tensor device, SVD device, bond growth, truncation events, discarded-weight
-telemetry, and state norm.
+tensor device, SVD driver and timing, fallback attempts, routing swaps, bond
+growth, canonical center, renormalization, truncation, discarded-weight
+telemetry, state norm, and accuracy classification.
+
+Analytic Qiskit Estimator and PennyLane executions can request an automated
+bond-dimension convergence report:
+
+```python
+from qiskit import QuantumCircuit
+from qiskit.quantum_info import SparsePauliOp
+from mlxq.integrations.qiskit import QupertinoEstimatorV2
+
+circuit = QuantumCircuit(3)
+circuit.h(0)
+circuit.cx(0, 1)
+observable = SparsePauliOp("IIZ")  # Z on Qiskit qubit 0
+
+estimator = QupertinoEstimatorV2(
+    method="matrix_product_state",
+    device="cpu",
+    mps_max_bond_dimension=64,
+    mps_convergence_bond_dimensions=(32, 64, 128),
+    mps_convergence_atol=1e-5,
+)
+pub_result = estimator.run([(circuit, observable)]).result()[0]
+print(pub_result.metadata["qupertino_mps_accuracy"])
+print(pub_result.metadata["qupertino_mps_convergence"])
+```
+
+Accuracy thresholds are based on local truncation and norm telemetry; passing
+them is not a global fidelity proof. Use convergence or an independent
+reference for results that matter.
 
 Launch the Python process with `MLXQ_METAL_KERNELS=auto` to request custom
 Metal kernels when all capability checks pass. Without it, both SDK adapters
@@ -266,18 +303,24 @@ flowchart TB
     PAPI --> IR
     IR --> PLAN["Inspectable method and device planner"]
 
-    PLAN --> SVCPU["Exact statevector · CPU<br/>small circuits"]
-    PLAN --> SVGPU["Exact statevector · Apple GPU<br/>MLX + capability-gated Metal"]
-    PLAN --> MPSCPU["Bounded MPS · CPU<br/>automatic default today"]
-    PLAN --> MPSGPU["Bounded MPS · GPU tensors<br/>explicit; CPU SVD is reported"]
+    PLAN --> SVSAFE["Statevector memory preflight"]
+    SVSAFE --> SVCPU["Exact statevector · CPU<br/>small circuits"]
+    SVSAFE --> SVGPU["Exact statevector · Apple GPU<br/>MLX + capability-gated Metal"]
+
+    PLAN --> ROUTE["MPS whole-circuit routing preflight<br/>lookahead or restore"]
+    ROUTE --> MPSCPU["Bounded MPS · CPU tensors<br/>automatic default today"]
+    ROUTE --> MPSGPU["Bounded MPS · GPU tensors<br/>explicit experimental path"]
+    MPSCPU --> SPLIT["Recoverable CPU SVD ladder<br/>truncate · canonicalize · renormalize"]
+    MPSGPU --> SPLIT
     PLAN -. future .-> STAB["Stabilizer · CPU<br/>not implemented"]
 
     SVCPU --> MEASURE["Native probabilities, sampling, counts, expectations"]
     SVGPU --> MEASURE
-    MPSCPU --> MEASURE
-    MPSGPU --> MEASURE
+    SPLIT --> MEASURE
     MEASURE --> RESULTS["Qiskit Result/DataBin/BitArray or PennyLane results"]
-    PLAN --> EVIDENCE["Selection reason · memory preflight · dispatch plan · MPS diagnostics"]
+    SPLIT --> TRUST["Accuracy threshold policy<br/>optional Dmax convergence"]
+    TRUST --> RESULTS
+    PLAN --> EVIDENCE["Selection reason · preflight · dispatch · routing/SVD evidence"]
 ```
 
 The product surface is deliberately limited to Qiskit and PennyLane for this
@@ -285,7 +328,9 @@ phase. Both adapters translate once into the same validated IR, then reuse the
 same planner, memory gate, simulator, measurement implementation, and evidence.
 Statevector sampling remains on the selected MLX device until shot bits are
 returned. MPS marginals, local expectations, and sequential samples contract
-the tensor network without constructing a dense `2**n` state.
+the tensor network without constructing a dense `2**n` state. CPU and GPU are
+alternative numerical paths, not additive acceleration; the planner keeps MPS
+on CPU until matched evidence establishes a real GPU crossover.
 
 ## Performance
 
@@ -625,9 +670,94 @@ summary, validation thresholds, exact command, versions, and clean-engine
 manifest are frozen in
 [`fork-m3pro-20260715-step5-sdk/`](assets/benchmarks-frozen/fork-m3pro-20260715-step5-sdk/).
 
-### How far does MPS go? Entanglement limits on Apple M3 Pro
+### Reliable, routed MPS: current Apple M3 Pro evidence
 
-There is no honest single MPS qubit limit. A 10,000-qubit GHZ chain needs bond
+There is no honest single MPS qubit limit: entanglement topology and bond
+growth matter more than width alone. Step 8 first fixed the numerical and
+trust failures exposed by Step 7, then measured the new engine at clean commit
+`0691674` through Qiskit `QupertinoEstimatorV2`.
+
+The current CPU MPS path uses a recoverable SciPy/NumPy SVD ladder, an explicit
+mixed-canonical center, renormalized two-site splits, local accuracy thresholds,
+automated `Dmax` convergence reporting, and whole-circuit routing preflight.
+The standard 26-case `Dmax=64` suite completed every case with no numerical
+errors. Its worst exact `Z0` error through 20 qubits fell from `1.278e-2` in
+Step 7 to `1.890e-6` now—a 6,762-fold reduction in this matched case set.
+
+| Reliability signal | Historical Step 7 | Current Step 8 |
+| --- | ---: | ---: |
+| Standard `Dmax=64` cases completed | 26 / 26 | 26 / 26 |
+| Worst exact-reference error through 20q | `1.278e-2` | **`1.890e-6`** |
+| Matched eight-case boundary set | 2 completed, 5 errors, 1 timeout | **7 completed, 0 errors, 1 timeout** |
+| All-to-all 32q d1 | 20.969 s; norm 0.5730 | **3.637 s; norm 1.00000024** |
+| All-to-all 36q d1 | Timed out after 30 s | **4.935 s** |
+
+The boundary campaign used CPU MPS, `Dmax=64`, `eps=1e-10`, topology-aware
+routing, and a 60-second ceiling. The largest demonstrated completions are
+test points, not universal maxima:
+
+| Entanglement family | Largest demonstrated completion | Runtime | Trust signal |
+| --- | ---: | ---: | --- |
+| GHZ chain | 10,000q d1 | 10.393 s | Bond 2; no local truncation |
+| 1D brickwork | 200q d4 | 0.246 s | Bond 4; 10,000q d8 reached the 60 s ceiling |
+| Ring brickwork | 1,000q d4 | 11.693 s | Bond cap; within configured local thresholds |
+| 2D grid | 144q d2 | 6.410 s | Bond cap; local threshold exceeded |
+| Rainbow pairs | 96q d1 | 14.627 s | Bond cap; local threshold exceeded |
+| Seeded long range | 160q d1 | 27.482 s | Bond cap; local threshold exceeded |
+| All to all | 36q d1 | 4.935 s | Bond cap; within configured local thresholds |
+
+<div align="center">
+  <img src="assets/benchmarks-frozen/fork-m3pro-20260716-step8-mps-reliability/mps_limit_landscape.png" alt="Current Qupertino MPS completion envelope, bond pressure, truncation, and timeout across seven entanglement families" width="920"/>
+  <br/><em>Filled points show no observed local truncation; hollow points show truncation. The triangle retains the 60-second timeout as a failure marker, not a runtime.</em>
+</div>
+
+The representative `Dmax=32/64/128` sweep completed all 36 plotted rows. Its
+worst small exact-reference error was `4.619e-5`, `1.890e-6`, and `1.341e-6`,
+respectively. Runtime rises sharply with bond capacity on high-entanglement
+cases, so convergence is evidence the caller must deliberately pay for.
+
+<div align="center">
+  <img src="assets/benchmarks-frozen/fork-m3pro-20260716-step8-mps-reliability/mps_dmax_convergence.png" alt="Current MPS runtime, normalized state stability, and exact small-circuit error across bond dimensions 32, 64, and 128" width="920"/>
+  <br/><em>Normalized state stability prevents silent norm collapse. It does not prove a truncated result is globally accurate.</em>
+</div>
+
+#### Matched Qupertino versus Qiskit Aer MPS
+
+Only after the reliability work completed, the same Qiskit circuits and
+analytic `Z0` EstimatorV2 contract were run through Qupertino CPU routed,
+Qupertino CPU restore, Qupertino GPU tensors, and Qiskit Aer CPU MPS. Each case
+used one warmup, three rotating-order repeats, and a fresh process.
+
+| Circuit | QP CPU routed | QP CPU restore | QP GPU tensors | Aer CPU MPS | Routing gain | QP / Aer speedup |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| GHZ 1,000q d1 | 338.76 ms | 338.28 ms | 797.22 ms | **57.90 ms** | 1.00x | 0.17x |
+| Line 100q d8 | 153.25 ms | 154.50 ms | 514.20 ms | **29.00 ms** | 1.01x | 0.19x |
+| Ring 50q d2 | 38.77 ms | 65.78 ms | 139.01 ms | **5.62 ms** | 1.70x | 0.14x |
+| Grid 36q d2 | **249.91 ms** | 248.75 ms | 522.18 ms | 422.57 ms | 1.00x | **1.69x** |
+| Rainbow 32q d1 | 710.44 ms | 888.97 ms | 1,255.08 ms | **3.65 ms** | 1.25x | 0.005x |
+| Random long range 32q d1 | 264.76 ms | 376.30 ms | 544.00 ms | **3.40 ms** | 1.42x | 0.013x |
+| All to all 20q d1 | 851.13 ms | 4,700.62 ms | 1,422.03 ms | **25.17 ms** | 5.52x | 0.030x |
+
+<div align="center">
+  <img src="assets/benchmarks-frozen/fork-m3pro-20260716-step8-mps-reliability/matched_aer_comparison.png" alt="Matched Qupertino CPU routed, CPU restore, GPU tensor, and Qiskit Aer CPU MPS results" width="920"/>
+  <br/><em>Aer is faster on six schedules; Qupertino wins the tested 36-qubit grid by 1.69x. CPU beats GPU tensors everywhere, so automatic MPS remains on CPU.</em>
+</div>
+
+Routing is nevertheless material inside Qupertino: it improves ring by 1.70x,
+rainbow by 1.25x, random long range by 1.42x, and all to all by 5.52x. The
+all-to-all schedule falls from 2,280 restore-baseline swaps to 384 routed
+swaps. Grid preflight correctly rejects lookahead when it predicts no saving.
+
+The raw rows, exact commands, clean-engine manifests, summaries, and plotted
+source data are frozen in
+[`fork-m3pro-20260716-step8-mps-reliability/`](assets/benchmarks-frozen/fork-m3pro-20260716-step8-mps-reliability/).
+
+<details>
+<summary><strong>Show the historical Step 7 failure envelope</strong></summary>
+
+#### Historical Step 7 MPS limits
+
+A 10,000-qubit GHZ chain needs bond
 dimension 2, while a much smaller nonlocal circuit can saturate `Dmax`, lose
 norm, or fail its SVD. Step 7 therefore swept seven deterministic topologies
 through the public Qiskit `QupertinoEstimatorV2` path, with every case isolated
@@ -674,12 +804,10 @@ The reviewed raw rows, manifests, summaries, plotted CSVs, commands, and
 interpretation are frozen in
 [`fork-m3pro-20260715-step7-mps-limits/`](assets/benchmarks-frozen/fork-m3pro-20260715-step7-mps-limits/).
 
-The next MPS engineering priorities are: make SVD failure recoverable and
-renormalization/canonicalization explicit; add `Dmax` convergence and accuracy
-policy to SDK results; plan nonlocal gates to minimize swap-induced bond
-growth; then optimize the two-site/SVD path and remeasure an honest Apple-GPU
-crossover. A matched Qupertino-versus-Aer MPS campaign should follow only after
-those reliability failures are fixed.
+These failures motivated the Step 8 work above and remain immutable historical
+evidence.
+
+</details>
 
 ## Trust, correctness, and observability
 
@@ -702,6 +830,15 @@ auditable. This fork adds explicit evidence at each layer:
   all-distinct-angle and long-product stress cases.
 - **Strict QASM:** unsupported dynamic semantics are rejected with source-aware
   errors instead of being silently ignored.
+- **Recoverable MPS numerics:** a scaled SciPy/NumPy SVD ladder reports failed
+  attempts instead of allowing MLX `sgesvdx` to terminate the process; explicit
+  canonicalization and renormalization guard finite norm.
+- **MPS trust policy:** both SDKs attach local discarded-weight and norm
+  classifications, can warn or raise on configured thresholds, and can rerun
+  analytic results across requested bond dimensions.
+- **Routing evidence:** whole-circuit preflight compares lookahead and immediate
+  restoration, records predicted and actual swaps, and skips routing work for
+  already-local circuits.
 - **Hermetic tests:** generated files use temporary directories, and successful
   tests leave the checkout unchanged.
 
@@ -712,16 +849,16 @@ auditable. This fork adds explicit evidence at each layer:
 | Core simulator and gate algebra | 149 |
 | Quantum-computing examples and algorithms | 41 |
 | Internal consistency and measurement parity | 21 |
-| MPS backend and correctness | 16 |
+| MPS backend and correctness | 18 |
 | QML wrapper, QFT, and subset semantics | 10 |
 | Strict OpenQASM and silent-risk checks | 7 |
 | QPE energy estimation | 2 |
-| Benchmark protocol and plotting | 9 |
+| Benchmark protocol and plotting | 10 |
 | Custom Metal parity and dispatch | 19 |
-| Execution plans, memory policy, planner, and capability reporting | 29 |
-| Native Qiskit and PennyLane integrations | 13 |
+| Execution plans, memory policy, planner, and capability reporting | 33 |
+| Native Qiskit and PennyLane integrations | 15 |
 | QuantumStudio backend and MCP API | 18 |
-| **Total** | **334** |
+| **Total** | **343** |
 
 Run everything with:
 
@@ -736,15 +873,17 @@ Silicon runner labeled `macOS` and `ARM64`.
 ### Known limits
 
 - Hand-written Metal kernels currently accelerate exact statevector patterns,
-  not MPS. MPS tensors support explicit CPU/GPU MLX execution, while MLX 0.32
-  SVD runs on CPU; the split is visible in diagnostics.
+  not MPS. MPS tensors support explicit CPU/GPU MLX execution, while the stable
+  SciPy/NumPy SVD ladder runs on CPU; the split is visible in diagnostics.
 - MPS is bounded and may be approximate. Local discarded singular-value weight
-  is telemetry, not a global fidelity bound. Automatic MPS requires
-  `allow_approximation=True` and conservative locality/depth checks.
-- The current MLX 0.32 CPU SVD can abort selected wide, nonlocal MPS cases with
-  `sgesvdx` convergence code 1. Deep/wide truncated cases can also lose norm;
-  process isolation contains the failure, and Step 7 retains it as evidence,
-  but a robust SVD fallback and canonical renormalization are not implemented.
+  and normalized state stability are telemetry, not global fidelity bounds.
+  Automatic MPS requires `allow_approximation=True` and conservative
+  locality/depth checks. Threshold success should be paired with `Dmax`
+  convergence or an independent reference for important results.
+- Stable MPS SVD currently moves each two-site matrix through a CPU LAPACK path.
+  This prevents the former process-aborting failure but adds overhead to shallow
+  low-bond circuits. The matched M3 Pro campaign found no GPU-tensor crossover,
+  and Aer remained faster on six of seven schedules.
 - The bundled strict importer accepts 33 of 42 OpenQASM files. It rejects reset,
   classical control, mid-circuit measurement, opaque gates, arbitrary includes,
   and malformed declarations.
@@ -770,17 +909,17 @@ Silicon runner labeled `macOS` and `ARM64`.
 | Native `mlxq` Python operations | Available | Execute validated operation dictionaries directly |
 | OpenQASM 2.0 | Available, strict unitary subset | Import supported circuits with explicit rejection of dynamic semantics |
 | `mlxq.qml` | Available, internal wrapper | PennyLane-like tapes, measurements, templates, and parameter-shift gradients |
-| Qiskit `BackendV2` | Available: statevector + MPS | Transpile and run unitary circuits; receive native `Result`, device-sampled counts/memory, optional statevector, and execution evidence |
-| Qiskit SamplerV2 / EstimatorV2 | Available | Use PUB batching, native `BitArray` samples, and exact device-resident Pauli expectations |
-| PennyLane `qupertino` device | Available: statevector + MPS | Use a normal QNode with analytic or finite-shot measurements, tracking, capability declarations, and framework-managed parameter-shift gradients |
+| Qiskit `BackendV2` | Available: statevector + MPS | Transpile and run unitary circuits; receive native `Result`, device-sampled counts/memory, optional statevector, accuracy classification, and execution evidence |
+| Qiskit SamplerV2 / EstimatorV2 | Available | Use PUB batching, native `BitArray` samples, device-resident Pauli expectations, and optional analytic `Dmax` convergence reports |
+| PennyLane `qupertino` device | Available: statevector + MPS | Use a normal QNode with analytic or finite-shot measurements, threshold policy, analytic `Dmax` convergence, tracking, and parameter-shift gradients |
 | Other SDKs | Out of scope for the current phase | Qiskit and PennyLane are the only active integration targets |
 
 Both adapters translate through one tested canonical operation layer. Qiskit's
 little-endian state and classical-bit conventions and PennyLane's declared wire
 order are covered by reference-parity tests. Unsupported semantics raise native
 SDK errors, while statevector preflight, capability-gated dispatch, checkpoint
-policy, and execution reports remain in the core rather than being reimplemented
-or bypassed by an adapter.
+policy, MPS routing/SVD/accuracy evidence, and execution reports remain in the
+core rather than being reimplemented or bypassed by an adapter.
 
 ## Running benchmarks
 
@@ -829,16 +968,35 @@ compare with `default.qubit`.
 PYTHONPATH=src caffeinate -i .venv/bin/python \
   tools/benchmark_mps_limits.py \
   --outdir bench/runs/mps-limits \
-  --profile standard --dmax 64 --eps 1e-10 --timeout-seconds 30
+  --profile standard --dmax 64 --eps 1e-10 \
+  --svd-driver auto --routing-strategy lookahead \
+  --routing-lookahead 8 --timeout-seconds 60
 
 # Repeat --case to narrow a boundary without editing the benchmark.
 PYTHONPATH=src .venv/bin/python tools/benchmark_mps_limits.py \
-  --outdir bench/runs/mps-boundary --dmax 64 --timeout-seconds 30 \
+  --outdir bench/runs/mps-boundary --dmax 64 --timeout-seconds 60 \
   --case grid_2d:81:2 --case rainbow:80:1 --case all_to_all:36:1
 ```
 
 The campaign separates completion, timeout, process error, small exact
-validation, local truncation, bond growth, state norm, runtime, and peak RSS.
+validation, local accuracy classification, routing, SVD fallbacks, bond growth,
+normalized state stability, runtime, and peak RSS.
+
+### Run the matched Qupertino/Aer MPS protocol
+
+```bash
+PYTHONPATH=src caffeinate -i .venv/bin/python \
+  tools/benchmark_mps_phase8.py \
+  --outdir bench/runs/mps-matched-aer \
+  --profile standard --dmax 64 --eps 1e-10 \
+  --svd-driver auto --routing-lookahead 8 \
+  --warmups 1 --repeats 3 --timeout-seconds 240
+```
+
+This benchmark uses the same Qiskit circuits and analytic `Z0` result contract
+for Qupertino CPU routed, CPU restore, GPU tensors, and Qiskit Aer CPU MPS. Run
+it only on an otherwise idle machine; implementation order rotates and every
+case starts in a fresh process.
 
 ### Statevector or MPS backend
 
@@ -906,6 +1064,9 @@ The Step 6 adaptive statevector/MPS evidence is frozen under
 The Step 7 MPS entanglement-limit evidence is frozen under
 [`assets/benchmarks-frozen/fork-m3pro-20260715-step7-mps-limits/`](assets/benchmarks-frozen/fork-m3pro-20260715-step7-mps-limits/). It contains 49 `Dmax=64` topology/qubit/depth probes, `Dmax=32/64/128` convergence rows, independent statevector validation through 20 qubits, retained SVD/norm failures, exact-commit manifests, and the plotted source data.
 
+The Step 8 reliable/routed MPS evidence is frozen under
+[`assets/benchmarks-frozen/fork-m3pro-20260716-step8-mps-reliability/`](assets/benchmarks-frozen/fork-m3pro-20260716-step8-mps-reliability/). It contains the clean-engine 26-case standard and 16-case boundary campaigns, `Dmax=32/64/128` convergence inputs, the matched four-path Qupertino/Aer campaign, raw rows, summaries, manifests, and charts.
+
 Recreate the current sweep and comparison:
 
 ```bash
@@ -959,6 +1120,21 @@ MLXQ_METAL_KERNELS=auto PYTHONPATH=src .venv/bin/python \
   tools/benchmark_sdk_method_matrix.py \
   --outdir bench/runs/sdk-method-matrix \
   --qubits 20 --steps 2 --warmups 1 --repeats 7
+
+unset MLXQ_METAL_KERNELS
+PYTHONPATH=src caffeinate -i .venv/bin/python \
+  tools/benchmark_mps_limits.py \
+  --outdir bench/runs/mps-limits-step8 \
+  --profile standard --dmax 64 --eps 1e-10 \
+  --svd-driver auto --routing-strategy lookahead \
+  --routing-lookahead 8 --timeout-seconds 60
+
+PYTHONPATH=src caffeinate -i .venv/bin/python \
+  tools/benchmark_mps_phase8.py \
+  --outdir bench/runs/mps-matched-aer-step8 \
+  --profile standard --dmax 64 --eps 1e-10 \
+  --svd-driver auto --routing-lookahead 8 \
+  --warmups 1 --repeats 3 --timeout-seconds 240
 ```
 
 Transient runs belong under `bench/runs/`. Promote only reviewed evidence to

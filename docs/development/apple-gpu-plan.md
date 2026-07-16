@@ -1,5 +1,70 @@
 # Apple GPU engineering log
 
+## 2026-07-16 — Step 8: recoverable, routed, trustworthy MPS
+
+### Reliability and SDK contract
+
+The five ordered Step 7 priorities are complete. MPS two-site decomposition no
+longer calls MLX 0.32's process-aborting `sgesvdx` path. A scaled, catchable CPU
+ladder tries SciPy `gesdd`, SciPy `gesvd`, NumPy complex64, and NumPy complex128;
+diagnostics retain the requested driver, successful driver, elapsed SVD time,
+and fallback count. Failed drivers now become `MPSNumericalError` only after all
+safe attempts are exhausted.
+
+The state maintains an explicit mixed-canonical center. QR sweeps move that
+center, every retained singular spectrum is renormalized after truncation, and
+public `canonicalize()` and `renormalize()` operations reject zero/non-finite
+norm. Relative discarded-weight telemetry is retained before normalization.
+
+Qiskit and PennyLane now expose the same MPS SVD, routing, threshold, and
+convergence options. Every MPS execution receives an accuracy classification
+against configured maximum relative local discarded weight and norm error. A
+caller can report, warn, or raise. Analytic Estimator/QNode results can rerun at
+multiple bond dimensions and report successive-result deltas, while clearly
+stating that convergence is not independent exactness proof.
+
+### Routing and performance work
+
+Nonlocal gates can keep a persistent logical-to-MPS layout instead of restoring
+after every operation. A whole-circuit preflight simulates lookahead and restore
+swap counts, chooses lookahead only when it predicts no regression, and skips
+the quadratic analysis for already-adjacent schedules. Final restoration keeps
+external wire semantics unchanged. The CPU SVD path uses single-precision
+SciPy `gesdd` first with LAPACK input reuse; routing reduces the number of
+two-site contractions before decomposition.
+
+Engine commit `0691674ca2d5b3f48e3fdf4967dd0e74b3a9023b` was clean for all
+evidence campaigns on the Apple M3 Pro. The standard 26-case `Dmax=64` suite
+completed with zero errors and a maximum exact-reference error of `1.890e-6`,
+versus `1.278e-2` in Step 7. The 16-case boundary suite completed 15 cases with
+one 60-second timeout and no SVD/process failures. Former failures now complete:
+ring 500q d4 in 5.432 s, grid 144q d2 in 6.410 s, rainbow 96q d1 in 14.627 s,
+and random-long-range 160q d1 in 27.482 s. All-to-all 32q d1 improved from
+20.969 s to 3.637 s, and the former 36q timeout completed in 4.935 s.
+
+All 24 added `Dmax=32/128` convergence cases completed. Across the matched
+small-reference rows, the worst errors were `4.619e-5`, `1.890e-6`, and
+`1.341e-6` at `Dmax=32/64/128`.
+
+### Matched Aer comparison and decision
+
+The Qupertino-versus-Qiskit Aer comparison was run only after reliability,
+routing, and CPU-path work completed. It used the same Qiskit circuit and
+analytic `Z0` EstimatorV2 contract, one warmup, three rotating repeats, a fresh
+process per case, and four implementations: Qupertino CPU routed, CPU restore,
+GPU tensors, and Aer CPU MPS.
+
+Lookahead routing improved ring by 1.70x, rainbow by 1.25x, random long range by
+1.42x, and all to all by 5.52x; all-to-all swaps fell from 2,280 to 384. Aer was
+faster on six of seven schedules. Qupertino was 1.69x faster on the tested
+36-qubit grid. CPU beat GPU tensors on all seven cases, so automatic MPS remains
+on CPU. Native GPU MPS should be revisited only after new batched contraction or
+decomposition kernels can amortize the current transfer/orchestration overhead.
+
+The full raw evidence, summaries, commands, clean-engine manifests, and plots
+are frozen under
+[`assets/benchmarks-frozen/fork-m3pro-20260716-step8-mps-reliability/`](../../assets/benchmarks-frozen/fork-m3pro-20260716-step8-mps-reliability/).
+
 ## 2026-07-15 — Step 7: topology-aware MPS limit campaign
 
 ### What was measured

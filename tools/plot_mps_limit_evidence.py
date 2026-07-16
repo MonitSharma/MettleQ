@@ -55,7 +55,9 @@ def _case_label(row: dict) -> str:
     return f"{family} {row['qubits']}q d{row['depth']}"
 
 
-def _plot_landscape(rows: list[dict], output: Path) -> None:
+def _plot_landscape(
+    rows: list[dict], output: Path, timeout_seconds: float
+) -> None:
     import matplotlib.pyplot as plt
     from matplotlib.lines import Line2D
 
@@ -66,7 +68,8 @@ def _plot_landscape(rows: list[dict], output: Path) -> None:
         for row in rows
         if row["execution_ms"] is not None
     )
-    failure_level = max(30_000.0, maximum_runtime * 1.25)
+    timeout_ms = timeout_seconds * 1_000.0
+    failure_level = max(timeout_ms, maximum_runtime * 1.25)
 
     for family in FAMILIES:
         selected = [row for row in rows if row["family"] == family]
@@ -112,11 +115,11 @@ def _plot_landscape(rows: list[dict], output: Path) -> None:
                 zorder=4,
             )
 
-    axes[0].axhline(30_000, color="#777777", linestyle="--", linewidth=1)
+    axes[0].axhline(timeout_ms, color="#777777", linestyle="--", linewidth=1)
     axes[0].text(
         0.98,
         0.03,
-        "30 s per-case ceiling; X/▲ are failure markers, not runtimes",
+        f"{timeout_seconds:g} s per-case ceiling; X/▲ are failure markers, not runtimes",
         transform=axes[0].transAxes,
         ha="right",
         va="bottom",
@@ -263,13 +266,18 @@ def main() -> int:
     parser.add_argument("--convergence", type=Path, action="append", required=True)
     parser.add_argument("--outdir", type=Path, required=True)
     parser.add_argument("--exact-atol", type=float, default=5e-5)
+    parser.add_argument("--timeout-seconds", type=float, default=30.0)
     args = parser.parse_args()
     args.outdir.mkdir(parents=True, exist_ok=True)
     campaign_rows = _read_rows(args.campaign)
     convergence_rows = _repeated_dmax_cases(_read_rows(args.convergence))
     if not campaign_rows or not convergence_rows:
         parser.error("campaign and convergence inputs must contain rows")
-    _plot_landscape(campaign_rows, args.outdir / "mps_limit_landscape.png")
+    _plot_landscape(
+        campaign_rows,
+        args.outdir / "mps_limit_landscape.png",
+        args.timeout_seconds,
+    )
     _plot_convergence(
         convergence_rows,
         args.outdir / "mps_dmax_convergence.png",
