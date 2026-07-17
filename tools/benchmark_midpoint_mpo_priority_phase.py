@@ -29,6 +29,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_QASM = ROOT / "src/mettleq/datasets/peaked_circuit_P9_Hqap_56x1917.qasm"
 PUBLISHED_COMMIT = "3bcdc1e5bfd6abb9425f71bd43e560d2b27f45c1"
 MAIN_ARMS = ("mettleq_d512", "mettleq_d768", "published_d512")
+MAIN_NO_PROGRESS_LIMIT = 20
+CUTOFF_NO_PROGRESS_LIMIT = 80
 
 
 def _sha256(path: Path) -> str:
@@ -105,6 +107,10 @@ def _arm_contract(arm: str) -> tuple[str, int, float]:
     raise ValueError(f"unknown arm: {arm}")
 
 
+def _no_progress_limit(phase: str) -> int:
+    return CUTOFF_NO_PROGRESS_LIMIT if phase == "cutoff" else MAIN_NO_PROGRESS_LIMIT
+
+
 def _run_mettleq(
     *,
     circuit,
@@ -114,6 +120,7 @@ def _run_mettleq(
     cutoff: float,
     shots: int,
     seed: int,
+    no_progress_limit: int,
     timeout_seconds: float,
 ) -> dict:
     simulator = IsolatedMidpointMPOSimulator(
@@ -123,7 +130,7 @@ def _run_mettleq(
             seed=seed,
             sabre_trials=90,
             post_sabre_trials=50,
-            abort_after_no_progress_unswap_cycles=20,
+            abort_after_no_progress_unswap_cycles=no_progress_limit,
             parallel_rewire=False,
         ),
         worker_python=worker_python,
@@ -461,6 +468,10 @@ def main() -> int:
             "sabre_trials": 90,
             "post_sabre_trials": 50,
             "parallel_rewire": False,
+            "no_progress_cycle_limits": {
+                "main": MAIN_NO_PROGRESS_LIMIT,
+                "cutoff": CUTOFF_NO_PROGRESS_LIMIT,
+            },
             "expected_bitstring": PUBLISHED_P9_EXPECTED_BITSTRING,
         },
         "ordering": (
@@ -504,6 +515,7 @@ def main() -> int:
                     cutoff=cutoff,
                     shots=args.shots,
                     seed=args.seed,
+                    no_progress_limit=_no_progress_limit(item["phase"]),
                     timeout_seconds=args.timeout_seconds,
                 )
                 if _sha256(run_dir / "input.qasm") != _sha256(exported_qasm):

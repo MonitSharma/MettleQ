@@ -1,5 +1,4 @@
 <div align="center">
-  <img src="quantumstudio/assets/app_icon_source.png" alt="MettleQ logo" width="150"/>
   <h1>MettleQ</h1>
   <p><strong>Fast, inspectable local quantum-circuit simulation for Apple Silicon.</strong></p>
   <p>Qiskit and PennyLane integration, exact statevector and MPS methods, MLX/Metal execution, and reproducible evidence.</p>
@@ -19,7 +18,7 @@
   </p>
 </div>
 
-![MettleQ Studio dashboard](quantumstudio/assets/screenshots/screen003.png)
+
 
 > **Project goal:** build the fastest trustworthy local quantum-simulation
 > engine for Apple Silicon, with native Qiskit and PennyLane paths that choose

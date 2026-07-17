@@ -269,6 +269,7 @@ def test_priority_campaign_schedules_balance_pairwise_order():
         MAIN_ARMS,
         _cutoff_schedule,
         _main_schedule,
+        _no_progress_limit,
     )
 
     main = _main_schedule(2)
@@ -286,3 +287,5 @@ def test_priority_campaign_schedules_balance_pairwise_order():
     cutoff = _cutoff_schedule(2)
     for arm in {row["arm"] for row in cutoff}:
         assert sorted(row["position"] for row in cutoff if row["arm"] == arm) == [0, 1]
+    assert _no_progress_limit("main") == 20
+    assert _no_progress_limit("cutoff") == 80
