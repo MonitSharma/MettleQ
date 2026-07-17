@@ -289,3 +289,53 @@ def test_priority_campaign_schedules_balance_pairwise_order():
         assert sorted(row["position"] for row in cutoff if row["arm"] == arm) == [0, 1]
     assert _no_progress_limit("main") == 20
     assert _no_progress_limit("cutoff") == 80
+
+
+def test_priority_campaign_classifies_attempted_cutoff_failures():
+    from tools.benchmark_midpoint_mpo_priority_phase import (
+        _arm_contract,
+        _cutoff_schedule,
+        _main_schedule,
+        _summarize,
+    )
+
+    plan = _main_schedule(2) + _cutoff_schedule(2)
+    records = []
+    for item in plan:
+        implementation, max_bond, cutoff = _arm_contract(item["arm"])
+        common = {
+            **item,
+            "implementation": implementation,
+            "max_bond": max_bond,
+            "cutoff": cutoff,
+        }
+        if item["arm"] == "mettleq_d512_c5e-4":
+            records.append(
+                {
+                    **common,
+                    "status": "failed",
+                    "error_type": "MidpointMPOWorkerError",
+                }
+            )
+            continue
+        records.append(
+            {
+                **common,
+                "status": "complete",
+                "algorithm_time_s": 1.0,
+                "campaign_wall_time_s": 1.1,
+                "expected_peak_count": 10,
+                "expected_peak_fraction": 0.1,
+                "matches_expected_bitstring": True,
+            }
+        )
+
+    summary = _summarize(records, plan)
+    assert summary["attempted_runs"] == summary["planned_runs"] == 10
+    assert summary["completed_runs"] == 8
+    assert summary["failed_runs"] == 2
+    assert summary["main_complete"] is True
+    cutoff = summary["cutoff_convergence"]
+    assert cutoff["classification"] == "operationally_incomplete"
+    assert cutoff["groups"]["0.0005"]["failures"] == 2
+    assert cutoff["groups"]["0.0005"]["runs"] == 0

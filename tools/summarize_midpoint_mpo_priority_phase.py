@@ -79,7 +79,10 @@ def _copy_failures(source: Path, target: Path) -> dict[str, list[str]]:
 def _safe_svd_rows(records: list[dict]) -> list[dict]:
     rows = []
     for record in records:
-        if record["implementation"] != "mettleq_isolated":
+        if (
+            record["status"] != "complete"
+            or record["implementation"] != "mettleq_isolated"
+        ):
             continue
         summary = _json(Path(record["run_dir"]) / "summary.json")
         telemetry = summary["diagnostics"].get("quimb_safe_svd", {})
@@ -122,7 +125,11 @@ def _plot(path: Path, records: list[dict], summary: dict) -> None:
         "published_d512": "Published core D512",
     }
     figure, axes = plt.subplots(2, 2, figsize=(13.8, 9.2))
-    main = [row for row in records if row["phase"] == "main"]
+    main = [
+        row
+        for row in records
+        if row["phase"] == "main" and row["status"] == "complete"
+    ]
     arms = list(labels)
     x = np.arange(len(arms))
     for index, arm in enumerate(arms):
@@ -176,7 +183,8 @@ def _plot(path: Path, records: list[dict], summary: dict) -> None:
     cutoff_rows = [
         row
         for row in records
-        if row["implementation"] == "mettleq_isolated"
+        if row["status"] == "complete"
+        and row["implementation"] == "mettleq_isolated"
         and row["max_bond"] == 512
     ]
     cutoff_values = (5e-4, 6e-4, 7e-4)
@@ -196,13 +204,22 @@ def _plot(path: Path, records: list[dict], summary: dict) -> None:
     axes[1, 0].set_ylabel("Expected-peak fraction")
     classification = summary["cutoff_convergence"]["classification"]
     spread = summary["cutoff_convergence"]["median_expected_peak_fraction_spread"]
-    axes[1, 0].set_title(f"Cutoff convergence: {classification} (spread {spread:.3f})")
+    spread_label = "n/a" if spread is None else f"{spread:.3f}"
+    axes[1, 0].set_title(
+        f"Cutoff convergence: {classification} (spread {spread_label})"
+    )
     axes[1, 0].grid(axis="y", alpha=0.25)
 
     for index, cutoff in enumerate(cutoff_values):
         group = [row for row in cutoff_rows if row["cutoff"] == cutoff]
         times = [row["algorithm_time_s"] for row in group]
-        axes[1, 1].bar(index, statistics.median(times), color="#7557ff", alpha=0.82)
+        if times:
+            axes[1, 1].bar(
+                index,
+                statistics.median(times),
+                color="#7557ff",
+                alpha=0.82,
+            )
         for offset, row in zip(np.linspace(-0.08, 0.08, len(group)), group):
             axes[1, 1].scatter(
                 index + offset,
@@ -273,10 +290,17 @@ def main() -> int:
         row["matches_expected_bitstring"] = (
             row["matches_expected_bitstring"].lower() == "true"
         )
-    if campaign_summary["completed_runs"] != campaign_summary["planned_runs"]:
-        raise RuntimeError("refusing to freeze an incomplete campaign")
-    if any(row["status"] != "complete" for row in records):
-        raise RuntimeError("refusing to freeze failed campaign records")
+    if campaign_summary["attempted_runs"] != campaign_summary["planned_runs"]:
+        raise RuntimeError("refusing to freeze a partially attempted campaign")
+    if not campaign_summary["main_complete"]:
+        raise RuntimeError("refusing to freeze incomplete main comparisons")
+    invalid_failures = [
+        row
+        for row in records
+        if row["status"] != "complete" and row["phase"] != "cutoff"
+    ]
+    if invalid_failures:
+        raise RuntimeError("refusing to freeze failed main comparison records")
 
     copied_runs = {}
     for row in records:
@@ -366,6 +390,10 @@ def main() -> int:
         )
 
     spread = cutoff["median_expected_peak_fraction_spread"]
+    spread_text = "not measurable" if spread is None else f"{spread:.3f}"
+    cutoff_failures = sum(
+        group["failures"] for group in cutoff["groups"].values()
+    )
     readme = f"""# MettleQ repeated midpoint-MPO evidence
 
 This bundle freezes the order-balanced Apple M3 Pro campaign for the isolated
@@ -385,7 +413,9 @@ midpoint-MPO/TNO + unswapping worker. The normal caller used Qiskit
 - Paired median MettleQ D512 / D768 runtime ratio:
   **{main_ratios['mettleq_d512_over_d768_algorithm_ratio']:.3f}x**.
 - Fixed-D512 cutoff classification: **{cutoff['classification']}**; median
-  expected-peak fraction spread across 5e-4, 6e-4, and 7e-4 is **{spread:.3f}**.
+  expected-peak fraction spread across 5e-4, 6e-4, and 7e-4 is
+  **{spread_text}**. The endpoint schedule contains **{cutoff_failures}**
+  recorded operational failure(s); failed arms contribute no peak estimate.
 - Safe-SVD telemetry across MettleQ arms: {fallback_totals['calls']} calls,
   {fallback_totals['native_service_calls']} routed to the persistent killable
   native service, {fallback_totals['native_service_failures']} service
