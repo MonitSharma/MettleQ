@@ -109,16 +109,16 @@ def table2(bench_dir: Path, keys: List[str]) -> Path:
         if cands:
             rows = load_csv_rows(sorted(cands)[0])
         if not rows:
-            lines.append(f"{k} & 0 & -- & -- \\\")
+            lines.append(f"{k} & 0 & -- & -- " + r"\\")
             continue
         xs, ys = to_xy(rows)
         if not xs or not ys:
-            lines.append(f"{k} & {len(rows)} & -- & -- \\\")
+            lines.append(f"{k} & {len(rows)} & -- & -- " + r"\\")
             continue
         maxq = max(xs)
         ys_at = [ys[i] for i in range(len(xs)) if xs[i] == maxq]
         med = stats.median(ys_at) if ys_at else 0.0
-        lines.append(f"{k} & {len(rows)} & {maxq} & {med:.1f} \\\")
+        lines.append(f"{k} & {len(rows)} & {maxq} & {med:.1f} " + r"\\")
     lines.append('\\bottomrule')
     lines.append('\\end{tabular}')
     out = bench_dir / 'benchpress_table2.tex'

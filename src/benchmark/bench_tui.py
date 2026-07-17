@@ -328,58 +328,6 @@ class BenchTUI(App):
                 self.msg_log = _LogWidget(id="log")
             yield self.msg_log
             yield Static("Ready", id="status")
-                with Container(id="bench-panel"):
-                    yield Label("Benchmarks (all selected by default, max qubits shown):")
-                    with Container(classes="bench-grid"):
-                        self.bench_cbs: List[Checkbox] = []
-                        self.bench_caps: dict[str, Input] = {}
-                        self.bench_sliders: dict[str, object] = {}
-                        self.bench_bars: dict[str, Label] = {}
-                        self.bench_values: dict[str, int] = {}
-                        self.cap_labels: dict[str, Label] = {}
-                        for name in BENCHMARKS:
-                            with Horizontal(classes="bench-row"):
-                                cb = Checkbox(_bench_label(name), value=True, id=f"bench-{name}")
-                                self.bench_cbs.append(cb)
-                                yield cb
-                                default_cap = 18 if name == "qasm" else BENCH_CAP.get(name, 25)
-                                yield Label("Max:")
-                                if _HAS_SLIDER:
-                                    slider = _Slider(low=1, high=25, value=default_cap, id=f"slider-{name}", show_value=True)
-                                    self.bench_sliders[name] = slider
-                                    yield slider
-                                    val_label = Label(f"{default_cap}", id=f"label-{name}")
-                                    self.cap_labels[name] = val_label
-                                    bar = Label(self._bar_str(int(default_cap)), id=f"bar-{name}", classes="cap-bar")
-                                    self.bench_bars[name] = bar
-                                    yield bar
-                                    yield val_label
-                                else:
-                                    self.bench_values[name] = int(default_cap)
-                                    bar = Label(self._bar_str(int(default_cap)), id=f"bar-{name}", classes="cap-bar")
-                                    self.bench_bars[name] = bar
-                                    yield bar
-                                    val_label = Label(f"{default_cap}", id=f"label-{name}")
-                                    self.cap_labels[name] = val_label
-                                    yield Button("-", id=f"dec-{name}")
-                                    yield val_label
-                                    yield Button("+", id=f"inc-{name}")
-                with Horizontal():
-                    yield Button("Run Selected", id="run")
-                    yield Button("Select All", id="all")
-                    yield Button("Deselect All", id="none")
-                    yield Button("Clear Log", id="clear")
-                    yield Button("Quit", id="quit")
-            with Container(id="right"):
-                self.progress = ProgressBar(total=100)
-                yield self.progress
-                # Ensure log is readable and scrollable
-                try:
-                    self.msg_log = _LogWidget(highlight=False, markup=True)
-                except Exception:
-                    self.msg_log = _LogWidget()
-                yield self.msg_log
-                yield Static("Ready", id="status")
         with Horizontal(id="lower-menu"):
             yield Button("F1 Help", id="help-btn")
             yield Button("R Run", id="run-btn")
@@ -511,7 +459,7 @@ class BenchTUI(App):
         # Prefer the rich, C++-style detailed run_all() from mlxQuantumCoreTest
         test_mod_path = Path(__file__).resolve().parents[1] / 'tests' / 'mlxQCoreTest.py'
         if test_mod_path.exists():
-        spec = _import_util.spec_from_file_location("mlxQCoreTest", str(test_mod_path))
+            spec = _import_util.spec_from_file_location("mlxQCoreTest", str(test_mod_path))
             mod = _import_util.module_from_spec(spec)
             sys.modules[spec.name] = mod
             assert spec.loader is not None
