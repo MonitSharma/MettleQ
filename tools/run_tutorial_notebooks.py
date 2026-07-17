@@ -78,7 +78,7 @@ def _execute(path: Path, *, timeout: int, write_back: bool) -> dict:
         allow_errors=False,
         record_timing=True,
     )
-    client.execute()
+    client.execute(stderr=subprocess.DEVNULL)
     if write_back:
         nbformat.write(notebook, path)
     return _extract_result(notebook, path)
