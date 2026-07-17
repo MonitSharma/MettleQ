@@ -283,7 +283,12 @@ def main() -> int:
     for row in records:
         for key in numeric_ints:
             if row.get(key):
-                row[key] = int(row[key])
+                value = float(row[key])
+                if not value.is_integer():
+                    raise ValueError(
+                        f"expected integral CSV value for {key}: {row[key]!r}"
+                    )
+                row[key] = int(value)
         for key in numeric_floats:
             if row.get(key):
                 row[key] = float(row[key])
