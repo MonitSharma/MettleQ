@@ -23,9 +23,11 @@ jobs:
         run: >-
           python -m pip install
           fastapi==0.115.6 uvicorn==0.30.6 pydantic==2.8.2
-          psutil httpx pytest
+          psutil httpx pytest 'nbformat>=5.10,<6'
       - name: Compile Python sources
         run: python -m compileall -q src/mettleq src/mlxq quantumstudio/backend quantumstudio/bin
+      - name: Verify generated tutorial sources
+        run: python tools/build_tutorial_notebooks.py --check
       - name: Verify backend test collection
         run: python -m pytest quantumstudio/tests --collect-only -q
       - name: Run backend tests
@@ -45,7 +47,7 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install simulator and SDK integration test dependencies
-        run: python -m pip install -e '.[plot,tests,backend]'
+        run: python -m pip install -e '.[plot,tests,backend,tutorials]'
       - name: Verify Apple GPU availability
         run: |
           python - <<'PY'
@@ -59,5 +61,7 @@ jobs:
         run: ./test.sh
       - name: Run coverage
         run: python -m pytest --cov=mettleq --cov-report=term-missing
+      - name: Execute Qiskit and PennyLane tutorial parity suite
+        run: python tools/run_tutorial_notebooks.py --no-write
       - name: Require a clean checkout
         run: test -z "$(git status --porcelain)"

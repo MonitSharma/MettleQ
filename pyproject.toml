@@ -56,6 +56,15 @@ baselines = [
   "qiskit>=2.0,<3",
   "qiskit-aer>=0.17,<0.18",
 ]
+tutorials = [
+  "pennylane>=0.45,<0.46",
+  "qiskit>=2.0,<3",
+  "qiskit-aer>=0.17,<0.18",
+  "matplotlib>=3.7.0",
+  "nbclient>=0.10,<0.11",
+  "nbformat>=5.10,<6",
+  "ipykernel>=6.29,<8",
+]
 
 [project.scripts]
 mettleq-mpo = "mettleq.midpoint_mpo:main"
