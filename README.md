@@ -41,7 +41,7 @@ acceleration.
 | Circuit inputs | Native Python operations, strict unitary OpenQASM 2.0, Qiskit circuits, and PennyLane QNodes |
 | Workloads | QFT, phase estimation, Grover, QAOA, VQE, QCBM, QNN, random circuits, and spin dynamics |
 | Trust model | Pre-allocation statevector checks, capability-gated dispatch, recoverable SVDs, MPS accuracy thresholds and convergence reports, explicit plans, numerical parity tests, synchronized benchmarks, and safe fallbacks |
-| Current test suite | **367 tests** across the simulator, SDK adapters, planner, algorithms, MPS/MPO, peaked circuits, QASM, Metal dispatch, campaign analysis, and MettleQ Studio backend |
+| Current test suite | **368 tests** across the simulator, SDK adapters, planner, algorithms, MPS/MPO, peaked circuits, QASM, Metal dispatch, campaign analysis, and MettleQ Studio backend |
 | Desktop product | MettleQ Studio orchestration, monitoring, plotting, and export |
 | SDK adapters | Native Qiskit backend and registered PennyLane device, plus the original internal `mettleq.qml` teaching wrapper |
 | SDK tutorials | 29 paired, executable Qiskit/PennyLane notebooks with reference parity, timing, statistical sampling checks, MPS trust evidence, and Apple GPU selection |
@@ -70,6 +70,7 @@ account and does not open pull requests against upstream.
 | **MettleQ 0.2 rename, peaked benchmark, and batched sampling** | Fork commit `be67897` |
 | **Midpoint-MPO/TNO, CPU MPS optimization, and GPU phase gate** | Fork commit `72582c7` |
 | **Qiskit 2 isolated MPO worker and recoverable native-SVD boundary** | Fork commit `a2b99fc` |
+| **Repeated P9 reliability and cutoff campaign** | Campaign commit `d8754ef`; frozen-evidence generator commit `068f4e1` |
 
 Original authorship, licensing, and citation information are retained at the
 end of this README.
@@ -257,6 +258,25 @@ python tools/run_tutorial_notebooks.py
 Verified per-notebook timings and comparison metrics are written to
 [`tutorials/results.md`](tutorials/results.md) and
 [`tutorials/results.json`](tutorials/results.json).
+
+The clean Apple M3 Pro execution on 2026-07-17 passed **29/29** notebooks in
+44.70 seconds. These are complete SDK-call timings, so they include adapter and
+dispatch overhead rather than timing only a favorable kernel.
+
+| Tutorial evidence | Qiskit | PennyLane |
+| --- | ---: | ---: |
+| Notebooks passing declared parity check | 16 / 16 | 13 / 13 |
+| 16q SDK reference statevector | 4.251 ms | 4.052 ms |
+| 16q MettleQ Apple-GPU statevector | **3.472 ms** | **4.002 ms** |
+| Reference / MettleQ at 16q | **1.224×** | **1.012×** |
+
+This 16-qubit crossover is a narrow result on one machine, not a universal SDK
+speedup. At 12 and 14 qubits the SDK reference remained faster, and every small
+algorithm notebook's aggregate call was reference-faster because MettleQ's
+planning and adapter overhead had not yet been amortized. Deterministic answer
+checks matched exactly in 9 notebooks; floating-point and finite-shot cases
+passed their declared numerical or statistical contracts instead of claiming
+byte-for-byte identity.
 
 ### Choose a simulation method and device
 
@@ -895,18 +915,24 @@ The matched M3 Pro runs below used Python 3.10.16, Qiskit 1.4.5, Quimb 1.11.2,
 NumPy 2.2.6, SciPy 1.15.3, cutoff `6e-4`, routing and sampling seed 123,
 90/50 initial/post-unswap Sabre trials, no parallel rewiring, and 1,000 shots.
 
-| Same-Mac P9 arm | Max bond | End-to-end | Expected peak | Result |
-| --- | ---: | ---: | ---: | --- |
-| MettleQ midpoint MPO | 512 | 1,252.92 s | 100/1,000 | Recovered |
-| MettleQ midpoint MPO | 768 | **958.84 s** | 103/1,000 | Recovered |
-| Published [`p9solver`](https://github.com/alexgalda-m/peaked-mpo-solver) core | 512 | 1,184.16 s | 100/1,000 | Recovered |
+The current campaign repeated each main arm twice with forward/reverse ordering
+on the same Mac. Bars in the chart are medians; individual repeat and order
+positions remain visible. Algorithm time includes consolidation, compression,
+materialization, and seeded sampling but excludes campaign-process setup.
+
+| Same-Mac P9 arm | Repeats | Max bond | Median algorithm time | Expected peak fractions | Result |
+| --- | ---: | ---: | ---: | --- | --- |
+| MettleQ midpoint MPO | 2 | 512 | 1,215.56 s | 0.100, 0.100 | Recovered twice |
+| MettleQ midpoint MPO | 2 | 768 | 1,215.71 s | 0.103, 0.103 | Recovered twice |
+| Published [`p9solver`](https://github.com/alexgalda-m/peaked-mpo-solver) core | 2 | 512 | **1,167.10 s** | 0.100, 0.100 | Recovered twice |
 
 The D=512 MettleQ and published-core arms executed the same algorithm and
-identical contract. MettleQ was 5.8% slower in this single ordered pair, so the
-classification is **performance parity**, not a speedup. D=768 changed the
-greedy trajectory, reduced MettleQ time by 23.5% versus D=512 (1.31×), and
-preserved the expected-peak fraction within 0.003. The automated bond report
-therefore classifies D=512/768 as converged at a 0.03 tolerance.
+sampling contract. The median of paired MettleQ/published runtime ratios is
+**1.041×**, so MettleQ is **4.15% slower** here; this is reliability evidence,
+not a speedup. D=512 and D=768 are effectively at parity
+(`MettleQ D512 / D768 = 1.000×`) and differ in expected-peak fraction by only
+0.003. Both reached an observed peak bond of 512, so the larger cap provided no
+runtime benefit in the repeated campaign.
 
 The published-core arm imported the published repository's
 `p9solver.pipeline` directly and ran it through the same in-memory telemetry
@@ -915,15 +941,25 @@ checkpoint-file overhead from both sides of the compute comparison. A separate
 published-CLI attempt was externally interrupted and is retained as partial
 evidence, not reported as a completed timing.
 
-Cutoff convergence is not yet established. A matched cutoff `1e-3` arm reached
-only 197/1,885 consolidated work gates after 501 seconds and was stopped as an
-operationally impractical trajectory; MettleQ makes no peak claim for that arm.
-The full result is therefore trustworthy at the tested `6e-4` contract, not a
-claim of cutoff-independent convergence.
+Cutoff convergence is **not established**. The fixed-D512 endpoint schedule
+attempted each cutoff twice:
+
+| Cutoff | Attempts completed | Median algorithm time | Expected peak fractions | Interpretation |
+| --- | ---: | ---: | --- | --- |
+| `5e-4` | 0 / 2 | n/a | no accepted result | Both attempts stopped after 80 no-progress cycles at 176/1,885 work gates; routing-SWAP thrash, not memory exhaustion or a process crash |
+| `6e-4` | 2 / 2 | 1,215.56 s | 0.100, 0.100 | Expected peak recovered |
+| `7e-4` | 2 / 2 | **1,119.75 s** | 0.024, 0.024 | 1.086× faster than `6e-4`, but reproducibly failed the expected-peak check |
+
+The cutoff classification is therefore `operationally_incomplete`. The
+`7e-4` timing is not reported as a usable speedup, while the failed `5e-4`
+arms contribute no fabricated accuracy estimate. Across completed MettleQ
+arms, 4,648,250 SVD calls included 48 native-service failures; all 48 recovered
+through fresh-process SciPy fallbacks, with no deeper scaled or eigensolver
+fallback required.
 
 <div align="center">
-  <img src="assets/benchmarks-frozen/fork-m3pro-20260716-step11-midpoint-mpo/midpoint_mpo_phase.png" alt="MettleQ midpoint-MPO P9 runtime, expected peak, and CPU GPU MPS phase-gate evidence" width="1120"/>
-  <br/><em>Same-Mac P9 results, seeded expected-peak evidence, and the measured reason native GPU MPS remains disabled.</em>
+  <img src="assets/benchmarks-frozen/fork-m3pro-20260717-step12-mpo-worker-convergence/midpoint_mpo_repeated_evidence.png" alt="Repeated MettleQ and published-core P9 runtime, expected-peak recovery, and cutoff endpoint evidence" width="1120"/>
+  <br/><em>Order-balanced same-Mac P9 repeats. Failed cutoff arms are shown as operational failures, never as completed timings.</em>
 </div>
 
 For contrast, the historical forward-MPS boundary run at `Dmax=64`,
@@ -956,10 +992,14 @@ Peak recovery was unchanged. Current MettleQ timings span
   <br/><em>Current end-to-end 1,024-shot result: correctness passes, but Aer remains faster on these small circuits.</em>
 </div>
 
-The new full MPO summaries, every sample, tensor-network stats, the interrupted
-cutoff and published-CLI arms, matched published-core result, CPU/GPU profile,
-manifest, and plots are frozen in
-[`step11-midpoint-mpo/`](assets/benchmarks-frozen/fork-m3pro-20260716-step11-midpoint-mpo/).
+The current repeated MPO records, every seeded sample, compressed
+tensor-network stats, operational failures, safe-SVD telemetry, hashes,
+manifest, and plot are frozen in
+[`step12-mpo-worker-convergence/`](assets/benchmarks-frozen/fork-m3pro-20260717-step12-mpo-worker-convergence/).
+The preliminary single-run results, interrupted experiments, and CPU/GPU phase
+profile remain frozen in
+[`step11-midpoint-mpo/`](assets/benchmarks-frozen/fork-m3pro-20260716-step11-midpoint-mpo/)
+as historical evidence; its single-run timing is superseded by Step 12.
 The earlier forward-MPS and mirrored-family evidence remains frozen in
 [`step9-mettleq-peaked/`](assets/benchmarks-frozen/fork-m3pro-20260716-step9-mettleq-peaked/)
 and
@@ -1076,7 +1116,7 @@ auditable. This fork adds explicit evidence at each layer:
 | Quantum-computing examples and algorithms | 41 |
 | Internal consistency and measurement parity | 21 |
 | MPS backend and correctness | 22 |
-| Midpoint-MPO API, isolated worker, safe SVD, and convergence policy | 11 |
+| Midpoint-MPO API, isolated worker, safe SVD, and convergence policy | 12 |
 | QML wrapper, QFT, and subset semantics | 10 |
 | Strict OpenQASM and silent-risk checks | 7 |
 | QPE energy estimation | 2 |
@@ -1086,7 +1126,7 @@ auditable. This fork adds explicit evidence at each layer:
 | Execution plans, memory policy, planner, and capability reporting | 33 |
 | Native Qiskit and PennyLane integrations and rebrand compatibility | 18 |
 | MettleQ Studio backend and MCP API | 18 |
-| **Total** | **367** |
+| **Total** | **368** |
 
 Run everything with:
 
@@ -1390,12 +1430,21 @@ evidence. Step 10 repeats the same 12-cell protocol after batched MPS sampling
 under
 [`fork-m3pro-20260716-step10-batched-mps-sampling/`](assets/benchmarks-frozen/fork-m3pro-20260716-step10-batched-mps-sampling/).
 
-The Step 11 midpoint-MPO evidence is frozen under
+The preliminary Step 11 midpoint-MPO evidence is frozen under
 [`fork-m3pro-20260716-step11-midpoint-mpo/`](assets/benchmarks-frozen/fork-m3pro-20260716-step11-midpoint-mpo/).
 It contains two full MettleQ P9 runs, the same-Mac published-core arm, all
 3,000 seeded samples, full tensor-network stats, bond convergence, the retained
 cutoff/Qiskit-2/CLI failure arms, CPU two-site/SVD before-after profiling, and
-the evidence-based decision to keep native GPU MPS disabled.
+the evidence-based decision to keep native GPU MPS disabled. Its single-run
+timing comparison is retained historically and superseded below.
+
+The current Step 12 repeated midpoint-MPO evidence is frozen under
+[`fork-m3pro-20260717-step12-mpo-worker-convergence/`](assets/benchmarks-frozen/fork-m3pro-20260717-step12-mpo-worker-convergence/).
+It contains the complete order-balanced two-repeat D512/D768/published-core P9
+campaign, the fixed-D512 `5e-4`/`6e-4`/`7e-4` cutoff schedule, all eight
+completed sample sets, both operational-failure records, losslessly compressed
+contraction statistics, aggregate safe-SVD recovery telemetry, hashes, clean
+provenance, and the README-facing plot.
 
 Pre-rename raw evidence retains its original schema and is not rewritten.
 Current README-facing plots with MettleQ labels are reproducibly rendered from
