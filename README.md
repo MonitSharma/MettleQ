@@ -11,6 +11,7 @@
   </p>
   <p>
     <a href="#quick-start">Quick start</a> ·
+    <a href="#paired-qiskit-and-pennylane-tutorials">Tutorials</a> ·
     <a href="#performance">Performance</a> ·
     <a href="#trust-correctness-and-observability">Trust &amp; correctness</a> ·
     <a href="#sdk-integration-status">SDK status</a> ·
@@ -43,6 +44,7 @@ acceleration.
 | Current test suite | **367 tests** across the simulator, SDK adapters, planner, algorithms, MPS/MPO, peaked circuits, QASM, Metal dispatch, campaign analysis, and MettleQ Studio backend |
 | Desktop product | MettleQ Studio orchestration, monitoring, plotting, and export |
 | SDK adapters | Native Qiskit backend and registered PennyLane device, plus the original internal `mettleq.qml` teaching wrapper |
+| SDK tutorials | 29 paired, executable Qiskit/PennyLane notebooks with reference parity, timing, statistical sampling checks, MPS trust evidence, and Apple GPU selection |
 
 ## Project lineage
 
@@ -115,6 +117,12 @@ For an SDK-focused install without the development and desktop extras:
 
 ```bash
 python -m pip install -e '.[sdk]'
+```
+
+For the executed Qiskit/PennyLane tutorial suite:
+
+```bash
+python -m pip install -e '.[tutorials]'
 ```
 
 The explicit midpoint-MPO method has optional tensor-network dependencies:
@@ -226,6 +234,29 @@ def circuit(theta):
 
 print(circuit(0.3))
 ```
+
+### Paired Qiskit and PennyLane tutorials
+
+[`tutorials/`](tutorials/) contains 16 Qiskit and 13 PennyLane notebooks. Each
+one runs the SDK reference path and the MettleQ path, records warm-up-aware
+median wall time, and enforces a declared agreement check. Analytic results use
+explicit numerical tolerances; deterministic algorithms also require the same
+answer; independent finite-shot RNG streams are compared statistically rather
+than being mislabeled as byte-for-byte identical.
+
+The detailed [`tutorial coverage audit`](tutorials/COVERAGE.md) maps the current
+official catalogs to direct local counterparts, locally represented unitary
+cores, and intentionally unsupported cloud/noise/dynamic workflows. Rebuild and
+execute the suite with:
+
+```bash
+python tools/build_tutorial_notebooks.py --check
+python tools/run_tutorial_notebooks.py
+```
+
+Verified per-notebook timings and comparison metrics are written to
+[`tutorials/results.md`](tutorials/results.md) and
+[`tutorials/results.json`](tutorials/results.json).
 
 ### Choose a simulation method and device
 
@@ -1483,6 +1514,7 @@ Build local UI artifacts with:
 | `src/mettleq/integrations/` | Shared adapter layer, Qiskit `BackendV2`, and PennyLane device plugin |
 | `src/mettleq/datasets/` | Published peaked-circuit input, integrity metadata, attribution, and third-party license |
 | `src/tests/` | Simulator, algorithm, correctness, protocol, and Metal tests |
+| `tutorials/` | Executed paired Qiskit/PennyLane notebooks, coverage audit, timing summary, and machine-readable parity results |
 | `tools/` | GPU profiler, sweep runners, SDK benchmark, comparison plots, and supporting utilities |
 | `bench.sh` | Main benchmark launcher |
 | `bench_with_logging.sh` | Orchestrated benchmark and promotion workflow |
