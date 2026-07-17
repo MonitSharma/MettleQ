@@ -65,6 +65,9 @@ MettleQ's measured crossover policy says the Apple GPU is worthwhile.
 
 ## Coverage boundary
 
+The detailed per-category disposition is maintained in
+[`COVERAGE.md`](COVERAGE.md).
+
 This suite covers the locally simulatable, unitary circuit cores of the current
 [IBM Quantum tutorial catalog](https://quantum.cloud.ibm.com/docs/en/tutorials/index),
 the Qiskit [exact local simulation](https://quantum.cloud.ibm.com/docs/en/guides/simulate-with-qiskit-sdk-primitives)
