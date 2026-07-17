@@ -1,0 +1,97 @@
+{
+  "benchmark": "mettleq_midpoint_mpo_priority_phase12",
+  "created_at": "2026-07-17T01:35:02+0800",
+  "git_commit": "96aa3f008404fa323bdd7f8336c8b723ffaed1bc",
+  "git_dirty": false,
+  "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "caller_environment": {
+    "python": "3.13.2",
+    "qiskit": "2.5.0"
+  },
+  "worker_environment": {
+    "python": "3.10.16",
+    "qiskit": "1.4.5",
+    "quimb": "1.11.2",
+    "numpy": "2.2.6",
+    "scipy": "1.15.3"
+  },
+  "worker_python": "/Users/monitsharma/code_projects/Qupertino/.venv-mpo/bin/python",
+  "published_solver_commit": "3bcdc1e5bfd6abb9425f71bd43e560d2b27f45c1",
+  "source_qasm": "/Users/monitsharma/code_projects/Qupertino/src/mettleq/datasets/peaked_circuit_P9_Hqap_56x1917.qasm",
+  "source_qasm_sha256": "cff3496c45d9133c1f1693f1d3b0cf1fc2da338f13cd7b339db330a4762d0f35",
+  "exported_qasm": "/Users/monitsharma/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-selective/input/p9-qiskit2-export.qasm",
+  "exported_qasm_sha256": "437029b7ca2b7e8ac4fd2b4dfcbcc8591e5b03f51e7d5049e2e445de81dd8ee8",
+  "contract": {
+    "shots": 1000,
+    "routing_seed": 123,
+    "sampling_seed": 123,
+    "sabre_trials": 90,
+    "post_sabre_trials": 50,
+    "parallel_rewire": false,
+    "expected_bitstring": "01101110111001100000100000001010011100101101010111110111"
+  },
+  "ordering": "forward/reverse three-arm ordering for pairwise main balance; reversed two-arm ordering for cutoff endpoints",
+  "plan": [
+    {
+      "phase": "main",
+      "repeat": 0,
+      "position": 0,
+      "arm": "mettleq_d512"
+    },
+    {
+      "phase": "main",
+      "repeat": 0,
+      "position": 1,
+      "arm": "mettleq_d768"
+    },
+    {
+      "phase": "main",
+      "repeat": 0,
+      "position": 2,
+      "arm": "published_d512"
+    },
+    {
+      "phase": "main",
+      "repeat": 1,
+      "position": 0,
+      "arm": "published_d512"
+    },
+    {
+      "phase": "main",
+      "repeat": 1,
+      "position": 1,
+      "arm": "mettleq_d768"
+    },
+    {
+      "phase": "main",
+      "repeat": 1,
+      "position": 2,
+      "arm": "mettleq_d512"
+    },
+    {
+      "phase": "cutoff",
+      "repeat": 0,
+      "position": 0,
+      "arm": "mettleq_d512_c5e-4"
+    },
+    {
+      "phase": "cutoff",
+      "repeat": 0,
+      "position": 1,
+      "arm": "mettleq_d512_c7e-4"
+    },
+    {
+      "phase": "cutoff",
+      "repeat": 1,
+      "position": 0,
+      "arm": "mettleq_d512_c7e-4"
+    },
+    {
+      "phase": "cutoff",
+      "repeat": 1,
+      "position": 1,
+      "arm": "mettleq_d512_c5e-4"
+    }
+  ]
+}

@@ -1,0 +1,181 @@
+{
+  "planned_runs": 10,
+  "attempted_runs": 10,
+  "completed_runs": 8,
+  "failed_runs": 2,
+  "main_complete": true,
+  "by_arm": {
+    "mettleq_d512": {
+      "runs": 2,
+      "positions": [
+        0,
+        2
+      ],
+      "algorithm_times_s": [
+        1234.3252314580022,
+        1196.801231874997
+      ],
+      "wall_times_s": [
+        1236.8473003340187,
+        1199.2721347500046
+      ],
+      "median_algorithm_time_s": 1215.5632316664996,
+      "median_wall_time_s": 1218.0597175420116,
+      "expected_peak_counts": [
+        100,
+        100
+      ],
+      "expected_peak_fractions": [
+        0.1,
+        0.1
+      ],
+      "all_recovered_expected_peak": true
+    },
+    "mettleq_d512_c7e-4": {
+      "runs": 2,
+      "positions": [
+        1,
+        0
+      ],
+      "algorithm_times_s": [
+        1142.6914201250474,
+        1096.8015803330345
+      ],
+      "wall_times_s": [
+        1144.8059811659914,
+        1098.6058983340045
+      ],
+      "median_algorithm_time_s": 1119.746500229041,
+      "median_wall_time_s": 1121.705939749998,
+      "expected_peak_counts": [
+        24,
+        24
+      ],
+      "expected_peak_fractions": [
+        0.024,
+        0.024
+      ],
+      "all_recovered_expected_peak": false
+    },
+    "mettleq_d768": {
+      "runs": 2,
+      "positions": [
+        1,
+        1
+      ],
+      "algorithm_times_s": [
+        1233.0731017089856,
+        1198.3411089589936
+      ],
+      "wall_times_s": [
+        1235.4543917079864,
+        1200.6717861669895
+      ],
+      "median_algorithm_time_s": 1215.7071053339896,
+      "median_wall_time_s": 1218.063088937488,
+      "expected_peak_counts": [
+        103,
+        103
+      ],
+      "expected_peak_fractions": [
+        0.103,
+        0.103
+      ],
+      "all_recovered_expected_peak": true
+    },
+    "published_d512": {
+      "runs": 2,
+      "positions": [
+        2,
+        0
+      ],
+      "algorithm_times_s": [
+        1169.681096290995,
+        1164.5102198340173
+      ],
+      "wall_times_s": [
+        1172.4487957500096,
+        1167.2378200420062
+      ],
+      "median_algorithm_time_s": 1167.0956580625061,
+      "median_wall_time_s": 1169.843307896008,
+      "expected_peak_counts": [
+        100,
+        100
+      ],
+      "expected_peak_fractions": [
+        0.1,
+        0.1
+      ],
+      "all_recovered_expected_peak": true
+    }
+  },
+  "paired_main_repeats": [
+    {
+      "repeat": 0,
+      "mettleq_d512_over_published_algorithm_ratio": 1.0552664614072937,
+      "mettleq_d512_over_published_wall_ratio": 1.0549264964213756,
+      "mettleq_d512_over_d768_algorithm_ratio": 1.0010154545965533
+    },
+    {
+      "repeat": 1,
+      "mettleq_d512_over_published_algorithm_ratio": 1.0277292646221536,
+      "mettleq_d512_over_published_wall_ratio": 1.0274445482813825,
+      "mettleq_d512_over_d768_algorithm_ratio": 0.998714992690742
+    }
+  ],
+  "paired_main_median_ratios": {
+    "mettleq_d512_over_published_algorithm_ratio": 1.0414978630147238,
+    "mettleq_d512_over_published_wall_ratio": 1.041185522351379,
+    "mettleq_d512_over_d768_algorithm_ratio": 0.9998652236436476
+  },
+  "cutoff_convergence": {
+    "classification": "operationally_incomplete",
+    "converged": false,
+    "all_endpoints_attempted": true,
+    "fixed_max_bond": 512,
+    "peak_fraction_atol": 0.03,
+    "median_expected_peak_fraction_spread": null,
+    "groups": {
+      "0.0005": {
+        "runs": 0,
+        "attempts": 2,
+        "failures": 2,
+        "failure_types": [
+          "MidpointMPOWorkerError",
+          "MidpointMPOWorkerError"
+        ],
+        "expected_peak_fractions": [],
+        "median_expected_peak_fraction": null,
+        "median_algorithm_time_s": null,
+        "all_recovered_expected_peak": false
+      },
+      "0.0006": {
+        "runs": 2,
+        "attempts": 2,
+        "failures": 0,
+        "failure_types": [],
+        "expected_peak_fractions": [
+          0.1,
+          0.1
+        ],
+        "median_expected_peak_fraction": 0.1,
+        "median_algorithm_time_s": 1215.5632316664996,
+        "all_recovered_expected_peak": true
+      },
+      "0.0007": {
+        "runs": 2,
+        "attempts": 2,
+        "failures": 0,
+        "failure_types": [],
+        "expected_peak_fractions": [
+          0.024,
+          0.024
+        ],
+        "median_expected_peak_fraction": 0.024,
+        "median_algorithm_time_s": 1119.746500229041,
+        "all_recovered_expected_peak": false
+      }
+    }
+  }
+}

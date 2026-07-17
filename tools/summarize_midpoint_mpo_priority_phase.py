@@ -203,11 +203,24 @@ def _plot(path: Path, records: list[dict], summary: dict) -> None:
     axes[1, 0].set_xlabel("Cutoff at fixed D=512")
     axes[1, 0].set_ylabel("Expected-peak fraction")
     classification = summary["cutoff_convergence"]["classification"]
+    classification_label = classification.replace("_", " ")
     spread = summary["cutoff_convergence"]["median_expected_peak_fraction_spread"]
     spread_label = "n/a" if spread is None else f"{spread:.3f}"
     axes[1, 0].set_title(
-        f"Cutoff convergence: {classification} (spread {spread_label})"
+        f"Cutoff convergence: {classification_label} (spread {spread_label})"
     )
+    strict_failures = summary["cutoff_convergence"]["groups"]["0.0005"][
+        "failures"
+    ]
+    if strict_failures:
+        axes[1, 0].annotate(
+            f"{strict_failures}/2 operational\nfailures at 176 gates",
+            (0, 0.026),
+            ha="center",
+            va="center",
+            fontsize=8,
+            color="#a63d40",
+        )
     axes[1, 0].grid(axis="y", alpha=0.25)
 
     for index, cutoff in enumerate(cutoff_values):
@@ -233,6 +246,15 @@ def _plot(path: Path, records: list[dict], summary: dict) -> None:
     axes[1, 1].set_ylabel("Algorithm time (s)")
     axes[1, 1].set_title("Cutoff cost (bars are medians)")
     axes[1, 1].grid(axis="y", alpha=0.25)
+    if strict_failures:
+        axes[1, 1].annotate(
+            f"{strict_failures}/2 operational\nfailures; no timing",
+            (0, 100),
+            ha="center",
+            va="center",
+            fontsize=8,
+            color="#a63d40",
+        )
 
     figure.suptitle(
         "MettleQ midpoint-MPO/TNO + unswapping — repeated M3 Pro evidence",
@@ -394,6 +416,19 @@ def main() -> int:
             f"{group['all_recovered_expected_peak']} |"
         )
 
+    def cutoff_line(cutoff_key: str, label: str) -> str:
+        group = cutoff["groups"][cutoff_key]
+        fractions = ", ".join(
+            f"{value:.3f}" for value in group["expected_peak_fractions"]
+        ) or "no accepted result"
+        median_time = group["median_algorithm_time_s"]
+        time_label = "n/a" if median_time is None else f"{median_time:.2f}"
+        return (
+            f"| {label} | {group['attempts']} | {group['runs']} | "
+            f"{group['failures']} | {time_label} | {fractions} | "
+            f"{group['all_recovered_expected_peak']} |"
+        )
+
     spread = cutoff["median_expected_peak_fraction_spread"]
     spread_text = "not measurable" if spread is None else f"{spread:.3f}"
     cutoff_failures = sum(
@@ -413,6 +448,12 @@ midpoint-MPO/TNO + unswapping worker. The normal caller used Qiskit
 {arm_line('mettleq_d768')}
 {arm_line('published_d512')}
 
+| Fixed-D512 cutoff | Attempts | Completed | Operational failures | Median algorithm time (s) | Expected-peak fractions | Peak recovered in every completed run |
+|---|---:|---:|---:|---:|---|---|
+{cutoff_line('0.0005', '5e-4')}
+{cutoff_line('0.0006', '6e-4')}
+{cutoff_line('0.0007', '7e-4')}
+
 - Paired median MettleQ D512 / published-core D512 runtime ratio:
   **{main_ratios['mettleq_d512_over_published_algorithm_ratio']:.3f}x**.
 - Paired median MettleQ D512 / D768 runtime ratio:
@@ -421,6 +462,9 @@ midpoint-MPO/TNO + unswapping worker. The normal caller used Qiskit
   expected-peak fraction spread across 5e-4, 6e-4, and 7e-4 is
   **{spread_text}**. The endpoint schedule contains **{cutoff_failures}**
   recorded operational failure(s); failed arms contribute no peak estimate.
+- The looser 7e-4 endpoint was **{by_arm['mettleq_d512']['median_algorithm_time_s'] / by_arm['mettleq_d512_c7e-4']['median_algorithm_time_s']:.3f}x**
+  faster than 6e-4, but its expected-peak fraction fell reproducibly from
+  0.100 to 0.024. It is therefore a failed accuracy endpoint, not a speedup.
 - Safe-SVD telemetry across MettleQ arms: {fallback_totals['calls']} calls,
   {fallback_totals['native_service_calls']} routed to the persistent killable
   native service, {fallback_totals['native_service_failures']} service

@@ -1,0 +1,179 @@
+{
+  "benchmark": "mettleq_midpoint_mpo_priority_phase12_frozen",
+  "created_at": "2026-07-17T11:34:48+0800",
+  "git_commit": "f16044977c6cad0e7524fb10f8873a7ac45a42ff",
+  "git_dirty": false,
+  "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "source_campaign": "/Users/monitsharma/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service",
+  "campaign_manifest_sha256": "5c229bfff111f4172b2476dad11bdc8deda83464d8014834f18a2de49999a205",
+  "campaign_summary_sha256": "3980fe1a9a1ea0dea1856b60f48085ee2f6e89067ebdbab24bebf5ca078d00e7",
+  "exported_qasm_sha256": "437029b7ca2b7e8ac4fd2b4dfcbcc8591e5b03f51e7d5049e2e445de81dd8ee8",
+  "copied_runs": {
+    "main/repeat-0/mettleq_d512": [
+      "campaign_record.json",
+      "summary.json",
+      "samples.tsv",
+      "worker.log",
+      "stats.json.gz"
+    ],
+    "main/repeat-0/mettleq_d768": [
+      "campaign_record.json",
+      "summary.json",
+      "samples.tsv",
+      "worker.log",
+      "stats.json.gz"
+    ],
+    "main/repeat-0/published_d512": [
+      "campaign_record.json",
+      "summary.json",
+      "samples.tsv",
+      "worker.log",
+      "stats.json.gz"
+    ],
+    "main/repeat-1/published_d512": [
+      "campaign_record.json",
+      "summary.json",
+      "samples.tsv",
+      "worker.log",
+      "stats.json.gz"
+    ],
+    "main/repeat-1/mettleq_d768": [
+      "campaign_record.json",
+      "summary.json",
+      "samples.tsv",
+      "worker.log",
+      "stats.json.gz"
+    ],
+    "main/repeat-1/mettleq_d512": [
+      "campaign_record.json",
+      "summary.json",
+      "samples.tsv",
+      "worker.log",
+      "stats.json.gz"
+    ],
+    "cutoff/repeat-0/mettleq_d512_c5e-4": [
+      "campaign_record.json",
+      "worker.log"
+    ],
+    "cutoff/repeat-0/mettleq_d512_c7e-4": [
+      "campaign_record.json",
+      "summary.json",
+      "samples.tsv",
+      "worker.log",
+      "stats.json.gz"
+    ],
+    "cutoff/repeat-1/mettleq_d512_c7e-4": [
+      "campaign_record.json",
+      "summary.json",
+      "samples.tsv",
+      "worker.log",
+      "stats.json.gz"
+    ],
+    "cutoff/repeat-1/mettleq_d512_c5e-4": [
+      "campaign_record.json",
+      "worker.log"
+    ]
+  },
+  "copied_recovery_evidence": {
+    "all_scaled_svd_r0_d512": [
+      "campaign_record.json",
+      "summary.json",
+      "worker.log"
+    ],
+    "all_scaled_svd_r0_d768_partial": [
+      "worker.log"
+    ],
+    "cutoff5e4_no_progress_limit20": [
+      "campaign_record.json",
+      "manifest.json",
+      "worker.log"
+    ],
+    "safe_unscaled_r0_d512_peak_drift": [
+      "campaign_record.json",
+      "manifest.json",
+      "summary.json",
+      "worker.log"
+    ],
+    "safe_unscaled_r0_d768_partial": [
+      "worker.log"
+    ],
+    "selective_native_r0_d512": [
+      "campaign_record.json",
+      "manifest.json",
+      "worker.log"
+    ],
+    "unsafe_quimb_gesvd_r0_d512": [
+      "campaign_record.json",
+      "manifest.json",
+      "worker.log"
+    ]
+  },
+  "safe_svd_totals": {
+    "calls": 4648250,
+    "native_in_process_calls": 4479618,
+    "native_service_starts": 6,
+    "native_service_calls": 168632,
+    "native_service_successes": 168584,
+    "native_service_failures": 48,
+    "isolated_scipy_gesvd_calls": 48,
+    "isolated_scipy_gesvd_successes": 48,
+    "isolated_scipy_gesvd_failures": 0,
+    "rescaled_calls": 0,
+    "numpy_complex128_failures": 0,
+    "scipy_gesdd_failures": 0,
+    "eigh_fallbacks": 0
+  },
+  "interpretation": {
+    "runtime": "paired, forward/reverse order-balanced medians on one Mac; ratios are evidence for this P9 contract, not universal speedups",
+    "peak": "seeded finite-shot recovery of the published expected bitstring; not a proof of full-state fidelity",
+    "cutoff": {
+      "classification": "operationally_incomplete",
+      "converged": false,
+      "all_endpoints_attempted": true,
+      "fixed_max_bond": 512,
+      "peak_fraction_atol": 0.03,
+      "median_expected_peak_fraction_spread": null,
+      "groups": {
+        "0.0005": {
+          "runs": 0,
+          "attempts": 2,
+          "failures": 2,
+          "failure_types": [
+            "MidpointMPOWorkerError",
+            "MidpointMPOWorkerError"
+          ],
+          "expected_peak_fractions": [],
+          "median_expected_peak_fraction": null,
+          "median_algorithm_time_s": null,
+          "all_recovered_expected_peak": false
+        },
+        "0.0006": {
+          "runs": 2,
+          "attempts": 2,
+          "failures": 0,
+          "failure_types": [],
+          "expected_peak_fractions": [
+            0.1,
+            0.1
+          ],
+          "median_expected_peak_fraction": 0.1,
+          "median_algorithm_time_s": 1215.5632316664996,
+          "all_recovered_expected_peak": true
+        },
+        "0.0007": {
+          "runs": 2,
+          "attempts": 2,
+          "failures": 0,
+          "failure_types": [],
+          "expected_peak_fractions": [
+            0.024,
+            0.024
+          ],
+          "median_expected_peak_fraction": 0.024,
+          "median_algorithm_time_s": 1119.746500229041,
+          "all_recovered_expected_peak": false
+        }
+      }
+    }
+  }
+}
