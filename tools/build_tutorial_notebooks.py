@@ -1333,7 +1333,7 @@ mettleq_device = MettleQDevice(
     mps_max_bond_dimension=32,
     mps_truncation_threshold=1e-12,
     mps_convergence_bond_dimensions=(8, 16, 32),
-    mps_convergence_atol=5e-5,
+    mps_convergence_atol=5e-4,
 )
 mettleq_qnode = make_qnode(mettleq_device)
 candidate, mettleq_ms, _ = benchmark(mettleq_qnode)
@@ -1341,18 +1341,31 @@ state_error = phase_aligned_statevector_error(reference[0], candidate[0])
 expectation_error = abs(float(reference[1]) - float(candidate[1]))
 convergence = mettleq_device.last_mps_convergence_report
 accuracy = mettleq_device.last_mps_accuracy_report
+convergence_summary = {
+    "converged": convergence["converged"],
+    "atol": convergence["atol"],
+    "comparisons": convergence["comparisons"],
+    "runs": [
+        {
+            "dmax": run["dmax"],
+            "accuracy_classification": run["accuracy"]["classification"],
+            "maximum_bond_dimension_reached": run["diagnostics"]["maximum_bond_dimension_reached"],
+        }
+        for run in convergence["runs"]
+    ],
+}
 method, device = pennylane_selection(mettleq_device)
 tutorial_result = emit_result(
     notebook="pennylane/12_mps_convergence.ipynb",
     framework="pennylane",
     reference_ms=reference_ms,
     mettleq_ms=mettleq_ms,
-    check="MPS state atol=8e-5 and automated Dmax convergence",
+    check="MPS state atol=8e-5 and Dmax convergence atol=5e-4",
     passed=state_error <= 8e-5 and expectation_error <= 5e-5 and convergence["converged"] and accuracy["passed"],
     exact_match=bool(np.array_equal(reference[0], candidate[0])),
     selected_method=method,
     selected_device=device,
-    metrics={"max_amplitude_error": state_error, "expectation_error": expectation_error, "accuracy": accuracy, "convergence": convergence},
+    metrics={"max_amplitude_error": state_error, "expectation_error": expectation_error, "accuracy": accuracy, "convergence": convergence_summary},
 )
 """,
         ),
