@@ -51,9 +51,17 @@ def _copy_run(source: Path, target: Path) -> list[str]:
             copied.append(name)
     stats = source / "stats.json"
     if stats.exists():
-        with stats.open("rb") as input_handle, gzip.open(
-            target / "stats.json.gz", "wb", compresslevel=9
-        ) as output_handle:
+        with (
+            stats.open("rb") as input_handle,
+            (target / "stats.json.gz").open("wb") as raw_output,
+            gzip.GzipFile(
+                filename="",
+                mode="wb",
+                compresslevel=9,
+                fileobj=raw_output,
+                mtime=0,
+            ) as output_handle,
+        ):
             shutil.copyfileobj(input_handle, output_handle)
         copied.append("stats.json.gz")
     return copied

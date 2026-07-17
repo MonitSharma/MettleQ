@@ -12,6 +12,12 @@ midpoint-MPO/TNO + unswapping worker. The normal caller used Qiskit
 | mettleq_d768 | 2 | 1215.71 | 0.103, 0.103 | True |
 | published_d512 | 2 | 1167.10 | 0.100, 0.100 | True |
 
+| Fixed-D512 cutoff | Attempts | Completed | Operational failures | Median algorithm time (s) | Expected-peak fractions | Peak recovered in every completed run |
+|---|---:|---:|---:|---:|---|---|
+| 5e-4 | 2 | 0 | 2 | n/a | no accepted result | False |
+| 6e-4 | 2 | 2 | 0 | 1215.56 | 0.100, 0.100 | True |
+| 7e-4 | 2 | 2 | 0 | 1119.75 | 0.024, 0.024 | False |
+
 - Paired median MettleQ D512 / published-core D512 runtime ratio:
   **1.041x**.
 - Paired median MettleQ D512 / D768 runtime ratio:
@@ -20,6 +26,9 @@ midpoint-MPO/TNO + unswapping worker. The normal caller used Qiskit
   expected-peak fraction spread across 5e-4, 6e-4, and 7e-4 is
   **not measurable**. The endpoint schedule contains **2**
   recorded operational failure(s); failed arms contribute no peak estimate.
+- The looser 7e-4 endpoint was **1.086x**
+  faster than 6e-4, but its expected-peak fraction fell reproducibly from
+  0.100 to 0.024. It is therefore a failed accuracy endpoint, not a speedup.
 - Safe-SVD telemetry across MettleQ arms: 4648250 calls,
   168632 routed to the persistent killable
   native service, 48 service
