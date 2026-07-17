@@ -249,6 +249,7 @@ def _record_from_summary(plan: dict, run_dir: Path, extra: dict) -> dict:
 
 def _summarize(records: list[dict], plan: list[dict]) -> dict:
     complete = [record for record in records if record["status"] == "complete"]
+    failed = [record for record in records if record["status"] == "failed"]
     by_arm = {}
     for arm in sorted({record["arm"] for record in complete}):
         group = [record for record in complete if record["arm"] == arm]
@@ -313,8 +314,23 @@ def _summarize(records: list[dict], plan: list[dict]) -> dict:
     cutoff_groups = {}
     for cutoff in (5e-4, 6e-4, 7e-4):
         group = [record for record in cutoff_records if record["cutoff"] == cutoff]
+        attempted_group = [
+            record
+            for record in records
+            if record.get("implementation") == "mettleq_isolated"
+            and record.get("max_bond") == 512
+            and record.get("cutoff") == cutoff
+        ]
+        failed_group = [
+            record for record in attempted_group if record["status"] == "failed"
+        ]
         cutoff_groups[str(cutoff)] = {
             "runs": len(group),
+            "attempts": len(attempted_group),
+            "failures": len(failed_group),
+            "failure_types": [
+                record.get("error_type") for record in failed_group
+            ],
             "expected_peak_fractions": [
                 record["expected_peak_fraction"] for record in group
             ],
@@ -337,6 +353,9 @@ def _summarize(records: list[dict], plan: list[dict]) -> dict:
         if group["median_expected_peak_fraction"] is not None
     ]
     cutoff_complete = all(group["runs"] > 0 for group in cutoff_groups.values())
+    cutoff_attempted = all(
+        group["attempts"] > 0 for group in cutoff_groups.values()
+    )
     cutoff_recovered = all(
         group["all_recovered_expected_peak"] for group in cutoff_groups.values()
     )
@@ -351,9 +370,29 @@ def _summarize(records: list[dict], plan: list[dict]) -> dict:
         and cutoff_spread is not None
         and cutoff_spread <= 0.03
     )
+    cutoff_classification = (
+        "operationally_incomplete"
+        if cutoff_attempted and not cutoff_complete
+        else "converged"
+        if cutoff_converged
+        else "not_converged"
+    )
     return {
         "planned_runs": len(plan),
+        "attempted_runs": len(records),
         "completed_runs": len(complete),
+        "failed_runs": len(failed),
+        "main_complete": all(
+            any(
+                record["status"] == "complete"
+                and record["phase"] == item["phase"]
+                and record["repeat"] == item["repeat"]
+                and record["arm"] == item["arm"]
+                for record in records
+            )
+            for item in plan
+            if item["phase"] == "main"
+        ),
         "by_arm": by_arm,
         "paired_main_repeats": paired,
         "paired_main_median_ratios": {
@@ -365,8 +404,9 @@ def _summarize(records: list[dict], plan: list[dict]) -> dict:
             )
         },
         "cutoff_convergence": {
-            "classification": "converged" if cutoff_converged else "not_converged",
+            "classification": cutoff_classification,
             "converged": cutoff_converged,
+            "all_endpoints_attempted": cutoff_attempted,
             "fixed_max_bond": 512,
             "peak_fraction_atol": 0.03,
             "median_expected_peak_fraction_spread": cutoff_spread,
@@ -407,6 +447,15 @@ def main() -> int:
     )
     parser.add_argument(
         "--resume", action=argparse.BooleanOptionalAction, default=True
+    )
+    parser.add_argument(
+        "--continue-cutoff-failures",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Preserve operational cutoff failures and continue the remaining "
+            "cutoff schedule; main comparison failures always remain fail-fast"
+        ),
     )
     args = parser.parse_args()
 
@@ -478,6 +527,14 @@ def main() -> int:
             "forward/reverse three-arm ordering for pairwise main balance; "
             "reversed two-arm ordering for cutoff endpoints"
         ),
+        "failure_policy": {
+            "main": "fail_fast",
+            "cutoff": (
+                "record_and_continue"
+                if args.continue_cutoff_failures
+                else "fail_fast"
+            ),
+        },
         "plan": plan,
     }
     (output_dir / "manifest.json").write_text(
@@ -490,15 +547,33 @@ def main() -> int:
         run_dir = phase_dir / item["arm"]
         run_dir.mkdir(parents=True, exist_ok=True)
         record_path = run_dir / "campaign_record.json"
-        if args.resume and record_path.exists() and (run_dir / "summary.json").exists():
+        if args.resume and record_path.exists():
             record = _json(record_path)
-            records.append(record)
-            print(
-                f"[{index}/{len(plan)}] reuse {item['phase']} r{item['repeat']} "
-                f"p{item['position']} {item['arm']}",
-                flush=True,
+            implementation, max_bond, cutoff = _arm_contract(item["arm"])
+            record.setdefault("implementation", implementation)
+            record.setdefault("max_bond", max_bond)
+            record.setdefault("cutoff", cutoff)
+            reusable_complete = (
+                record.get("status") == "complete"
+                and (run_dir / "summary.json").exists()
             )
-            continue
+            reusable_cutoff_failure = (
+                record.get("status") == "failed"
+                and item["phase"] == "cutoff"
+                and args.continue_cutoff_failures
+            )
+            if reusable_complete or reusable_cutoff_failure:
+                record_path.write_text(
+                    json.dumps(record, indent=2, default=str) + "\n"
+                )
+                records.append(record)
+                suffix = " (operational failure)" if reusable_cutoff_failure else ""
+                print(
+                    f"[{index}/{len(plan)}] reuse {item['phase']} r{item['repeat']} "
+                    f"p{item['position']} {item['arm']}{suffix}",
+                    flush=True,
+                )
+                continue
         implementation, max_bond, cutoff = _arm_contract(item["arm"])
         print(
             f"[{index}/{len(plan)}] start {item['phase']} r{item['repeat']} "
@@ -537,6 +612,9 @@ def main() -> int:
             record = {
                 **item,
                 "status": "failed",
+                "implementation": implementation,
+                "max_bond": max_bond,
+                "cutoff": cutoff,
                 "error_type": type(error).__name__,
                 "error": str(error),
                 "run_dir": str(run_dir),
@@ -547,6 +625,13 @@ def main() -> int:
             (output_dir / "summary.partial.json").write_text(
                 json.dumps(_summarize(records, plan), indent=2, default=str) + "\n"
             )
+            if item["phase"] == "cutoff" and args.continue_cutoff_failures:
+                print(
+                    f"[{index}/{len(plan)}] cutoff operational failure "
+                    f"{item['arm']}: {type(error).__name__}",
+                    flush=True,
+                )
+                continue
             raise
         record_path.write_text(json.dumps(record, indent=2, default=str) + "\n")
         records.append(record)
@@ -568,7 +653,10 @@ def main() -> int:
         json.dumps(summary, indent=2, default=str) + "\n"
     )
     print(json.dumps(summary, indent=2, default=str), flush=True)
-    return 0 if summary["completed_runs"] == summary["planned_runs"] else 1
+    return 0 if (
+        summary["attempted_runs"] == summary["planned_runs"]
+        and summary["main_complete"]
+    ) else 1
 
 
 if __name__ == "__main__":
