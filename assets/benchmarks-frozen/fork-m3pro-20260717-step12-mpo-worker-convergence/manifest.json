@@ -1,8 +1,8 @@
 {
   "benchmark": "mettleq_midpoint_mpo_priority_phase12_frozen",
-  "created_at": "2026-07-17T11:38:12+0800",
-  "git_commit": "768ba1fc1455852e7102ec5a556c9f16d778e7e3",
-  "git_dirty": true,
+  "created_at": "2026-07-17T11:38:32+0800",
+  "git_commit": "068f4e154e38d4ec08a779ced99f3031d53ad951",
+  "git_dirty": false,
   "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
   "source_campaign": "/Users/monitsharma/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service",
   "campaign_manifest_sha256": "5c229bfff111f4172b2476dad11bdc8deda83464d8014834f18a2de49999a205",
