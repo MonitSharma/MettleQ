@@ -13,7 +13,8 @@ MIT-licensed Qupertino repository but has been substantially extended and
 renamed. This report describes the current architecture, the optimization that
 recovers legal layers from SDK scheduling, a radix-16 single-qubit Metal
 kernel, matched CPU/GPU experiments, numerical validation, safe capacity
-limits, and remaining limitations.
+limits, adaptive SDK delegation, GPU-native reductions, first-class
+midpoint-MPO exposure, experimental GPU-resident SVD, and remaining limitations.
 
 On an otherwise idle 14-inch MacBook Pro with Apple M3 Pro, 12 CPU cores, 18
 GPU cores, and 36 GB unified memory, MettleQ crossed Qiskit Aer CPU statevector
@@ -49,7 +50,7 @@ It does not combine independent CPU and GPU times into a cooperative speedup.
 
 ## 2. Project lineage
 
-MettleQ is maintained as a private fork of BoltzmannEntropy/Qupertino. The
+MettleQ is maintained as an independent fork of BoltzmannEntropy/Qupertino. The
 original repository, authorship, MIT license, and benchmark history are
 retained in the main README. The fork adds native SDK adapters, adaptive
 planning, exact-state memory safeguards, recoverable MPS numerics, convergence
@@ -58,9 +59,12 @@ benchmarking, and MettleQ Studio.
 
 ## 3. Architecture
 
-Qiskit circuits enter through a BackendV2 adapter and PennyLane programs enter
-through a registered device. Both translate operations to one canonical gate
-stream. The planner selects statevector or MPS and one numerical device. Dense
+Qiskit circuits enter through an adaptive BackendV2 and PennyLane programs enter
+through an adaptive registered device. Aer and Lightning handle small or
+double-precision work; MettleQ handles calibrated single-precision Apple-GPU
+work. Both translate operations to one canonical gate stream. Selection uses
+gate mix, expected launches, fusion coverage, output contract, topology,
+precision, and memory. Dense
 statevector execution then performs capability-gated pattern recognition and
 dispatches either hand-written Metal kernels or the MLX compatibility path.
 
@@ -103,6 +107,12 @@ This reduces full-state traversals from approximately n/2 to n/4 for uniform
 and per-qubit-varying layers. It is general to arbitrary supported 2x2 gates;
 it is not specialized to one benchmark angle or circuit. Execution-plan launch
 accounting and memory checkpointing were updated with the kernel.
+
+A matching radix-8 implementation permits hardware-specific calibration.
+Radix-16 remains the M3 Pro default; Xcode GPU traces are local artifacts used
+to inspect occupancy and register pressure and are not generalized to M1, M2,
+or M4 devices. Sparse controlled-unitary kernels now cover CH, CRX, CRY, and
+CRZ, and fuse two consecutive disjoint controlled gates into one traversal.
 
 ## 6. Experimental method
 
@@ -203,13 +213,24 @@ discarded-weight threshold because routing and entanglement increased bond
 growth. These completed runs must not be called trustworthy without higher
 bond convergence.
 
-The next MPS work is CPU contraction/SVD profiling, topology-aware routing,
-compact observable contracts, and only then GPU-resident contractions large
-enough to amortize transfers and launch overhead.
+The CPU path now uses overwrite-capable Fortran LAPACK buffers, direct SciPy
+QR/SVD calls, matrix-multiplication two-site contractions, topology-aware
+routing, canonicalization, and renormalization. An explicit `gpu_jacobi`
+driver implements a one-sided complex64 Jacobi SVD whose matrix factors remain
+on the Apple GPU; only its singular spectrum and residual scalar return to the
+host. Every split refuses a non-finite or excessive reconstruction residual.
+The driver is not automatic: on the measured M3 Pro its many Jacobi rounds are
+still slower than optimized CPU LAPACK, so residency is an achieved mechanism,
+not yet a performance win.
+
+Midpoint-MPO/TNO plus unswapping is exposed as a normal Qiskit BackendV2. Its
+pinned worker remains an internal numerical-isolation boundary necessitated by
+the published solver's dependency contract. Results include compression,
+sampling, bond/cutoff diagnostics, and expected-peak evidence.
 
 ## 11. Validation and reproducibility
 
-The release passes 372 automated tests and all 29 paired tutorial notebooks.
+The release passes 386 automated tests and all 29 paired tutorial notebooks.
 The tutorial correctness audit reports nine bit-for-bit matches and 20
 tolerance-based matches; every declared check passes. Frozen benchmark folders
 contain JSON, CSV, plots, protocol metadata, raw timing samples, and refusal
@@ -217,24 +238,21 @@ records. The main README contains reproduction commands.
 
 ## 12. Limitations and future work
 
-The most direct next improvements are:
+This revision completed the earlier adaptive-delegation, circuit-profile,
+controlled-gate, device-reduction, radix calibration, MPS CPU, experimental
+GPU-SVD, first-class MPO, and performance-metadata priorities. Remaining work is:
 
-1. Build calibrated SDK dispatch that can select Aer or Lightning as the small
-   CPU fallback and MettleQ as the Apple-GPU path without changing user code.
-2. Add circuit-family calibration based on gate mix, fusion coverage, expected
-   launches, precision, and output contract rather than width alone.
-3. Profile radix-16 occupancy, register pressure, memory bandwidth, and tail
-   kernels with Metal counters on multiple M1-M4 machines.
-4. Add more native kernels for controlled arbitrary unitaries, multi-control
-   gates, reductions, sampling, and expectation values so full-state host
-   materialization is not required.
-5. Improve Qiskit result construction and state return to minimize avoidable
-   host copies.
-6. Optimize MPS CPU contractions and SVDs before revisiting GPU MPS.
-7. Expand precision policies, accumulated-error studies, randomized circuit
+1. Measure radix-8/radix-16 occupancy, register pressure, and bandwidth on
+   representative M1, M2, M3, and M4 GPUs; only M3 Pro is calibrated today.
+2. Replace iterative Jacobi with a blocked or library-quality GPU SVD whose
+   launch count and convergence become competitive with Accelerate LAPACK.
+3. Add native multi-control and remaining generic unitary families.
+4. Improve Qiskit result construction further where Qiskit's public result
+   contract permits true zero-copy ownership.
+5. Expand precision policies, accumulated-error studies, randomized circuit
    differential testing, and long-depth norm/error monitoring.
-8. Establish continuous performance regression testing with thermal state,
-   power mode, OS version, and background-load metadata.
+6. Collect stable self-hosted regression evidence across power and thermal
+   states, then publish per-hardware calibration files.
 
 ## 13. References
 
@@ -246,6 +264,7 @@ The most direct next improvements are:
 6. MLX data types: https://ml-explore.github.io/mlx/build/html/python/data_types.html
 7. Apple Metal recommendedMaxWorkingSetSize: https://developer.apple.com/documentation/metal/mtldevice/recommendedmaxworkingsetsize
 8. PennyLane Lightning: https://docs.pennylane.ai/projects/lightning/en/stable/lightning_qubit/device.html
+9. Apple GPU occupancy guidance: https://developer.apple.com/documentation/xcode/finding-your-metal-apps-gpu-occupancy
 
 ## Citation
 

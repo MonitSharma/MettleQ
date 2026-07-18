@@ -1,5 +1,5 @@
 {
-  "qasm": "/Users/monitsharma/code_projects/Qupertino/src/mettleq/datasets/peaked_circuit_P9_Hqap_56x1917.qasm",
+  "qasm": "<HOME>/code_projects/Qupertino/src/mettleq/datasets/peaked_circuit_P9_Hqap_56x1917.qasm",
   "tag": "matched",
   "num_qubits": 56,
   "initial_ops": {
@@ -30,8 +30,8 @@
     "scipy_flapack": "/tmp/peaked-mpo-solver-reference-20260716/.venv/lib/python3.10/site-packages/scipy/linalg/_flapack.cpython-310-darwin.so"
   },
   "parameters": {
-    "qasm": "/Users/monitsharma/code_projects/Qupertino/src/mettleq/datasets/peaked_circuit_P9_Hqap_56x1917.qasm",
-    "outdir": "/Users/monitsharma/code_projects/Qupertino/bench/runs/midpoint-mpo-phase11-pinned/published_solver",
+    "qasm": "<HOME>/code_projects/Qupertino/src/mettleq/datasets/peaked_circuit_P9_Hqap_56x1917.qasm",
+    "outdir": "<HOME>/code_projects/Qupertino/bench/runs/midpoint-mpo-phase11-pinned/published_solver",
     "tag": "matched",
     "samples": 1000,
     "expected_bitstring": "01101110111001100000100000001010011100101101010111110111",

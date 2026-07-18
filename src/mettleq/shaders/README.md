@@ -101,6 +101,22 @@ pair and single kernels handle the remaining one to three qubits.
   product order, tensor order, and no detector double-consume.
 - Per-qubit pair launches participate in the same opt-in intra-layer streaming
   policy as uniform U2/RX layers.
+- A semantically identical radix-8 variant is available for hardware
+  calibration with `METTLEQ_SINGLE_QUBIT_RADIX=8`. The default radix-16 path
+  keeps 16 amplitudes in registers; `tools/profile_metal_radix.py` records
+  matched timings and can emit local Xcode `.gputrace` captures so occupancy
+  and register pressure are measured rather than inferred.
+
+### controlled_single.py — controlled 2x2 gates
+
+- CH, CRX, CRY, and CRZ share one arbitrary controlled-2x2 sparse kernel: one
+  thread owns a target-amplitude pair and performs no matrix work when the
+  control bit is zero.
+- Two consecutive controlled gates whose four wires are distinct share one
+  four-amplitude traversal. Overlapping gates stay in program order as single
+  sparse launches, preserving dependency semantics.
+- Execution plans report the concrete single/pair kernels and launch count;
+  parity tests cover mixed controlled families and dependency-bearing groups.
 
 ### diag.py — weighted diagonal layer (`diag_weighted_layer`) [S4]
 - CPHASE runs with per-bond angles (QPE controlled-power ladder base·2^p,

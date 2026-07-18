@@ -71,6 +71,7 @@ mettleq-mpo = "mettleq.midpoint_mpo:main"
 
 [project.entry-points."pennylane.plugins"]
 mettleq = "mettleq.integrations.pennylane:MettleQDevice"
+"mettleq.adaptive" = "mettleq.integrations.pennylane:AdaptivePennyLaneDevice"
 qupertino = "mettleq.integrations.pennylane:MettleQDevice"
 
 [tool.setuptools]

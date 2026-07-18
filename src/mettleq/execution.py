@@ -684,6 +684,15 @@ def _custom_dispatch_spec(op: Dict[str, Any], n: int) -> Optional[Dict[str, Any]
         if n % 2 and n - 1 in active:
             kernels.append("mettleq_u2_single")
         family = "per_qubit_single_qubit_layer"
+    elif name == "_CULISTLAYER":
+        groups = op.get("groups", [])
+        launches = len(groups)
+        kernels = []
+        if any(len(group) == 2 for group in groups):
+            kernels.append("mettleq_controlled_u_pair")
+        if any(len(group) == 1 for group in groups):
+            kernels.append("mettleq_controlled_u_single")
+        family = "controlled_single_qubit_layer"
     elif name == "_XORLAYER":
         identity = _is_identity_rows(op.get("rows", []), n)
         kernels = ["mettleq_xor_flip" if identity else "mettleq_xor_affine_gather"]
@@ -715,6 +724,7 @@ def _custom_dispatch_spec(op: Dict[str, Any], n: int) -> Optional[Dict[str, Any]
                 "_RXLAYER",
                 "_U2LAYER",
                 "_U2LISTLAYER",
+                "_CULISTLAYER",
                 "_XXLAYER",
                 "_YYLAYER",
             }

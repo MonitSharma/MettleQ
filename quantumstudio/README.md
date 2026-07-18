@@ -3,7 +3,8 @@
 MLX Quantum Benchmarking Suite for Apple Silicon.
 License: Source code and binary distributions are covered by the MIT License.
 See `LICENSE`, `LICENSE.md`, and `BINARY-LICENSE.txt`.
-The codebase is cross-platform, but we currently provide [macOS binaries only](https://qneura.ai/apps.html).
+The codebase is cross-platform; release artifacts and installation notes are
+published through the [MettleQ repository](https://github.com/MonitSharma/MettleQ).
 
 ## Quick Start
 

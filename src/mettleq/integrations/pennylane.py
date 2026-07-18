@@ -46,6 +46,7 @@ from ._common import (
     marginal_probabilities,
     observable_samples,
     pauli_product_expectation,
+    pauli_product_expectations,
     sample_bits,
     statevector_numpy,
 )
@@ -57,6 +58,7 @@ from ..planning import (
     normalize_device,
     normalize_method,
 )
+from .policy import recommend_sdk_engine
 
 
 _PENNYLANE_TO_CORE = {
@@ -289,36 +291,7 @@ class MettleQDevice(PennyLaneDevice):
     def _execute_circuit(
         self, circuit, execution_options, *, execution_cache=None
     ):
-        operations = []
-        global_phase = 0.0
-        for operation in circuit.operations:
-            if operation.name == "Identity":
-                continue
-            if operation.name == "GlobalPhase":
-                # PennyLane's GlobalPhase(phi) is exp(-i phi) I.
-                global_phase -= self._parameter(operation.parameters[0], operation.name)
-                continue
-            if operation.name not in _PENNYLANE_TO_CORE:
-                raise DeviceError(
-                    f"Operation {operation.name!r} reached MettleQ without "
-                    "a supported decomposition"
-                )
-            parameters = [
-                self._parameter(value, operation.name)
-                for value in operation.parameters
-            ]
-            if operation.name in ("IsingXX", "IsingYY", "IsingZZ"):
-                # PennyLane uses exp(-i theta P⊗P / 2).
-                parameters[0] /= 2.0
-            wires = [self.wires.index(wire) for wire in operation.wires]
-            try:
-                operations.append(
-                    core_operation(
-                        _PENNYLANE_TO_CORE[operation.name], wires, parameters
-                    )
-                )
-            except ValueError as exc:
-                raise DeviceError(str(exc)) from exc
+        operations, global_phase = self._canonical_operations(circuit)
 
         effective_shots = circuit.shots
         if not effective_shots and self.shots:
@@ -405,6 +378,40 @@ class MettleQDevice(PennyLaneDevice):
                     runs, atol=float(execution_options["mps_convergence_atol"])
                 )
         return result
+
+    def _canonical_operations(self, circuit):
+        """Translate one preprocessed PennyLane tape without executing it."""
+        operations = []
+        global_phase = 0.0
+        for operation in circuit.operations:
+            if operation.name == "Identity":
+                continue
+            if operation.name == "GlobalPhase":
+                # PennyLane's GlobalPhase(phi) is exp(-i phi) I.
+                global_phase -= self._parameter(operation.parameters[0], operation.name)
+                continue
+            if operation.name not in _PENNYLANE_TO_CORE:
+                raise DeviceError(
+                    f"Operation {operation.name!r} reached MettleQ without "
+                    "a supported decomposition"
+                )
+            parameters = [
+                self._parameter(value, operation.name)
+                for value in operation.parameters
+            ]
+            if operation.name in ("IsingXX", "IsingYY", "IsingZZ"):
+                # PennyLane uses exp(-i theta P⊗P / 2).
+                parameters[0] /= 2.0
+            wires = [self.wires.index(wire) for wire in operation.wires]
+            try:
+                operations.append(
+                    core_operation(
+                        _PENNYLANE_TO_CORE[operation.name], wires, parameters
+                    )
+                )
+            except ValueError as exc:
+                raise DeviceError(str(exc)) from exc
+        return operations, global_phase
 
     def _execute_operations(
         self,
@@ -616,16 +623,19 @@ class MettleQDevice(PennyLaneDevice):
         )
 
     def _sentence_expectation(self, device, sentence) -> complex:
-        value = 0.0 + 0.0j
+        coefficients = []
+        words = []
         for word, coefficient in sentence.items():
-            value += complex(coefficient) * pauli_product_expectation(
-                device,
-                {
+            coefficients.append(complex(coefficient))
+            words.append({
                     self.wires.index(wire): pauli
                     for wire, pauli in word.items()
-                },
-            )
-        return value
+                })
+        values = pauli_product_expectations(device, words)
+        return sum(
+            coefficient * value
+            for coefficient, value in zip(coefficients, values)
+        )
 
     @staticmethod
     def _pauli_sentence(observable):
@@ -644,6 +654,104 @@ class MettleQDevice(PennyLaneDevice):
                 f"{value.imag:.3e}, above the {tolerance:.3e} tolerance"
             )
         return float(value.real)
+
+
+@simulator_tracking
+@single_tape_support
+class AdaptivePennyLaneDevice(MettleQDevice):
+    """Circuit-aware Lightning CPU / MettleQ Apple-GPU PennyLane device."""
+
+    def __init__(
+        self,
+        wires,
+        shots=None,
+        *,
+        precision: str = "single",
+        pennylane_gpu_crossover_qubits: int = 16,
+        **kwargs,
+    ) -> None:
+        super().__init__(wires=wires, shots=shots, **kwargs)
+        precision = str(precision).strip().lower()
+        if precision not in {"single", "double"}:
+            raise DeviceError("precision must be 'single' or 'double'")
+        self._adaptive_precision = precision
+        self._adaptive_gpu_crossover = int(pennylane_gpu_crossover_qubits)
+        self.last_adaptive_decisions = []
+
+    @property
+    def name(self) -> str:
+        return "mettleq.adaptive"
+
+    @staticmethod
+    def _lightning_available() -> bool:
+        try:
+            import pennylane_lightning  # noqa: F401
+            return True
+        except ImportError:
+            return False
+
+    @staticmethod
+    def _output_contract(circuit) -> str:
+        if any(isinstance(measurement, StateMP) for measurement in circuit.measurements):
+            return "statevector"
+        if any(isinstance(measurement, ExpectationMP) for measurement in circuit.measurements):
+            return "expectation"
+        if any(isinstance(measurement, ProbabilityMP) for measurement in circuit.measurements):
+            return "probabilities"
+        return "samples"
+
+    def execute(self, circuits, execution_config=None):
+        config = self.setup_execution_config(execution_config)
+        options = config.device_options
+        execution_cache = {}
+        lightning_cache = {}
+        fallback_available = self._lightning_available()
+        results = []
+        decisions = []
+        for circuit in circuits:
+            operations, _ = self._canonical_operations(circuit)
+            decision = recommend_sdk_engine(
+                "pennylane",
+                len(self.wires),
+                operations,
+                precision=self._adaptive_precision,
+                output_contract=self._output_contract(circuit),
+                method=options["method"],
+                allow_approximation=bool(options["allow_approximation"]),
+                fallback_available=fallback_available,
+                allow_unsafe_statevector=self._allow_unsafe_statevector,
+                pennylane_gpu_crossover_qubits=self._adaptive_gpu_crossover,
+            )
+            decisions.append(decision.to_dict())
+            if decision.engine == "pennylane_lightning_cpu":
+                key = repr(circuit.shots)
+                if key not in lightning_cache:
+                    lightning_cache[key] = qml.device(
+                        "lightning.qubit", wires=self.wires, shots=circuit.shots
+                    )
+                results.append(lightning_cache[key].execute(circuit, config))
+                self.last_execution_plan = None
+                self.statevector_preflight = decision.statevector_preflight
+                self.last_execution_selection = decision.to_dict()
+                self.last_mps_diagnostics = None
+                self.last_mps_accuracy_report = None
+                self.last_mps_convergence_report = None
+            elif decision.engine == "refused":
+                raise DeviceError(decision.reason)
+            else:
+                selected_options = dict(options)
+                selected_options["device"] = (
+                    "gpu" if "gpu" in decision.engine else "cpu"
+                )
+                results.append(
+                    self._execute_circuit(
+                        circuit,
+                        selected_options,
+                        execution_cache=execution_cache,
+                    )
+                )
+        self.last_adaptive_decisions = decisions
+        return tuple(results)
 
 
 # Source-compatible alias for applications written before the MettleQ rename.

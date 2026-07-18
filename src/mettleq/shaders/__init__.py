@@ -25,6 +25,7 @@ from .single_qubit import (rx_layer_all, u2_layer_all, u2_list_layer_all,
 from .diag import diag_pair_layer, diag_weighted_layer
 from .xor_affine import compose_inverse_affine, xor_affine_gather
 from .pauli_pair import xx_layer, yy_layer
+from .controlled_single import controlled_u_groups
 
 __all__ = [
     "metal_enabled",
@@ -44,6 +45,7 @@ __all__ = [
     "xor_affine_gather",
     "xx_layer",
     "yy_layer",
+    "controlled_u_groups",
 ]
 
 

@@ -10,6 +10,7 @@ four adjacent bits) plus pair/single tail passes. Two variants:
 from __future__ import annotations
 
 import math
+import os
 from typing import Callable, Optional
 
 import mlx.core as mx
@@ -208,6 +209,36 @@ _U2L_QUAD_SRC = """
     for (uint r = 0; r < 16u; ++r) out[idx[r]] = a[r];
 """
 
+# Radix-8 calibration variant: three adjacent one-qubit matrices share one
+# traversal while eight amplitudes remain in registers. It is selectable with
+# METTLEQ_SINGLE_QUBIT_RADIX=8; radix-16 remains the measured default.
+_U2L_TRI_SRC = """
+    uint q = thread_position_in_grid.x;
+    if (q >= n_octets) return;
+    uint bit_low = 1u << (shift_hi - 2u);
+    uint low = q & (bit_low - 1u);
+    uint high = q >> (shift_hi - 2u);
+    uint base = (high << (shift_hi + 1u)) | low;
+    complex64_t a[8]; uint idx[8];
+    for (uint c=0u;c<8u;++c) { idx[c]=base|(c<<(shift_hi-2u)); a[c]=state[idx[c]]; }
+    for (uint pass=0u;pass<3u;++pass) {
+        complex64_t u00=pass==0u?uc[0]:(pass==1u?ub[0]:ua[0]);
+        complex64_t u01=pass==0u?uc[1]:(pass==1u?ub[1]:ua[1]);
+        complex64_t u10=pass==0u?uc[2]:(pass==1u?ub[2]:ua[2]);
+        complex64_t u11=pass==0u?uc[3]:(pass==1u?ub[3]:ua[3]);
+        uint bit=1u<<pass;
+        for (uint x=0u;x<8u;++x) {
+            if ((x&bit)!=0u) continue;
+            uint y=x|bit; complex64_t v0=a[x],v1=a[y];
+            a[x]=complex64_t(u00.real*v0.real-u00.imag*v0.imag+u01.real*v1.real-u01.imag*v1.imag,
+                             u00.real*v0.imag+u00.imag*v0.real+u01.real*v1.imag+u01.imag*v1.real);
+            a[y]=complex64_t(u10.real*v0.real-u10.imag*v0.imag+u11.real*v1.real-u11.imag*v1.imag,
+                             u10.real*v0.imag+u10.imag*v0.real+u11.real*v1.imag+u11.imag*v1.real);
+        }
+    }
+    for (uint r=0u;r<8u;++r) out[idx[r]]=a[r];
+"""
+
 # Radix-4 Walsh-Hadamard: H on FOUR adjacent qubits per pass, one thread per
 # 16-tuple; out[r] = (1/4) * sum_c (-1)^popcount(r&c) a[c]. Halves the
 # full-state passes of an H layer vs the pair kernel (codex S5 review
@@ -258,6 +289,7 @@ _u2_pair_kernel = None
 _u2_single_kernel = None
 _u2l_pair_kernel = None
 _u2l_quad_kernel = None
+_u2l_tri_kernel = None
 _walsh4_kernel = None
 _phase_popcount_kernel = None
 
@@ -396,7 +428,15 @@ def u2_layer_all(
 ) -> mx.array:
     """Apply the SAME 2x2 unitary to every qubit with radix-16 passes and a
     pair/single tail. `u2x2` is [u00, u01, u10, u11] in complex64."""
-    global _u2l_quad_kernel, _u2_pair_kernel, _u2_single_kernel
+    global _u2l_quad_kernel, _u2l_tri_kernel, _u2_pair_kernel, _u2_single_kernel
+    radix = os.environ.get("METTLEQ_SINGLE_QUBIT_RADIX", "16").strip()
+    if radix not in {"8", "16"}:
+        raise ValueError("METTLEQ_SINGLE_QUBIT_RADIX must be 8 or 16")
+    if radix == "8" and _u2l_tri_kernel is None:
+        _u2l_tri_kernel = mx.fast.metal_kernel(
+            name="mettleq_u2_list_tri",
+            input_names=["state", "shift_hi", "ua", "ub", "uc", "n_octets"],
+            output_names=["out"], source=_U2L_TRI_SRC)
     if _u2l_quad_kernel is None:
         _u2l_quad_kernel = mx.fast.metal_kernel(
             name="mettleq_u2_list_quad",
@@ -406,8 +446,9 @@ def u2_layer_all(
             source=_U2L_QUAD_SRC,
         )
     n_hexads = 1 << (n - 4) if n >= 4 else 0
+    n_octets = 1 << (n - 3) if n >= 3 else 0
     shift = n - 1
-    while shift >= 3:
+    while radix == "16" and shift >= 3:
         (state,) = _u2l_quad_kernel(
             inputs=[state, mx.array(shift, dtype=mx.uint32),
                     u2x2, u2x2, u2x2, u2x2,
@@ -419,6 +460,14 @@ def u2_layer_all(
         )
         _launch_observed(state, on_launch)
         shift -= 4
+    while radix == "8" and shift >= 2:
+        (state,) = _u2l_tri_kernel(
+            inputs=[state, mx.array(shift, dtype=mx.uint32), u2x2, u2x2, u2x2,
+                    mx.array(n_octets, dtype=mx.uint32)],
+            grid=(n_octets,1,1), threadgroup=(min(256,n_octets),1,1),
+            output_shapes=[state.shape], output_dtypes=[mx.complex64])
+        _launch_observed(state, on_launch)
+        shift -= 3
     if _u2_pair_kernel is None:
         _u2_pair_kernel = mx.fast.metal_kernel(
             name="mettleq_u2_pair",
@@ -472,7 +521,15 @@ def u2_list_layer_all(
     row q holds [u00, u01, u10, u11] for qubit q (identity rows are fine).
     `active`, when given, lists qubits with non-identity matrices; pair
     passes where both qubits are identity are skipped entirely."""
-    global _u2l_quad_kernel, _u2l_pair_kernel, _u2_single_kernel
+    global _u2l_quad_kernel, _u2l_tri_kernel, _u2l_pair_kernel, _u2_single_kernel
+    radix = os.environ.get("METTLEQ_SINGLE_QUBIT_RADIX", "16").strip()
+    if radix not in {"8", "16"}:
+        raise ValueError("METTLEQ_SINGLE_QUBIT_RADIX must be 8 or 16")
+    if radix == "8" and _u2l_tri_kernel is None:
+        _u2l_tri_kernel = mx.fast.metal_kernel(
+            name="mettleq_u2_list_tri",
+            input_names=["state", "shift_hi", "ua", "ub", "uc", "n_octets"],
+            output_names=["out"], source=_U2L_TRI_SRC)
     if _u2l_quad_kernel is None:
         _u2l_quad_kernel = mx.fast.metal_kernel(
             name="mettleq_u2_list_quad",
@@ -490,9 +547,10 @@ def u2_list_layer_all(
         )
     act = set(active) if active is not None else None
     n_hexads = 1 << (n - 4) if n >= 4 else 0
+    n_octets = 1 << (n - 3) if n >= 3 else 0
     n_quads = 1 << (n - 2) if n >= 2 else 0
     shift = n - 1
-    while shift >= 3:
+    while radix == "16" and shift >= 3:
         q0 = n - 1 - shift
         block = range(q0, q0 + 4)
         if act is None or any(q in act for q in block):
@@ -507,6 +565,17 @@ def u2_list_layer_all(
             )
             _launch_observed(state, on_launch)
         shift -= 4
+    while radix == "8" and shift >= 2:
+        q0 = n - 1 - shift
+        block = range(q0, q0 + 3)
+        if act is None or any(q in act for q in block):
+            (state,) = _u2l_tri_kernel(
+                inputs=[state, mx.array(shift,dtype=mx.uint32), mats[q0],mats[q0+1],mats[q0+2],
+                        mx.array(n_octets,dtype=mx.uint32)],
+                grid=(n_octets,1,1), threadgroup=(min(256,n_octets),1,1),
+                output_shapes=[state.shape], output_dtypes=[mx.complex64])
+            _launch_observed(state,on_launch)
+        shift -= 3
     while shift >= 1:
         q_hi = n - 1 - shift          # qubit on the high bit of this pass
         q_lo = q_hi + 1               # adjacent qubit on the low bit

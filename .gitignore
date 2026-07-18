@@ -1,5 +1,19 @@
 # OS
 .DS_Store
+*.crash
+core
+core.*
+
+# Local secrets and credentials (commit only redacted *.example templates)
+.env
+.env.*
+!.env.example
+*credentials*.json
+*service-account*.json
+*.pem
+*.p12
+*.key
+.codex/
 
 # Python
 __pycache__/
@@ -42,9 +56,21 @@ purge/quantumstudio/flutter_app/build/
 .pids/
 .logs/
 
+# Hardware profiler captures and local machine snapshots
+*.gputrace
+*.trace
+*.instrdst
+bench/local/
+bench/runs/*-environment.json
+
 # Benchmark transient runs (keep frozen assets)
 bench/runs/
 bench/current
+assets/benchmarks-frozen/**/memray/
+
+# Local/generated IDE dependency snapshots
+quantumstudio/flutter_app/macos/_old_pods/
+osxQuantum-MLX/
 
 # Large generated binary bundles
 quantumstudio.zip

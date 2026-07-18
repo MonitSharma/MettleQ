@@ -98,6 +98,29 @@ def test_midpoint_mpo_convergence_requires_peak_recovery_and_stability():
     assert failed["classification"] == "not_converged"
 
 
+def test_midpoint_mpo_is_a_first_class_qiskit_backend():
+    qiskit = pytest.importorskip("qiskit")
+    from mettleq.integrations.qiskit import MettleQMidpointMPOBackend
+
+    class FakeSimulator:
+        def run(self, circuit, *, shots, expected_bitstring):
+            result = _result(max_bond=8, cutoff=0.0, fraction=1.0)
+            result.shots = shots
+            result.samples = ["101"] * shots
+            result.raw_samples = list(result.samples)
+            result.counts = {"101": shots}
+            return result
+
+    circuit = qiskit.QuantumCircuit(3, 3)
+    circuit.x(0)
+    circuit.measure([0, 1, 2], [0, 1, 2])
+    backend = MettleQMidpointMPOBackend(simulator=FakeSimulator())
+    result = backend.run(circuit, shots=7, memory=True).result()
+    assert result.get_counts() == {"101": 7}
+    assert result.get_memory() == ["101"] * 7
+    assert backend.last_mpo_results[0].diagnostics["options"]["max_bond"] == 8
+
+
 def test_midpoint_mpo_exact_qiskit_smoke():
     pytest.importorskip("quimb")
     pytest.importorskip("qiskit_quimb")

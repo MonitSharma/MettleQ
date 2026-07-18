@@ -11,7 +11,14 @@ __all__ = [
     "MettleQBackend",
     "MettleQSamplerV2",
     "MettleQEstimatorV2",
+    "AdaptiveQiskitBackend",
+    "MettleQMidpointMPOBackend",
     "MettleQDevice",
+    "AdaptivePennyLaneDevice",
+    "CircuitProfile",
+    "SDKEngineDecision",
+    "profile_operations",
+    "recommend_sdk_engine",
     "QupertinoBackend",
     "QupertinoSamplerV2",
     "QupertinoEstimatorV2",
@@ -21,13 +28,20 @@ __all__ = [
 
 def __getattr__(name):
     if name in {
+        "CircuitProfile", "SDKEngineDecision", "profile_operations",
+        "recommend_sdk_engine",
+    }:
+        return getattr(import_module(".policy", __name__), name)
+    if name in {
         "MettleQBackend",
         "MettleQSamplerV2",
         "MettleQEstimatorV2",
+        "AdaptiveQiskitBackend",
+        "MettleQMidpointMPOBackend",
     }:
         return getattr(import_module(".qiskit", __name__), name)
-    if name == "MettleQDevice":
-        return import_module(".pennylane", __name__).MettleQDevice
+    if name in {"MettleQDevice", "AdaptivePennyLaneDevice"}:
+        return getattr(import_module(".pennylane", __name__), name)
     legacy = {
         "QupertinoBackend": (".qiskit", "QupertinoBackend"),
         "QupertinoSamplerV2": (".qiskit", "QupertinoSamplerV2"),

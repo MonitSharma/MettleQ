@@ -8,12 +8,87 @@ from qiskit.exceptions import QiskitError
 from qiskit.quantum_info import Statevector
 from qiskit.quantum_info import SparsePauliOp
 
-from mettleq.integrations.pennylane import MettleQDevice
+from mettleq.integrations.pennylane import AdaptivePennyLaneDevice, MettleQDevice
 from mettleq.integrations.qiskit import (
+    AdaptiveQiskitBackend,
     MettleQBackend,
     MettleQEstimatorV2,
     MettleQSamplerV2,
 )
+
+
+def test_adaptive_qiskit_backend_delegates_small_double_to_aer():
+    circuit = QuantumCircuit(2)
+    circuit.h(0)
+    circuit.cx(0, 1)
+    circuit.measure_all()
+    backend = AdaptiveQiskitBackend(precision="double")
+    result = backend.run(circuit, shots=32, seed_simulator=7).result()
+    assert set(result.get_counts()) <= {"00", "11"}
+    assert backend.last_adaptive_decisions[0]["engine"] == (
+        "qiskit_aer_cpu_statevector"
+    )
+
+
+def test_adaptive_qiskit_backend_can_force_measured_gpu_side_of_policy():
+    circuit = QuantumCircuit(3)
+    circuit.h(range(3))
+    backend = AdaptiveQiskitBackend(qiskit_gpu_crossover_qubits=1)
+    result = backend.run(
+        circuit, shots=1, return_statevector=True
+    ).result()
+    assert np.asarray(result.data(0)["statevector"]).shape == (8,)
+    assert backend.last_adaptive_decisions[0]["engine"] == (
+        "mettleq_gpu_statevector"
+    )
+
+
+def test_adaptive_qiskit_parameter_batch_preserves_mixed_engine_order():
+    small = QuantumCircuit(2, 2)
+    small.x(0)
+    small.measure(range(2), range(2))
+    large = QuantumCircuit(5, 5)
+    large.x(4)
+    large.measure(range(5), range(5))
+    backend = AdaptiveQiskitBackend(qiskit_gpu_crossover_qubits=4)
+    result = backend.run([small, large], shots=5).result()
+    assert result.get_counts(0) == {"01": 5}
+    assert result.get_counts(1) == {"10000": 5}
+    assert [row["engine"] for row in backend.last_adaptive_decisions] == [
+        "qiskit_aer_cpu_statevector", "mettleq_gpu_statevector"
+    ]
+
+
+def test_adaptive_pennylane_device_delegates_double_to_lightning():
+    device = AdaptivePennyLaneDevice(wires=2, precision="double")
+
+    @qml.qnode(device)
+    def circuit():
+        qml.Hadamard(0)
+        qml.CNOT([0, 1])
+        return qml.expval(qml.Z(0) @ qml.Z(1))
+
+    assert circuit() == pytest.approx(1.0)
+    assert device.last_adaptive_decisions[0]["engine"] == (
+        "pennylane_lightning_cpu"
+    )
+
+
+def test_adaptive_pennylane_device_can_force_gpu_policy_side():
+    device = AdaptivePennyLaneDevice(
+        wires=3, pennylane_gpu_crossover_qubits=1
+    )
+
+    @qml.qnode(device)
+    def circuit():
+        for wire in range(3):
+            qml.Hadamard(wire)
+        return qml.state()
+
+    assert circuit().shape == (8,)
+    assert device.last_adaptive_decisions[0]["engine"] == (
+        "mettleq_gpu_statevector"
+    )
 
 
 def test_qiskit_statevector_ordering_and_gate_parity():
@@ -203,6 +278,27 @@ def test_qiskit_sampler_v2_and_estimator_v2_native_contracts():
     counts = sampler_result.data.meas.get_counts()
     assert sum(counts.values()) == 64
     assert set(counts) <= {"00", "11"}
+
+
+def test_estimator_batches_many_pauli_reductions_without_state_readback(monkeypatch):
+    import mettleq.integrations._common as common
+
+    calls = []
+    original = common.mx.eval
+
+    def recording_eval(*values):
+        calls.append(len(values))
+        return original(*values)
+
+    monkeypatch.setattr(common.mx, "eval", recording_eval)
+    circuit = QuantumCircuit(3)
+    circuit.h(range(3))
+    observable = SparsePauliOp.from_list(
+        [("IIX", 0.25), ("IXI", 0.25), ("XII", 0.25), ("XXX", 0.25)]
+    )
+    value = MettleQEstimatorV2(device="gpu").run([(circuit, observable)]).result()[0]
+    assert value.data.evs == pytest.approx(1.0, abs=2e-6)
+    assert any(count >= 4 for count in calls)
 
 
 def test_qiskit_estimator_reports_accuracy_and_automated_dmax_convergence():

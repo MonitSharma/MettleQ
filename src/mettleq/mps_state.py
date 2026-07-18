@@ -30,7 +30,7 @@ class MPSNumericalError(RuntimeError):
     """A recoverable numerical failure in compact MPS execution."""
 
 
-_SVD_DRIVERS = {"auto", "gesdd", "gesvd", "numpy"}
+_SVD_DRIVERS = {"auto", "gesdd", "gesvd", "numpy", "gpu_jacobi"}
 _ROUTING_STRATEGIES = {"lookahead", "restore"}
 
 
@@ -129,6 +129,17 @@ def _safe_cpu_svd(matrix: np.ndarray, driver: str):
     raise MPSNumericalError(f"All recoverable MPS SVD drivers failed: {detail}")
 
 
+def _safe_cpu_qr(matrix: np.ndarray):
+    """Use SciPy's overwrite-capable LAPACK path, with NumPy as fallback."""
+    scratch = np.array(matrix, dtype=np.complex64, order="F", copy=True)
+    try:
+        from scipy.linalg import qr
+        return qr(scratch, mode="economic", overwrite_a=True,
+                  check_finite=False)
+    except (ImportError, ValueError, np.linalg.LinAlgError):
+        return np.linalg.qr(scratch, mode="reduced")
+
+
 def _svd_truncate_numpy(
     matrix: np.ndarray,
     dmax: int,
@@ -183,6 +194,158 @@ def _svd_truncate_numpy(
     return U_out, S_out, Vh_out, metadata
 
 
+def _round_robin_pairs(columns: int):
+    """Return disjoint pair rounds covering every column pair once."""
+    players = list(range(columns))
+    dummy = None
+    if len(players) % 2:
+        dummy = len(players)
+        players.append(dummy)
+    rounds = []
+    for _ in range(max(0, len(players) - 1)):
+        pairs = []
+        for index in range(len(players) // 2):
+            a, b = players[index], players[-1 - index]
+            if a != dummy and b != dummy:
+                pairs.append((a, b))
+        rounds.append(pairs)
+        players = [players[0], players[-1], *players[1:-1]]
+    return rounds
+
+
+def _gpu_jacobi_svd(matrix: mx.array, *, sweeps: int = 4):
+    """Experimental complex64 one-sided Jacobi SVD resident on Metal.
+
+    Only the final singular-value vector crosses to the host for deterministic
+    truncation. Matrix factors and all Jacobi rotations remain MLX GPU arrays.
+    This deliberately does not replace the recoverable LAPACK default yet.
+    """
+    if mx.default_device() != mx.Device(mx.gpu):
+        raise MPSNumericalError("gpu_jacobi requires the MLX GPU device")
+    rows, columns = map(int, matrix.shape)
+    transposed = rows < columns
+    work = mx.transpose(mx.conjugate(matrix)) if transposed else matrix
+    rows, columns = map(int, work.shape)
+    # MLX 0.32 constructs complex eye through a GPU scatter it cannot execute;
+    # build the real identity first and cast without leaving the device.
+    vectors = mx.eye(columns, dtype=mx.float32).astype(mx.complex64)
+    tiny = mx.array(1e-20, dtype=mx.float32)
+    rounds = _round_robin_pairs(columns)
+    for _ in range(max(1, int(sweeps))):
+        for pairs in rounds:
+            if not pairs:
+                continue
+            order = np.asarray([item for pair in pairs for item in pair], dtype=np.int32)
+            remaining = np.asarray(
+                [item for item in range(columns) if item not in set(order.tolist())],
+                dtype=np.int32,
+            )
+            order_index = mx.array(order, dtype=mx.uint32)
+            remaining_index = mx.array(remaining, dtype=mx.uint32)
+            inverse_index = mx.array(np.argsort(np.concatenate((order, remaining))),
+                                     dtype=mx.uint32)
+            pair_columns = work[:, order_index]
+            p, q = pair_columns[:, 0::2], pair_columns[:, 1::2]
+            alpha = mx.sum(mx.abs(p) ** 2, axis=0)
+            beta = mx.sum(mx.abs(q) ** 2, axis=0)
+            gamma = mx.sum(mx.conjugate(p) * q, axis=0)
+            magnitude = mx.abs(gamma)
+            active = magnitude > (1e-6 * mx.maximum(alpha + beta, tiny))
+            denominator = mx.where(active, 2.0 * magnitude, 1.0)
+            zeta = mx.where(active, (beta - alpha) / denominator, 0.0)
+            sign = mx.where(zeta >= 0.0, 1.0, -1.0)
+            tangent = sign / (mx.abs(zeta) + mx.sqrt(1.0 + zeta * zeta))
+            tangent = mx.where(active, tangent, 0.0)
+            cosine = 1.0 / mx.sqrt(1.0 + tangent * tangent)
+            phase = mx.where(
+                active,
+                mx.conjugate(gamma) / mx.maximum(magnitude, tiny),
+                mx.zeros_like(gamma),
+            )
+            sine = cosine * tangent * phase
+            p_new = p * cosine - q * sine
+            q_new = p * mx.conjugate(sine) + q * cosine
+            paired = mx.reshape(mx.stack((p_new, q_new), axis=2), (rows, len(order)))
+            combined = (mx.concatenate((paired, work[:, remaining_index]), axis=1)
+                        if remaining.size else paired)
+            work = combined[:, inverse_index]
+
+            vp, vq = (vectors[:, order_index][:, 0::2],
+                      vectors[:, order_index][:, 1::2])
+            vp_new = vp * cosine - vq * sine
+            vq_new = vp * mx.conjugate(sine) + vq * cosine
+            vpaired = mx.reshape(
+                mx.stack((vp_new, vq_new), axis=2), (columns, len(order)))
+            vcombined = (mx.concatenate((vpaired, vectors[:, remaining_index]), axis=1)
+                         if remaining.size else vpaired)
+            vectors = vcombined[:, inverse_index]
+    singular = mx.sqrt(mx.sum(mx.abs(work) ** 2, axis=0))
+    order = mx.argsort(-singular)
+    singular = singular[order]
+    work = work[:, order]
+    vectors = vectors[:, order]
+    safe = mx.where(
+        singular > (1e-7 * mx.maximum(mx.max(singular), tiny)),
+        singular,
+        mx.ones_like(singular),
+    )
+    left = work / safe
+    right_h = mx.transpose(mx.conjugate(vectors))
+    if transposed:
+        return mx.transpose(mx.conjugate(right_h)), singular, mx.transpose(mx.conjugate(left))
+    return left, singular, right_h
+
+
+def _svd_truncate_gpu_jacobi(
+    matrix: mx.array,
+    dmax: int,
+    eps: float,
+    *,
+    renormalize: bool,
+):
+    started = time.perf_counter_ns()
+    U, S, Vh = _gpu_jacobi_svd(matrix)
+    reconstructed = (U * mx.reshape(S, (1, -1))) @ Vh
+    residual_value = mx.linalg.norm(reconstructed - matrix) / mx.maximum(
+        mx.linalg.norm(matrix), mx.array(1e-20, dtype=mx.float32)
+    )
+    mx.eval(S, residual_value)
+    residual = float(residual_value.item())
+    if not np.isfinite(residual) or residual > 5e-4:
+        raise MPSNumericalError(
+            f"GPU Jacobi SVD residual {residual:.3e} exceeds 5e-4"
+        )
+    spectrum = np.asarray(S, dtype=np.float32)
+    rank = len(spectrum)
+    rank_eps = rank
+    if rank:
+        rank_eps = int(np.count_nonzero(spectrum >= eps * spectrum[0]))
+    keep = min(rank, max(1, min(dmax, rank_eps)))
+    total = float(np.dot(spectrum, spectrum))
+    discarded = float(np.dot(spectrum[keep:], spectrum[keep:]))
+    kept = float(np.dot(spectrum[:keep], spectrum[:keep]))
+    if not np.isfinite(kept) or kept <= np.finfo(np.float32).tiny:
+        raise MPSNumericalError("GPU Jacobi SVD retained an invalid spectrum")
+    norm = kept ** 0.5 if renormalize else 1.0
+    metadata = {
+        "matrix_shape": [int(matrix.shape[0]), int(matrix.shape[1])],
+        "matrix_elements": int(matrix.size),
+        "rank_before": rank,
+        "rank_kept": keep,
+        "local_discarded_weight": discarded,
+        "relative_discarded_weight": discarded / total if total else 0.0,
+        "limited_by_dmax": dmax < rank,
+        "limited_by_eps": rank_eps < rank,
+        "svd_driver": "mlx_gpu_jacobi_experimental",
+        "svd_failed_attempts": [],
+        "svd_elapsed_ms": (time.perf_counter_ns() - started) / 1e6,
+        "pre_normalization_norm": kept ** 0.5,
+        "renormalized": bool(renormalize),
+        "svd_relative_residual": residual,
+    }
+    return U[:, :keep], S[:keep] / norm, Vh[:keep, :], metadata
+
+
 def _svd_truncate(
     M: mx.array,
     dmax: int,
@@ -192,6 +355,10 @@ def _svd_truncate(
     renormalize: bool = True,
 ):
     # M shape: (a*2, 2*b) for two-site tensor; perform SVD and truncate.
+    if driver == "gpu_jacobi":
+        return _svd_truncate_gpu_jacobi(
+            M, dmax, eps, renormalize=renormalize
+        )
     mx.eval(M)
     U_np, S_np, Vh_np, metadata = _svd_truncate_numpy(
         np.asarray(M, dtype=np.complex64),
@@ -242,7 +409,7 @@ class MPSState:
         self.tensor_device = (
             "cpu" if mx.default_device() == mx.Device(mx.cpu) else "gpu"
         )
-        self.svd_device = "cpu"
+        self.svd_device = "gpu" if self.opts.svd_driver == "gpu_jacobi" else "cpu"
         self.reset()
 
     def reset(self):
@@ -298,11 +465,11 @@ class MPSState:
     def _move_center_right(self, site: int) -> None:
         tensor = np.asarray(self.A[site], dtype=np.complex64)
         dl, physical, dr = tensor.shape
-        q, r = np.linalg.qr(
-            tensor.reshape(dl * physical, dr), mode="reduced"
-        )
+        q, r = _safe_cpu_qr(tensor.reshape(dl * physical, dr))
         next_tensor = np.asarray(self.A[site + 1], dtype=np.complex64)
-        absorbed = np.tensordot(r, next_tensor, axes=([1], [0]))
+        absorbed = (r @ next_tensor.reshape(next_tensor.shape[0], -1)).reshape(
+            r.shape[0], next_tensor.shape[1], next_tensor.shape[2]
+        )
         self._replace_tensor(site, q.reshape(dl, physical, q.shape[1]))
         self._replace_tensor(site + 1, absorbed)
         self.canonical_center = site + 1
@@ -310,11 +477,11 @@ class MPSState:
     def _move_center_left(self, site: int) -> None:
         tensor = np.asarray(self.A[site], dtype=np.complex64)
         dl, physical, dr = tensor.shape
-        q, r = np.linalg.qr(
-            tensor.reshape(dl, physical * dr).T, mode="reduced"
-        )
+        q, r = _safe_cpu_qr(tensor.reshape(dl, physical * dr).T)
         previous = np.asarray(self.A[site - 1], dtype=np.complex64)
-        absorbed = np.tensordot(previous, r.T, axes=([2], [0]))
+        absorbed = (previous.reshape(-1, previous.shape[2]) @ r.T).reshape(
+            previous.shape[0], previous.shape[1], r.shape[0]
+        )
         self._replace_tensor(site - 1, absorbed)
         self._replace_tensor(site, q.T.reshape(q.shape[1], physical, dr))
         self.canonical_center = site - 1
@@ -476,7 +643,8 @@ class MPSState:
             if int(right.shape[0]) != int(bond):
                 raise ValueError("MPS bond mismatch")
             Dr2 = int(right.shape[2])
-            tensor = np.tensordot(left, right, axes=([2], [0]))
+            tensor = (left.reshape(Dl * 2, bond)
+                      @ right.reshape(bond, 2 * Dr2)).reshape(Dl, 2, 2, Dr2)
             merged = tensor.reshape(Dl, 4, Dr2)
             transformed = np.tensordot(
                 gate, merged, axes=([1], [1])
@@ -516,7 +684,10 @@ class MPSState:
             right = np.asarray(self.A[i + 1], dtype=np.complex64)
             if int(left.shape[2]) != int(right.shape[0]):
                 raise ValueError("MPS bond mismatch")
-            tensor = np.tensordot(left, right, axes=([2], [0]))
+            dl, _, bond = left.shape
+            dr2 = int(right.shape[2])
+            tensor = (left.reshape(dl * 2, bond)
+                      @ right.reshape(bond, 2 * dr2)).reshape(dl, 2, 2, dr2)
             even = complex(math.cos(theta), -math.sin(theta))
             odd = complex(math.cos(theta), math.sin(theta))
             phases = np.array(

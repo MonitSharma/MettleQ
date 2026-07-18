@@ -309,6 +309,11 @@ class Device:
                 self.sim.state = metal_kernels.u2_list_layer_all(
                     self.sim.state, self.sim.n, op["mats"],
                     active=op.get("active"), on_launch=launch_observer)
+            elif op_name == "_CULISTLAYER":
+                from . import shaders as metal_kernels
+                self.sim.state = metal_kernels.controlled_u_groups(
+                    self.sim.state, self.sim.n, op["groups"],
+                    on_launch=launch_observer)
             else:
                 name = str(op_name or "").upper()
                 wires = list(op.get("wires", []))
@@ -689,6 +694,57 @@ class Device:
                                           "active": sorted(active)})
                             i = j
                             continue
+            # Controlled single-qubit gates use a sparse target-pair kernel;
+            # adjacent gates on four distinct wires share one traversal.
+            # Overlapping gates remain ordered as individual groups.
+            if rx_layer_ok:
+                controlled = {"CH", "CRX", "CRY", "CRZ"}
+
+                def _controlled_entry(candidate):
+                    name = str(candidate.get("name", "")).upper()
+                    wires = list(candidate.get("wires", []))
+                    params = list(candidate.get("parameters", []) or [])
+                    if (name not in controlled or len(wires) != 2
+                            or wires[0] == wires[1]
+                            or not all(0 <= q < self.wires for q in wires)):
+                        return None
+                    if name == "CH" and not params:
+                        target = H()
+                    elif name == "CRX" and len(params) == 1:
+                        target = RX(params[0])
+                    elif name == "CRY" and len(params) == 1:
+                        target = RY(params[0])
+                    elif name == "CRZ" and len(params) == 1:
+                        target = RZ(params[0])
+                    else:
+                        return None
+                    return {"control": wires[0], "target": wires[1],
+                            "matrix": mx.reshape(target, (4,))}
+
+                first_controlled = _controlled_entry(op)
+                if first_controlled is not None:
+                    entries = []
+                    j = i
+                    while j < n_ops:
+                        entry = _controlled_entry(operations[j])
+                        if entry is None:
+                            break
+                        entries.append(entry)
+                        j += 1
+                    groups = []
+                    k = 0
+                    while k < len(entries):
+                        if (k + 1 < len(entries)
+                                and {entries[k]["control"], entries[k]["target"]}.isdisjoint(
+                                    {entries[k + 1]["control"], entries[k + 1]["target"]})):
+                            groups.append(entries[k:k + 2])
+                            k += 2
+                        else:
+                            groups.append(entries[k:k + 1])
+                            k += 1
+                    fused.append({"name": "_CULISTLAYER", "groups": groups})
+                    i = j
+                    continue
             # CNOT/X/SWAP runs (opt-in Metal): the block acts on basis
             # indices as an affine GF(2) map, so the whole run is ONE
             # amplitude permutation executed as a single gather pass.

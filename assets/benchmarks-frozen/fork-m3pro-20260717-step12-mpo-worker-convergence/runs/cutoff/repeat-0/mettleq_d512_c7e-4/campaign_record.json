@@ -21,7 +21,7 @@
   "work_gates_consumed": 1885,
   "total_work_gates": 1885,
   "termination_reason": "completed",
-  "run_dir": "/Users/monitsharma/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/cutoff/repeat-0/mettleq_d512_c7e-4",
+  "run_dir": "<HOME>/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/cutoff/repeat-0/mettleq_d512_c7e-4",
   "campaign_wall_time_s": 1144.8059811659914,
   "caller_qiskit_version": "2.5.0",
   "worker_wall_time_s": 1144.6798572910193

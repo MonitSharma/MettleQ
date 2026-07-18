@@ -41,6 +41,7 @@ from ._common import (
     core_operation,
     execute_operations,
     pauli_product_expectation,
+    pauli_product_expectations,
     sample_bits,
     statevector_numpy,
 )
@@ -53,6 +54,7 @@ from ..planning import (
     normalize_device,
     normalize_method,
 )
+from .policy import recommend_sdk_engine
 
 
 _QISKIT_TO_CORE = {
@@ -109,6 +111,210 @@ class _CompletedJob(JobV1):
 
     def status(self):
         return JobStatus.DONE
+
+
+class AdaptiveQiskitBackend(BackendV2):
+    """Delegate each Qiskit circuit to Aer CPU or MettleQ Apple GPU.
+
+    The selection is based on the translated gate stream, requested precision,
+    output contract, topology, fusion coverage, and dense-memory preflight.
+    Aer remains optional; if it is unavailable the policy falls back to the
+    MettleQ CPU path below crossover rather than failing package import.
+    """
+
+    version = 2
+
+    def __init__(
+        self,
+        provider=None,
+        *,
+        precision: str = "single",
+        output_contract: str = "samples",
+        qiskit_gpu_crossover_qubits: int = 20,
+        mettleq_options: Optional[dict] = None,
+        **fields,
+    ) -> None:
+        super().__init__(
+            provider=provider,
+            name="mettleq_adaptive",
+            description="Circuit-aware Aer CPU / MettleQ Apple-GPU dispatcher",
+            backend_version=__version__,
+            **fields,
+        )
+        precision = str(precision).strip().lower()
+        if precision not in {"single", "double"}:
+            raise ValueError("precision must be 'single' or 'double'")
+        self.precision = precision
+        self.output_contract = str(output_contract).strip().lower()
+        self.qiskit_gpu_crossover_qubits = int(qiskit_gpu_crossover_qubits)
+        self._mettleq = MettleQBackend(**dict(mettleq_options or {}))
+        self._target = self._mettleq.target
+        self.last_adaptive_decisions = []
+
+    @classmethod
+    def _default_options(cls):
+        return Options(
+            shots=1024,
+            memory=False,
+            seed_simulator=None,
+            return_statevector=False,
+            execution_report=False,
+            precision=None,
+            output_contract=None,
+        )
+
+    @property
+    def target(self):
+        return self._target
+
+    @property
+    def max_circuits(self):
+        return None
+
+    @staticmethod
+    def _aer_available() -> bool:
+        try:
+            import qiskit_aer  # noqa: F401
+            return True
+        except ImportError:
+            return False
+
+    def _decision(self, circuit, options, *, fallback_available):
+        operations, _, _ = self._mettleq._translate_circuit(circuit)
+        contract = options.get("output_contract") or (
+            "statevector" if options.get("return_statevector")
+            else self.output_contract
+        )
+        precision = options.get("precision") or self.precision
+        return recommend_sdk_engine(
+            "qiskit",
+            circuit.num_qubits,
+            operations,
+            precision=precision,
+            output_contract=contract,
+            method="statevector",
+            fallback_available=fallback_available,
+            qiskit_gpu_crossover_qubits=self.qiskit_gpu_crossover_qubits,
+        )
+
+    @staticmethod
+    def _result_from_jobs(backend, jobs):
+        results = []
+        success = True
+        total_time = 0.0
+        for job in jobs:
+            payload = job.result().to_dict()
+            results.extend(payload.get("results", []))
+            success = success and bool(payload.get("success", True))
+            total_time += float(payload.get("time_taken") or 0.0)
+        result = Result.from_dict(
+            {
+                "backend_name": backend.name,
+                "backend_version": backend.backend_version,
+                "qobj_id": None,
+                "job_id": str(uuid.uuid4()),
+                "success": success,
+                "results": results,
+                "status": "COMPLETED" if success else "ERROR",
+                "time_taken": total_time,
+            }
+        )
+        return _CompletedJob(backend, str(uuid.uuid4()), result)
+
+    def _run_aer(self, circuits, decision, options):
+        from qiskit_aer import AerSimulator
+
+        method = (
+            "matrix_product_state"
+            if decision.engine == "qiskit_aer_cpu_mps"
+            else "statevector"
+        )
+        backend = AerSimulator(
+            method=method,
+            device="CPU",
+            precision="double" if decision.precision == "double" else "single",
+            enable_truncation=False,
+        )
+        candidates = []
+        for circuit in circuits:
+            candidate = circuit.copy()
+            if options.get("return_statevector"):
+                candidate.save_statevector()
+            candidates.append(candidate)
+        kwargs = {
+            "shots": int(options["shots"]),
+            "memory": bool(options["memory"]),
+        }
+        if options.get("seed_simulator") is not None:
+            kwargs["seed_simulator"] = options["seed_simulator"]
+        return backend.run(candidates, **kwargs)
+
+    def run(self, run_input, **run_options):
+        circuits = (
+            [run_input]
+            if isinstance(run_input, QuantumCircuit)
+            else list(run_input)
+            if isinstance(run_input, Sequence)
+            else None
+        )
+        if not circuits or not all(isinstance(c, QuantumCircuit) for c in circuits):
+            raise QiskitError(
+                "AdaptiveQiskitBackend.run expects a circuit or non-empty circuit sequence"
+            )
+        unknown = set(run_options) - set(self.options)
+        if unknown:
+            raise QiskitError(
+                "Unsupported adaptive option(s): " + ", ".join(sorted(unknown))
+            )
+        options = {name: getattr(self.options, name) for name in self.options}
+        options.update(run_options)
+        fallback_available = self._aer_available()
+        decisions = [
+            self._decision(circuit, options, fallback_available=fallback_available)
+            for circuit in circuits
+        ]
+        self.last_adaptive_decisions = [decision.to_dict() for decision in decisions]
+        groups = {}
+        for index, decision in enumerate(decisions):
+            if decision.engine == "refused":
+                raise QiskitError(decision.reason)
+            groups.setdefault(decision.engine, []).append(index)
+        experiment_slots = [None] * len(circuits)
+        success = True
+        elapsed = 0.0
+        for engine, indices in groups.items():
+            selected = [circuits[index] for index in indices]
+            decision = decisions[indices[0]]
+            if engine.startswith("qiskit_aer_cpu"):
+                job = self._run_aer(selected, decision, options)
+            else:
+                mettleq_options = {
+                    "shots": options["shots"],
+                    "memory": options["memory"],
+                    "seed_simulator": options["seed_simulator"],
+                    "return_statevector": options["return_statevector"],
+                    "execution_report": options["execution_report"],
+                    "method": "statevector",
+                    "device": "gpu" if "gpu" in decision.engine else "cpu",
+                }
+                job = self._mettleq.run(selected, **mettleq_options)
+            payload = job.result().to_dict()
+            success = success and bool(payload.get("success", True))
+            elapsed += float(payload.get("time_taken") or 0.0)
+            for index, experiment in zip(indices, payload.get("results", [])):
+                experiment_slots[index] = experiment
+        job_id = str(uuid.uuid4())
+        result = Result.from_dict({
+            "backend_name": self.name,
+            "backend_version": self.backend_version,
+            "qobj_id": None,
+            "job_id": job_id,
+            "success": success,
+            "results": experiment_slots,
+            "status": "COMPLETED" if success else "ERROR",
+            "time_taken": elapsed,
+        })
+        return _CompletedJob(self, job_id, result)
 
 
 class MettleQBackend(BackendV2):
@@ -551,6 +757,142 @@ class MettleQBackend(BackendV2):
         }
 
 
+class MettleQMidpointMPOBackend(BackendV2):
+    """First-class Qiskit backend for midpoint-MPO/TNO plus unswapping.
+
+    The pinned worker remains a numerical isolation detail; callers use the
+    ordinary ``BackendV2.run(...).result().get_counts()`` contract.
+    """
+
+    version = 2
+
+    def __init__(
+        self,
+        provider=None,
+        *,
+        mpo_options=None,
+        worker_python=None,
+        timeout_seconds=None,
+        simulator=None,
+        **fields,
+    ) -> None:
+        super().__init__(
+            provider=provider,
+            name="mettleq_midpoint_mpo",
+            description="MettleQ midpoint-MPO/TNO and greedy-unswapping backend",
+            backend_version=__version__,
+            **fields,
+        )
+        from ..midpoint_mpo import IsolatedMidpointMPOSimulator, MidpointMPOOptions
+
+        if mpo_options is None:
+            mpo_options = MidpointMPOOptions()
+        elif isinstance(mpo_options, dict):
+            mpo_options = MidpointMPOOptions(**mpo_options)
+        self._simulator = simulator or IsolatedMidpointMPOSimulator(
+            mpo_options,
+            worker_python=worker_python,
+            timeout_seconds=timeout_seconds,
+        )
+        self._target = MettleQBackend().target
+        self.last_mpo_results = []
+
+    @classmethod
+    def _default_options(cls):
+        return Options(shots=1024, memory=False, expected_bitstring=None)
+
+    @property
+    def target(self):
+        return self._target
+
+    @property
+    def max_circuits(self):
+        return None
+
+    @staticmethod
+    def _unitary_and_measurements(circuit):
+        measured = {}
+        saw_measurement = False
+        for instruction in circuit.data:
+            name = instruction.operation.name
+            if name == "measure":
+                saw_measurement = True
+                qubit = circuit.find_bit(instruction.qubits[0]).index
+                clbit = circuit.find_bit(instruction.clbits[0]).index
+                measured[clbit] = qubit
+            elif saw_measurement and name != "barrier":
+                raise QiskitError("midpoint-MPO supports final measurements only")
+        return circuit.remove_final_measurements(inplace=False), measured
+
+    def run(self, run_input, **run_options):
+        circuits = ([run_input] if isinstance(run_input, QuantumCircuit)
+                    else list(run_input) if isinstance(run_input, Sequence) else None)
+        if not circuits or not all(isinstance(c, QuantumCircuit) for c in circuits):
+            raise QiskitError("MettleQMidpointMPOBackend.run expects Qiskit circuits")
+        unknown = set(run_options) - set(self.options)
+        if unknown:
+            raise QiskitError("Unsupported midpoint-MPO option(s): "
+                              + ", ".join(sorted(unknown)))
+        options = {name: getattr(self.options, name) for name in self.options}
+        options.update(run_options)
+        shots = int(options["shots"])
+        if shots < 1:
+            raise QiskitError("shots must be positive")
+
+        started = time.perf_counter()
+        experiments = []
+        self.last_mpo_results = []
+        for circuit in circuits:
+            unitary, measured = self._unitary_and_measurements(circuit)
+            mpo_result = self._simulator.run(
+                unitary,
+                shots=shots,
+                expected_bitstring=options["expected_bitstring"],
+            )
+            self.last_mpo_results.append(mpo_result)
+            memory = []
+            counts = Counter()
+            if measured:
+                for sample in mpo_result.samples:
+                    value = 0
+                    for clbit, qubit in measured.items():
+                        value |= int(sample[qubit]) << clbit
+                    encoded = hex(value)
+                    counts[encoded] += 1
+                    memory.append(encoded)
+            data = {
+                "counts": dict(counts),
+                "mettleq_midpoint_mpo": mpo_result.to_summary(include_counts=False),
+            }
+            if options["memory"]:
+                data["memory"] = memory
+            experiments.append({
+                "name": circuit.name,
+                "shots": shots,
+                "data": data,
+                "status": "DONE",
+                "success": True,
+                "header": {
+                    "name": circuit.name,
+                    "n_qubits": circuit.num_qubits,
+                    "memory_slots": circuit.num_clbits,
+                    "metadata": circuit.metadata or {},
+                },
+            })
+        job_id = str(uuid.uuid4())
+        result = Result.from_dict({
+            "backend_name": self.name,
+            "backend_version": self.backend_version,
+            "qobj_id": None,
+            "job_id": job_id,
+            "success": True,
+            "results": experiments,
+            "status": "COMPLETED",
+            "time_taken": time.perf_counter() - started,
+        })
+        return _CompletedJob(self, job_id, result)
+
+
 class MettleQSamplerV2(BackendSamplerV2):
     """Qiskit SamplerV2 bound to a MettleQ backend by default.
 
@@ -656,8 +998,8 @@ class MettleQEstimatorV2(BaseEstimatorV2):
                 getattr(device, "mps_accuracy_report", None)
             )
 
+            requests = []
             for index in indices:
-                value = 0.0 + 0.0j
                 observable = observables[index]
                 for pauli, coefficient in observable.items():
                     label = (
@@ -674,9 +1016,15 @@ class MettleQEstimatorV2(BaseEstimatorV2):
                         for internal_wire, symbol in enumerate(label)
                         if symbol != "I"
                     }
-                    value += complex(
-                        coefficient
-                    ) * pauli_product_expectation(device, word)
+                    requests.append((index, complex(coefficient), word))
+            reduced = pauli_product_expectations(
+                device, [word for _, _, word in requests]
+            )
+            accumulated = {index: 0.0 + 0.0j for index in indices}
+            for (index, coefficient, _), term in zip(requests, reduced):
+                accumulated[index] += coefficient * term
+            for index in indices:
+                value = accumulated[index]
                 if abs(value.imag) > 5e-5 * max(1.0, abs(value.real)):
                     raise QiskitError("Estimator observable is not Hermitian")
                 evs[index] = value.real

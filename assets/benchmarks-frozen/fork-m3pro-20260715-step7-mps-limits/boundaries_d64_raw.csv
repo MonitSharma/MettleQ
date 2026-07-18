@@ -1,30 +1,30 @@
 family,qubits,depth,status,device,dmax,eps,circuit_build_ms,execution_ms,operation_count,two_qubit_operation_count,expectation_z0,exact_expectation_z0,exact_absolute_error,exact_reference_ms,truncated,truncation_events,local_discarded_weight_sum,local_discarded_weight_max,current_bond_dimension_max,current_bond_dimension_mean,maximum_bond_dimension_reached,state_norm,tensor_device,svd_device,peak_rss_bytes,error,trust_classification
 line_brickwork,10000,8,error,cpu,64,1e-10,,,,,,,,,,,,,,,,,,,,"~~~^^
-  File ""/Users/monitsharma/code_projects/Qupertino/tools/benchmark_mps_limits.py"", line 565, in main
+  File ""<HOME>/code_projects/Qupertino/tools/benchmark_mps_limits.py"", line 565, in main
     return _worker(args)
-  File ""/Users/monitsharma/code_projects/Qupertino/tools/benchmark_mps_limits.py"", line 185, in _worker
+  File ""<HOME>/code_projects/Qupertino/tools/benchmark_mps_limits.py"", line 185, in _worker
     result = estimator.run([(circuit, observable)]).result()[0]
              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
-  File ""/Users/monitsharma/code_projects/Qupertino/.venv/lib/python3.13/site-packages/qiskit/primitives/primitive_job.py"", line 72, in result
+  File ""<HOME>/code_projects/Qupertino/.venv/lib/python3.13/site-packages/qiskit/primitives/primitive_job.py"", line 72, in result
     self._result = self._future.result()
                    ~~~~~~~~~~~~~~~~~~~^^
-  File ""/Users/monitsharma/.local/share/uv/python/cpython-3.13.2-macos-aarch64-none/lib/python3.13/concurrent/futures/_base.py"", line 456, in result
+  File ""<HOME>/.local/share/uv/python/cpython-3.13.2-macos-aarch64-none/lib/python3.13/concurrent/futures/_base.py"", line 456, in result
     return self.__get_result()
            ~~~~~~~~~~~~~~~~~^^
-  File ""/Users/monitsharma/.local/share/uv/python/cpython-3.13.2-macos-aarch64-none/lib/python3.13/concurrent/futures/_base.py"", line 401, in __get_result
+  File ""<HOME>/.local/share/uv/python/cpython-3.13.2-macos-aarch64-none/lib/python3.13/concurrent/futures/_base.py"", line 401, in __get_result
     raise self._exception
-  File ""/Users/monitsharma/.local/share/uv/python/cpython-3.13.2-macos-aarch64-none/lib/python3.13/concurrent/futures/thread.py"", line 59, in run
+  File ""<HOME>/.local/share/uv/python/cpython-3.13.2-macos-aarch64-none/lib/python3.13/concurrent/futures/thread.py"", line 59, in run
     result = self.fn(*self.args, **self.kwargs)
-  File ""/Users/monitsharma/code_projects/Qupertino/src/mlxq/integrations/qiskit.py"", line 544, in _run
+  File ""<HOME>/code_projects/Qupertino/src/mlxq/integrations/qiskit.py"", line 544, in _run
     [self._run_pub(pub) for pub in pubs],
      ~~~~~~~~~~~~~^^^^^
-  File ""/Users/monitsharma/code_projects/Qupertino/src/mlxq/integrations/qiskit.py"", line 610, in _run_pub
+  File ""<HOME>/code_projects/Qupertino/src/mlxq/integrations/qiskit.py"", line 610, in _run_pub
     ) * pauli_product_expectation(device, word)
         ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
-  File ""/Users/monitsharma/code_projects/Qupertino/src/mlxq/integrations/_common.py"", line 333, in pauli_product_expectation
+  File ""<HOME>/code_projects/Qupertino/src/mlxq/integrations/_common.py"", line 333, in pauli_product_expectation
     return device.sim.expectation_product(operators)
            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
-  File ""/Users/monitsharma/code_projects/Qupertino/src/mlxq/mps_state.py"", line 402, in expectation_product
+  File ""<HOME>/code_projects/Qupertino/src/mlxq/mps_state.py"", line 402, in expectation_product
     return numerator / (norm * norm)
            ~~~~~~~~~~^~~~~~~~~~~~~~~
 ZeroDivisionError: complex division by zero

@@ -99,6 +99,57 @@ def test_metal_u2_layer_ry_rz_matches_mlx(metal_env):
     assert err < 5e-6
 
 
+def test_controlled_rotation_pair_fusion_matches_generic_path(metal_env):
+    """Two disjoint controlled rotations share one sparse Metal traversal."""
+    n = 7
+    ops = [
+        {"name": "H", "wires": [0]},
+        {"name": "H", "wires": [2]},
+        {"name": "CRX", "wires": [0, 1], "parameters": [0.31]},
+        {"name": "CRY", "wires": [2, 4], "parameters": [-0.27]},
+        {"name": "CRZ", "wires": [1, 6], "parameters": [0.19]},
+        {"name": "CH", "wires": [4, 5]},
+    ]
+    os.environ["METTLEQ_METAL_KERNELS"] = "0"
+    reference = Device(n)
+    reference.execute(ops)
+    mx.eval(reference.sim.state)
+
+    os.environ["METTLEQ_METAL_KERNELS"] = "1"
+    candidate = Device(n)
+    candidate.execute(ops, report=True)
+    mx.eval(candidate.sim.state)
+
+    error = float(mx.max(mx.abs(
+        reference.sim.state - candidate.sim.state)).item().real)
+    assert error < 5e-6
+    dispatches = candidate.last_execution_plan["selected_custom_kernels"]
+    controlled = [d for d in dispatches
+                  if d["kernel_family"] == "controlled_single_qubit_layer"]
+    assert len(controlled) == 1
+    assert controlled[0]["expected_metal_launches"] == 2
+
+
+def test_radix8_and_radix16_single_qubit_layers_match(metal_env, monkeypatch):
+    """The occupancy-calibration variants have the same gate semantics."""
+    n = 9
+    ops = []
+    for q in range(n):
+        ops.extend([
+            {"name": "RY", "wires": [q], "parameters": [0.03 * (q + 1)]},
+            {"name": "RZ", "wires": [q], "parameters": [-0.07 * (q + 1)]},
+        ])
+    monkeypatch.setenv("METTLEQ_SINGLE_QUBIT_RADIX", "8")
+    radix8 = Device(n)
+    radix8.execute(ops)
+    mx.eval(radix8.sim.state)
+    monkeypatch.setenv("METTLEQ_SINGLE_QUBIT_RADIX", "16")
+    radix16 = Device(n)
+    radix16.execute(ops)
+    mx.eval(radix16.sim.state)
+    assert float(mx.max(mx.abs(radix8.sim.state - radix16.sim.state)).item()) < 5e-6
+
+
 def test_dependency_scheduler_recovers_layers_from_eager_two_qubit_order(
     metal_env,
 ):

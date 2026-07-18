@@ -48,7 +48,7 @@ acceleration.
 | Circuit inputs | Native Python operations, strict unitary OpenQASM 2.0, Qiskit circuits, and PennyLane QNodes |
 | Workloads | QFT, phase estimation, Grover, QAOA, VQE, QCBM, QNN, random circuits, and spin dynamics |
 | Trust model | Pre-allocation statevector checks, capability-gated dispatch, recoverable SVDs, MPS accuracy thresholds and convergence reports, explicit plans, numerical parity tests, synchronized benchmarks, and safe fallbacks |
-| Current test suite | **372 tests** across the simulator, SDK adapters, planner, algorithms, MPS/MPO, peaked circuits, QASM, Metal dispatch, campaign analysis, and MettleQ Studio backend |
+| Current test suite | **386 tests** across the simulator, SDK adapters, planner, algorithms, MPS/MPO, peaked circuits, QASM, Metal dispatch, campaign analysis, and MettleQ Studio backend |
 | Desktop product | MettleQ Studio orchestration, monitoring, plotting, and export |
 | SDK adapters | Native Qiskit backend and registered PennyLane device, plus the original internal `mettleq.qml` teaching wrapper |
 | SDK tutorials | 29 paired, executable Qiskit/PennyLane notebooks with reference parity, timing, statistical sampling checks, MPS trust evidence, and Apple GPU selection |
@@ -69,14 +69,14 @@ editable source is in [`paper/MettleQ_technical_report.md`](paper/MettleQ_techni
 
 ## Project lineage
 
-MettleQ is an independently maintained private fork of the original public
+MettleQ is an independently maintained fork of the original public
 **Qupertino** project. The original name and links below are intentionally
-preserved for attribution. This fork is kept in the maintainer's GitHub
+preserved for attribution. This fork is maintained in the author's GitHub
 account and does not open pull requests against upstream.
 
 | | Repository |
 | --- | --- |
-| **Private fork** | [MonitSharma/MettleQ](https://github.com/MonitSharma/MettleQ) |
+| **MettleQ repository** | [MonitSharma/MettleQ](https://github.com/MonitSharma/MettleQ) |
 | **Original upstream** | [BoltzmannEntropy/Qupertino](https://github.com/BoltzmannEntropy/Qupertino) |
 | **Original website** | [QupertinoWEB](https://boltzmannentropy.github.io/QupertinoWEB/) |
 | **Original author** | Shlomo Kashani |
@@ -179,12 +179,15 @@ code should use the MettleQ names.
 ```python
 from qiskit import QuantumCircuit, transpile
 from mettleq.integrations.qiskit import (
+    AdaptiveQiskitBackend,
     MettleQBackend,
     MettleQEstimatorV2,
     MettleQSamplerV2,
 )
 
-backend = MettleQBackend(method="automatic", device="auto")
+# Recommended SDK entry point: Aer CPU below the measured crossover or for
+# double precision, MettleQ Apple GPU when gate mix and memory make it useful.
+backend = AdaptiveQiskitBackend(precision="single")
 circuit = QuantumCircuit(3, 3)
 circuit.h(0)
 circuit.cx(0, 1)
@@ -209,27 +212,25 @@ the separate MPO/TNO method instead of selecting ordinary forward MPS:
 
 ```python
 from qiskit import QuantumCircuit
-from mettleq.midpoint_mpo import (
-    IsolatedMidpointMPOSimulator,
-    MidpointMPOOptions,
-)
+from mettleq.integrations.qiskit import MettleQMidpointMPOBackend
+from mettleq.midpoint_mpo import MidpointMPOOptions
 
 circuit = QuantumCircuit(8)
 circuit.h(0)
 for qubit in range(7):
     circuit.cx(qubit, qubit + 1)
 
-simulator = IsolatedMidpointMPOSimulator(
-    MidpointMPOOptions(max_bond=512, cutoff=6e-4, seed=123),
+backend = MettleQMidpointMPOBackend(
+    mpo_options=MidpointMPOOptions(max_bond=512, cutoff=6e-4, seed=123),
     worker_python=".venv-mpo/bin/python",
 )
-result = simulator.run(circuit, shots=1000, output_dir="bench/runs/my-mpo-run")
-print(result.counts)
-print(result.diagnostics)
+result = backend.run(circuit, shots=1000).result()
+print(result.get_counts())
+print(result.data(0)["mettleq_midpoint_mpo"])
 ```
 
-The isolated API keeps normal Qiskit 2.x code on the caller side while the
-pinned worker owns Quimb and the long-running compression. It is deliberately
+The first-class backend keeps normal Qiskit 2.x code on the caller side while
+an isolated pinned worker owns Quimb and the long-running compression. It is deliberately
 not hidden behind `method="matrix_product_state"`: midpoint MPO has different
 routing, approximation, runtime, and trust controls. PennyLane exposure is not
 included yet because the method's current contract is finite-shot,
@@ -241,10 +242,9 @@ whole-circuit sampling rather than general differentiable observables.
 import pennylane as qml
 
 device = qml.device(
-    "mettleq",
+    "mettleq.adaptive",
     wires=3,
-    method="automatic",
-    device="auto",
+    precision="single",
 )
 
 @qml.qnode(device, diff_method="parameter-shift")
@@ -425,11 +425,12 @@ Qiskit and PennyLane accept the same policy vocabulary:
 | `device="auto"` | Select one measured path: CPU below crossover, GPU above it |
 | `device="cpu"` / `"gpu"` | Force one numerical path for testing or a calibrated deployment |
 | `mps_svd_driver="auto"` | Recoverable CPU SVD ladder: SciPy `gesdd`, `gesvd`, then NumPy fallbacks |
+| `mps_svd_driver="gpu_jacobi"` | Experimental complex64 Metal-resident Jacobi SVD with a checked reconstruction residual; explicit opt-in only |
 | `mps_routing_strategy="lookahead"` | Persist a logical-to-MPS layout when preflight predicts no more swaps than immediate restoration |
 | `mps_accuracy_policy="report"` | Attach threshold evidence; use `"warn"` or `"error"` for stricter enforcement |
 | `mps_convergence_bond_dimensions=(32, 64, 128)` | Rerun analytic SDK results and report successive-`Dmax` agreement |
 
-`IsolatedMidpointMPOSimulator` is the recommended explicit method and has its own
+`MettleQMidpointMPOBackend` is the recommended explicit method and has its own
 `max_bond`, `cutoff`, unswapping, seeded-sampling, and expected-peak evidence;
 it is not an `automatic` planner target.
 
@@ -447,11 +448,13 @@ backend = MettleQBackend(
 )
 ```
 
-The current shared M3 Pro calibration selects statevector GPU execution from 16
-qubits. MPS tensor operations can be forced onto CPU or GPU, while the stable
-SVD ladder runs on CPU. A matched seven-topology campaign found CPU faster than
-GPU tensors in every case, so automatic MPS stays on CPU unless the caller
-supplies a measured `mps_gpu_min_qubits` value. MPS diagnostics expose the
+The adaptive SDK policy considers precision, requested result, gate mix,
+expected Metal launches, fusion coverage, topology, and statevector memory—not
+only qubit count. The stable MPS path uses the recoverable CPU SVD ladder. An
+experimental one-sided Jacobi driver now keeps contractions, rotations, and
+factors on Metal, returning only its singular spectrum and validation scalar;
+on this M3 Pro it remains slower than direct SciPy LAPACK and is therefore not
+selected automatically. MPS diagnostics expose the
 tensor device, SVD driver and timing, fallback attempts, routing swaps, bond
 growth, canonical center, renormalization, truncation, discarded-weight
 telemetry, state norm, and accuracy classification.
@@ -488,6 +491,15 @@ reference for results that matter.
 Supported Apple GPUs now request custom Metal kernels automatically when all
 capability checks pass. Set `METTLEQ_METAL_KERNELS=0` only when you deliberately
 want the pure-MLX compatibility/ablation path.
+
+CH, CRX, CRY, and CRZ use a sparse controlled-unitary kernel; consecutive
+controlled gates on disjoint wire sets share one state traversal. Generic
+single-qubit layers provide both radix-8 and radix-16 implementations. Set
+`METTLEQ_SINGLE_QUBIT_RADIX=8` only for calibration; radix-16 is the current M3
+Pro default. `tools/profile_metal_radix.py` can create local `.gputrace` files
+for Xcode occupancy/register-pressure inspection without committing them. See
+[Apple's Metal occupancy guidance](https://developer.apple.com/documentation/xcode/finding-your-metal-apps-gpu-occupancy);
+results from this M3 Pro are not presented as M1, M2, or M4 measurements.
 
 ### Run a first accelerated circuit
 
@@ -566,9 +578,9 @@ is opt-in; unset preserves fully lazy execution.
 
 ```mermaid
 flowchart TB
-    QISKIT["Qiskit circuits and PUBs"] --> QAPI["BackendV2 · SamplerV2 · EstimatorV2"]
-    QISKIT --> MPOAPI["Isolated midpoint-MPO worker<br/>Qiskit 2 caller · pinned tensor environment"]
-    PL["PennyLane QNodes and tapes"] --> PAPI["PennyLane mettleq device"]
+    QISKIT["Qiskit circuits and PUBs"] --> QAPI["Adaptive BackendV2<br/>Aer CPU or MettleQ Apple GPU"]
+    QISKIT --> MPOAPI["Midpoint-MPO BackendV2<br/>isolated pinned worker internally"]
+    PL["PennyLane QNodes and tapes"] --> PAPI["Adaptive PennyLane device<br/>Lightning CPU or MettleQ Apple GPU"]
     QAPI --> IR["Validated canonical circuit IR"]
     PAPI --> IR
     IR --> PLAN["Inspectable method and device planner"]
@@ -581,7 +593,7 @@ flowchart TB
     ROUTE --> MPSCPU["Bounded MPS · CPU tensors<br/>automatic default today"]
     ROUTE --> MPSGPU["Bounded MPS · GPU tensors<br/>explicit experimental path"]
     MPSCPU --> SPLIT["Recoverable CPU SVD ladder<br/>truncate · canonicalize · renormalize"]
-    MPSGPU --> SPLIT
+    MPSGPU --> GPUSPLIT["Experimental Metal-resident Jacobi SVD<br/>checked residual · opt-in only"]
     MPOAPI --> MIDPOINT["Consolidate and split at midpoint<br/>left/right linear Sabre routing"]
     MIDPOINT --> UNSWAP["MPO/TNO cancellation<br/>greedy unswapping + rerouting"]
     UNSWAP --> MPOSAMPLE["Materialize bounded MPS<br/>seeded sequential sampling"]
@@ -590,6 +602,7 @@ flowchart TB
     SVCPU --> MEASURE["Native probabilities, sampling, counts, expectations"]
     SVGPU --> MEASURE
     SPLIT --> MEASURE
+    GPUSPLIT --> MEASURE
     MPOSAMPLE --> MEASURE
     MEASURE --> RESULTS["Qiskit Result/DataBin/BitArray or PennyLane results"]
     SPLIT --> TRUST["Accuracy threshold policy<br/>optional Dmax convergence"]
@@ -602,8 +615,8 @@ flowchart TB
 The product surface is deliberately limited to Qiskit and PennyLane for this
 phase. Both adapters translate once into the same validated IR, then reuse the
 same planner, memory gate, simulator, measurement implementation, and evidence.
-Statevector sampling remains on the selected MLX device until shot bits are
-returned. MPS marginals, local expectations, and sequential samples contract
+Statevector probabilities, marginals, batched Pauli reductions, and sampling
+remain on the selected MLX device until compact results are returned. MPS marginals, local expectations, and sequential samples contract
 the tensor network without constructing a dense `2**n` state. CPU and GPU are
 alternative numerical paths, not additive acceleration; the planner keeps MPS
 on CPU until matched evidence establishes a real GPU crossover. Midpoint MPO
@@ -760,7 +773,7 @@ unchanged ratios, and seven lower ratios.
 <details>
 <summary><strong>Show the complete 29-workload comparison table</strong></summary>
 
-| Workload | Original upstream, M1 Max | Private fork, M3 Pro | Ratio difference |
+| Workload | Original upstream, M1 Max | MettleQ, M3 Pro | Ratio difference |
 | --- | ---: | ---: | ---: |
 | Long-range Ising | 24.3× | 32.65× | +8.35× |
 | Grover | 11.5× | 22.64× | +11.14× |
@@ -1659,6 +1672,15 @@ PYTHONPATH=src caffeinate -i .venv/bin/python \
 Transient runs belong under `bench/runs/`. Promote only reviewed evidence to
 `assets/benchmarks-frozen/`; keep historical sample bundles immutable.
 
+The manual `performance-regression.yml` workflow runs only on an explicitly
+managed Apple-Silicon self-hosted runner. It captures privacy-safe thermal,
+power-mode, OS, hardware, and background-load metadata; gates numerical
+accuracy; compares MettleQ latency with the frozen matched baseline; and keeps
+raw Xcode GPU traces out of Git. Before changing repository visibility, follow
+[`PUBLIC_RELEASE_CHECKLIST.md`](PUBLIC_RELEASE_CHECKLIST.md) and run
+`python tools/audit_public_release.py`. Ignoring a file does not remove it from
+earlier commits, so the historical cleanup is a separate reviewed operation.
+
 ## MettleQ Studio
 
 MettleQ Studio is the desktop companion for launching runs, monitoring progress,
@@ -1708,6 +1730,8 @@ Build local UI artifacts with:
 | `datasets/qasm/local/` | Bundled OpenQASM corpus |
 | `quantumstudio/` | Desktop UI, backend API, MCP server, and packaging scripts |
 | `.github/workflows/ci.yml` | Portable CI and manually triggered Apple Silicon validation |
+| `.github/workflows/performance-regression.yml` | Self-hosted Apple-Silicon accuracy, environment, radix, and latency regression gate |
+| `PUBLIC_RELEASE_CHECKLIST.md` | Current-tree and Git-history checks required before public release |
 
 ## Development
 
@@ -1755,7 +1779,8 @@ For this independent fork:
 ```
 
 The associated technical report is self-published but unpublished; its PDF and
-LaTeX source are not distributed in this repository.
+editable Markdown source are distributed in this repository for review and
+reproduction.
 
 ## License
 

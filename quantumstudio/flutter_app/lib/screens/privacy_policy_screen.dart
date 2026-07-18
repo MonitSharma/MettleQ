@@ -246,14 +246,14 @@ class PrivacyPolicyScreen extends StatelessWidget {
                         const SizedBox(height: 8),
                         Text(
                           'If you have any questions about this Privacy Policy, please contact '
-                          'solomon@qneura.ai or visit:',
+                          'the MettleQ issue tracker:',
                           style: theme.textTheme.bodyMedium,
                         ),
                         const SizedBox(height: 12),
                         FilledButton.icon(
-                          onPressed: () => _launchUrl('https://qneura.ai/apps.html'),
+                          onPressed: () => _launchUrl('https://github.com/MonitSharma/MettleQ/issues'),
                           icon: const Icon(Icons.language),
-                          label: const Text('qneura.ai/apps.html'),
+                          label: const Text('github.com/MonitSharma/MettleQ/issues'),
                         ),
                       ],
                     ),

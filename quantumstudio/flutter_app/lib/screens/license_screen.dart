@@ -4,7 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 class LicenseScreen extends StatelessWidget {
   const LicenseScreen({super.key});
 
-  static const String _websiteUrl = 'https://qneura.ai/apps.html';
+  static const String _websiteUrl = 'https://github.com/MonitSharma/MettleQ';
 
   static const Map<String, Map<String, String>> _thirdPartyLibraries = {
     'MLX': {

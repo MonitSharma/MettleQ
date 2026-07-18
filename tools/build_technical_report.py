@@ -161,15 +161,14 @@ def build():
         len(story),
     )
     charts = [
-        PageBreak(),
         Paragraph("Measured crossover and guarded capacity", styles["Section"]),
-        Image(str(CHART), width=164 * mm, height=125 * mm),
+        Image(str(CHART), width=157 * mm, height=120 * mm),
         Spacer(1, 7),
         Paragraph(
             "Figure 1. Complete full-state CPU/GPU crossover. Ratios above one favor MettleQ; annotations include maximum phase-aligned state error.",
             styles["BodyPaper"],
         ),
-        Image(str(LIMIT_CHART), width=150 * mm, height=82 * mm),
+        Image(str(LIMIT_CHART), width=143 * mm, height=78 * mm),
         Paragraph(
             "Figure 2. Monitored scalar-output capacity probe. The 30-qubit marks are pre-launch safety refusals.",
             styles["BodyPaper"],

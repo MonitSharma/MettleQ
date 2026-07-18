@@ -247,7 +247,6 @@ class BackendService {
       path.join(resourcesDir, 'python', 'bin', 'python'),
       path.join(backendPath, 'venv', 'bin', 'python3'),
       path.join(backendPath, 'venv', 'bin', 'python'),
-      '/Users/sol/.pyenv/shims/python3',
       '/opt/homebrew/bin/python3',
     ];
     for (final candidate in candidates) {

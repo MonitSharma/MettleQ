@@ -1,10 +1,10 @@
 algorithm_time_s,arm,caller_qiskit_version,campaign_wall_time_s,compression_time_s,cutoff,error,error_type,expected_peak_count,expected_peak_fraction,implementation,matches_expected_bitstring,materialize_time_s,max_bond,peak_max_bond,peak_total_elements,phase,position,predicted_bitstring,repeat,run_dir,sampling_time_s,shots,status,termination_reason,total_work_gates,work_gates_consumed,worker_wall_time_s
-1234.3252314580022,mettleq_d512,2.5.0,1236.8473003340187,1218.594917667011,0.0006,,,100,0.1,mettleq_isolated,True,0.021096082986332476,512,512.0,1012992.0,main,0,01101110111001100000100000001010011100101101010111110111,0,/Users/monitsharma/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/main/repeat-0/mettleq_d512,15.709217708004871,1000,complete,completed,1885,1885,1236.7120285829878
-1233.0731017089856,mettleq_d768,2.5.0,1235.4543917079864,1217.5859826249944,0.0006,,,103,0.103,mettleq_isolated,True,0.021999666991177946,768,512.0,1030972.0,main,1,01101110111001100000100000001010011100101101010111110111,0,/Users/monitsharma/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/main/repeat-0/mettleq_d768,15.465119417000096,1000,complete,completed,1885,1885,1235.3130269169924
-1169.681096290995,published_d512,,1172.4487957500096,1154.1293634580215,0.0006,,,100,0.1,published_core,True,0.020415499981027097,512,512.0,1012992.0,main,2,01101110111001100000100000001010011100101101010111110111,0,/Users/monitsharma/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/main/repeat-0/published_d512,15.53131733299233,1000,complete,completed,1885,1885,
-1164.5102198340173,published_d512,,1167.2378200420062,1149.422948624997,0.0006,,,100,0.1,published_core,True,0.020082417002413422,512,512.0,1012992.0,main,0,01101110111001100000100000001010011100101101010111110111,1,/Users/monitsharma/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/main/repeat-1/published_d512,15.067188792017987,1000,complete,completed,1885,1885,
-1198.3411089589936,mettleq_d768,2.5.0,1200.6717861669895,1183.4559615420003,0.0006,,,103,0.103,mettleq_isolated,True,0.02087375000701286,768,512.0,1030972.0,main,1,01101110111001100000100000001010011100101101010111110111,1,/Users/monitsharma/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/main/repeat-1/mettleq_d768,14.864273666986264,1000,complete,completed,1885,1885,1200.5333848340088
-1196.801231874997,mettleq_d512,2.5.0,1199.2721347500046,1181.8414983749972,0.0006,,,100,0.1,mettleq_isolated,True,0.020471750001888722,512,512.0,1012992.0,main,2,01101110111001100000100000001010011100101101010111110111,1,/Users/monitsharma/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/main/repeat-1/mettleq_d512,14.939261749997968,1000,complete,completed,1885,1885,1199.1343445839884
+1234.3252314580022,mettleq_d512,2.5.0,1236.8473003340187,1218.594917667011,0.0006,,,100,0.1,mettleq_isolated,True,0.021096082986332476,512,512.0,1012992.0,main,0,01101110111001100000100000001010011100101101010111110111,0,<HOME>/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/main/repeat-0/mettleq_d512,15.709217708004871,1000,complete,completed,1885,1885,1236.7120285829878
+1233.0731017089856,mettleq_d768,2.5.0,1235.4543917079864,1217.5859826249944,0.0006,,,103,0.103,mettleq_isolated,True,0.021999666991177946,768,512.0,1030972.0,main,1,01101110111001100000100000001010011100101101010111110111,0,<HOME>/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/main/repeat-0/mettleq_d768,15.465119417000096,1000,complete,completed,1885,1885,1235.3130269169924
+1169.681096290995,published_d512,,1172.4487957500096,1154.1293634580215,0.0006,,,100,0.1,published_core,True,0.020415499981027097,512,512.0,1012992.0,main,2,01101110111001100000100000001010011100101101010111110111,0,<HOME>/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/main/repeat-0/published_d512,15.53131733299233,1000,complete,completed,1885,1885,
+1164.5102198340173,published_d512,,1167.2378200420062,1149.422948624997,0.0006,,,100,0.1,published_core,True,0.020082417002413422,512,512.0,1012992.0,main,0,01101110111001100000100000001010011100101101010111110111,1,<HOME>/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/main/repeat-1/published_d512,15.067188792017987,1000,complete,completed,1885,1885,
+1198.3411089589936,mettleq_d768,2.5.0,1200.6717861669895,1183.4559615420003,0.0006,,,103,0.103,mettleq_isolated,True,0.02087375000701286,768,512.0,1030972.0,main,1,01101110111001100000100000001010011100101101010111110111,1,<HOME>/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/main/repeat-1/mettleq_d768,14.864273666986264,1000,complete,completed,1885,1885,1200.5333848340088
+1196.801231874997,mettleq_d512,2.5.0,1199.2721347500046,1181.8414983749972,0.0006,,,100,0.1,mettleq_isolated,True,0.020471750001888722,512,512.0,1012992.0,main,2,01101110111001100000100000001010011100101101010111110111,1,<HOME>/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/main/repeat-1/mettleq_d512,14.939261749997968,1000,complete,completed,1885,1885,1199.1343445839884
 ,mettleq_d512_c5e-4,,,,0.0005,"isolated midpoint-MPO worker exited 1:
 [cycle 108] 176/1885 work gates after 1550s
 [cycle 109] 176/1885 work gates after 1566s
@@ -25,19 +25,19 @@ algorithm_time_s,arm,caller_qiskit_version,campaign_wall_time_s,compression_time
 [cycle 123] 176/1885 work gates after 1782s
 ERROR:root:aborting after 80 consecutive no-progress unswap cycles (limit=80, consumed=176/1885, cutoff=0.0005, mode=swap_thrash). The MPO is small at the stall (max_bond=64 vs cap 512, elems=80692 vs unswap_threshold 500000) -- the last cycles absorbed only routing SWAP layers before reaching the next 2q block, so zero work gates were consumed. Changing --cutoff will NOT help. Raise --abort-after-no-progress-unswap-cycles (e.g. 20) or set it negative to disable the guard and let the reroute push past this patch.
 Traceback (most recent call last):
-  File ""/Users/monitsharma/.local/share/uv/python/cpython-3.10.16-macos-aarch64-none/lib/python3.10/runpy.py"", line 196, in _run_module_as_main
+  File ""<HOME>/.local/share/uv/python/cpython-3.10.16-macos-aarch64-none/lib/python3.10/runpy.py"", line 196, in _run_module_as_main
     return _run_code(code, main_globals, None,
-  File ""/Users/monitsharma/.local/share/uv/python/cpython-3.10.16-macos-aarch64-none/lib/python3.10/runpy.py"", line 86, in _run_code
+  File ""<HOME>/.local/share/uv/python/cpython-3.10.16-macos-aarch64-none/lib/python3.10/runpy.py"", line 86, in _run_code
     exec(code, run_globals)
-  File ""/Users/monitsharma/code_projects/Qupertino/src/mettleq/midpoint_mpo.py"", line 1309, in <module>
+  File ""<HOME>/code_projects/Qupertino/src/mettleq/midpoint_mpo.py"", line 1309, in <module>
     raise SystemExit(main())
-  File ""/Users/monitsharma/code_projects/Qupertino/src/mettleq/midpoint_mpo.py"", line 1282, in main
+  File ""<HOME>/code_projects/Qupertino/src/mettleq/midpoint_mpo.py"", line 1282, in main
     result = MidpointMPOSimulator(options).run(
-  File ""/Users/monitsharma/code_projects/Qupertino/src/mettleq/midpoint_mpo.py"", line 765, in run
+  File ""<HOME>/code_projects/Qupertino/src/mettleq/midpoint_mpo.py"", line 765, in run
     raise MidpointMPOError(
-__main__.MidpointMPOError: midpoint-MPO compression terminated with 'no_progress_cycle_limit'",MidpointMPOWorkerError,,,mettleq_isolated,,,512,,,cutoff,0,,0,/Users/monitsharma/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/cutoff/repeat-0/mettleq_d512_c5e-4,,,failed,,,,
-1142.6914201250474,mettleq_d512_c7e-4,2.5.0,1144.8059811659914,1130.3272814160155,0.0007,,,24,0.024,mettleq_isolated,False,0.014779250021092594,512,512.0,1174524.0,cutoff,1,01101110111001100000100000001010011100101001010111110111,0,/Users/monitsharma/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/cutoff/repeat-0/mettleq_d512_c7e-4,12.349359459010884,1000,complete,completed,1885,1885,1144.6798572910193
-1096.8015803330345,mettleq_d512_c7e-4,2.5.0,1098.6058983340045,1085.6386770410172,0.0007,,,24,0.024,mettleq_isolated,False,0.014337000000523403,512,512.0,1174524.0,cutoff,0,01101110111001100000100000001010011100101001010111110111,1,/Users/monitsharma/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/cutoff/repeat-1/mettleq_d512_c7e-4,11.148566292016767,1000,complete,completed,1885,1885,1098.4859414160019
+__main__.MidpointMPOError: midpoint-MPO compression terminated with 'no_progress_cycle_limit'",MidpointMPOWorkerError,,,mettleq_isolated,,,512,,,cutoff,0,,0,<HOME>/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/cutoff/repeat-0/mettleq_d512_c5e-4,,,failed,,,,
+1142.6914201250474,mettleq_d512_c7e-4,2.5.0,1144.8059811659914,1130.3272814160155,0.0007,,,24,0.024,mettleq_isolated,False,0.014779250021092594,512,512.0,1174524.0,cutoff,1,01101110111001100000100000001010011100101001010111110111,0,<HOME>/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/cutoff/repeat-0/mettleq_d512_c7e-4,12.349359459010884,1000,complete,completed,1885,1885,1144.6798572910193
+1096.8015803330345,mettleq_d512_c7e-4,2.5.0,1098.6058983340045,1085.6386770410172,0.0007,,,24,0.024,mettleq_isolated,False,0.014337000000523403,512,512.0,1174524.0,cutoff,0,01101110111001100000100000001010011100101001010111110111,1,<HOME>/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/cutoff/repeat-1/mettleq_d512_c7e-4,11.148566292016767,1000,complete,completed,1885,1885,1098.4859414160019
 ,mettleq_d512_c5e-4,,,,0.0005,"isolated midpoint-MPO worker exited 1:
 [cycle 108] 176/1885 work gates after 1492s
 [cycle 109] 176/1885 work gates after 1507s
@@ -58,14 +58,14 @@ __main__.MidpointMPOError: midpoint-MPO compression terminated with 'no_progress
 [cycle 123] 176/1885 work gates after 1715s
 ERROR:root:aborting after 80 consecutive no-progress unswap cycles (limit=80, consumed=176/1885, cutoff=0.0005, mode=swap_thrash). The MPO is small at the stall (max_bond=64 vs cap 512, elems=80692 vs unswap_threshold 500000) -- the last cycles absorbed only routing SWAP layers before reaching the next 2q block, so zero work gates were consumed. Changing --cutoff will NOT help. Raise --abort-after-no-progress-unswap-cycles (e.g. 20) or set it negative to disable the guard and let the reroute push past this patch.
 Traceback (most recent call last):
-  File ""/Users/monitsharma/.local/share/uv/python/cpython-3.10.16-macos-aarch64-none/lib/python3.10/runpy.py"", line 196, in _run_module_as_main
+  File ""<HOME>/.local/share/uv/python/cpython-3.10.16-macos-aarch64-none/lib/python3.10/runpy.py"", line 196, in _run_module_as_main
     return _run_code(code, main_globals, None,
-  File ""/Users/monitsharma/.local/share/uv/python/cpython-3.10.16-macos-aarch64-none/lib/python3.10/runpy.py"", line 86, in _run_code
+  File ""<HOME>/.local/share/uv/python/cpython-3.10.16-macos-aarch64-none/lib/python3.10/runpy.py"", line 86, in _run_code
     exec(code, run_globals)
-  File ""/Users/monitsharma/code_projects/Qupertino/src/mettleq/midpoint_mpo.py"", line 1309, in <module>
+  File ""<HOME>/code_projects/Qupertino/src/mettleq/midpoint_mpo.py"", line 1309, in <module>
     raise SystemExit(main())
-  File ""/Users/monitsharma/code_projects/Qupertino/src/mettleq/midpoint_mpo.py"", line 1282, in main
+  File ""<HOME>/code_projects/Qupertino/src/mettleq/midpoint_mpo.py"", line 1282, in main
     result = MidpointMPOSimulator(options).run(
-  File ""/Users/monitsharma/code_projects/Qupertino/src/mettleq/midpoint_mpo.py"", line 765, in run
+  File ""<HOME>/code_projects/Qupertino/src/mettleq/midpoint_mpo.py"", line 765, in run
     raise MidpointMPOError(
-__main__.MidpointMPOError: midpoint-MPO compression terminated with 'no_progress_cycle_limit'",MidpointMPOWorkerError,,,mettleq_isolated,,,512,,,cutoff,1,,1,/Users/monitsharma/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/cutoff/repeat-1/mettleq_d512_c5e-4,,,failed,,,,
+__main__.MidpointMPOError: midpoint-MPO compression terminated with 'no_progress_cycle_limit'",MidpointMPOWorkerError,,,mettleq_isolated,,,512,,,cutoff,1,,1,<HOME>/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service/cutoff/repeat-1/mettleq_d512_c5e-4,,,failed,,,,

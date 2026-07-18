@@ -4,7 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 class TermsOfServiceScreen extends StatelessWidget {
   const TermsOfServiceScreen({super.key});
 
-  static const String _websiteUrl = 'https://qneura.ai/apps.html';
+  static const String _websiteUrl = 'https://github.com/MonitSharma/MettleQ';
   static const String _appleEulaUrl =
       'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 
@@ -221,7 +221,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                   '9. Contact Us',
                   Icons.mail_outline,
                   [
-                    'If you have questions about these Terms, please contact solomon@qneura.ai or visit https://qneura.ai/apps.html.',
+                    'If you have questions about these Terms, open an issue at https://github.com/MonitSharma/MettleQ/issues.',
                   ],
                 ),
                 const SizedBox(height: 20),

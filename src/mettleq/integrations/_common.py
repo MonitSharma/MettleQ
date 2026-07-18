@@ -384,6 +384,52 @@ def pauli_product_expectation(
     return complex(value.item())
 
 
+def pauli_product_expectations(
+    device: Device,
+    words: Sequence[dict[int, str]],
+) -> list[complex]:
+    """Evaluate many Pauli words with one synchronization/readback boundary.
+
+    Each statevector reduction remains on the selected MLX device. Only the
+    final scalar per word crosses to the host, and all lazy reductions are
+    evaluated together so Estimator Hamiltonians do not synchronize once per
+    Pauli term.
+    """
+    normalized_words = [
+        {
+            int(wire): str(pauli).upper()
+            for wire, pauli in word.items()
+            if str(pauli).upper() != "I"
+        }
+        for word in words
+    ]
+    if any(
+        pauli not in _PAULI_MATRICES
+        for word in normalized_words
+        for pauli in word.values()
+    ):
+        raise ValueError("Pauli products support only I, X, Y, and Z")
+    device.synchronize()
+    if device.backend == "mps":
+        return [
+            device.sim.expectation_product(
+                {wire: _PAULI_MATRICES[pauli] for wire, pauli in word.items()}
+            )
+            for word in normalized_words
+        ]
+    values = []
+    for word in normalized_words:
+        acted = device.sim.state
+        for wire, pauli in word.items():
+            acted = _apply_local_matrix(
+                acted, device.wires, [wire], _PAULI_MATRICES[pauli]
+            )
+        values.append(mx.sum(mx.conj(device.sim.state) * acted))
+    if values:
+        mx.eval(*values)
+    return [complex(value.item()) for value in values]
+
+
 def observable_samples(
     device: Device,
     wires: Sequence[int],

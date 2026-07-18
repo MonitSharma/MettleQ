@@ -4,8 +4,8 @@
   "git_commit": "068f4e154e38d4ec08a779ced99f3031d53ad951",
   "git_dirty": false,
   "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
-  "source_campaign": "/Users/monitsharma/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service",
-  "campaign_manifest_sha256": "5c229bfff111f4172b2476dad11bdc8deda83464d8014834f18a2de49999a205",
+  "source_campaign": "<HOME>/code_projects/Qupertino/bench/runs/midpoint-mpo-phase12-native-service",
+  "campaign_manifest_sha256": "da1951b7220f29f7219e0ce280aee071fe491a25e078356764aecaa8eb0e4661",
   "campaign_summary_sha256": "3980fe1a9a1ea0dea1856b60f48085ee2f6e89067ebdbab24bebf5ca078d00e7",
   "exported_qasm_sha256": "437029b7ca2b7e8ac4fd2b4dfcbcc8591e5b03f51e7d5049e2e445de81dd8ee8",
   "copied_runs": {

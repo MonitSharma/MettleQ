@@ -645,7 +645,7 @@ class _AboutScreenState extends State<AboutScreen> {
                 FilledButton.tonalIcon(
                   onPressed: () async {
                     final uri = Uri.parse(
-                      'mailto:solomon@qneura.ai?subject=MettleQ%20Issue',
+                      'https://github.com/MonitSharma/MettleQ/issues',
                     );
                     if (await canLaunchUrl(uri)) {
                       await launchUrl(uri);
