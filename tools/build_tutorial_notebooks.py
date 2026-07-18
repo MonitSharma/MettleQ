@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 from dataclasses import dataclass
 from pathlib import Path
 import textwrap
@@ -24,6 +25,162 @@ class NotebookSpec:
     source: str
 
 
+@dataclass(frozen=True)
+class TutorialGuide:
+    background: str
+    correctness: str
+    practical_use: str
+
+
+GUIDES: dict[str, TutorialGuide] = {
+    "qiskit/01_backend_quickstart.ipynb": TutorialGuide(
+        "A Qiskit backend is the execution target used after transpilation. The circuit itself does not need to be rewritten for MettleQ.",
+        "A Bell state has two non-zero amplitudes. We remove an irrelevant global phase before comparing those amplitudes.",
+        "Use this pattern when existing Qiskit code already accepts a BackendV2. This tiny circuit demonstrates integration, not acceleration.",
+    ),
+    "qiskit/02_statevectors_and_gates.ipynb": TutorialGuide(
+        "This circuit mixes rotations, controlled phases, XX/YY/ZZ interactions, and a global phase to exercise Qiskit's gate and endian conventions.",
+        "The complete statevector is phase-aligned and compared amplitude by amplitude; its norm is checked separately.",
+        "Full-state readback is useful for debugging and small exact studies, but its transfer cost matters at larger widths.",
+    ),
+    "qiskit/03_sampler_and_counts.ipynb": TutorialGuide(
+        "SamplerV2 returns finite-shot bitstring counts rather than an analytic state. Independent random generators need not produce identical dictionaries.",
+        "Both distributions must have GHZ support and their total-variation distance must stay below the declared threshold.",
+        "Use sampling when the downstream program consumes counts. For very small circuits, SDK and RNG overhead dominate simulation time.",
+    ),
+    "qiskit/04_estimator_chsh.ipynb": TutorialGuide(
+        "EstimatorV2 evaluates observables without materializing counts. Sweeping the measurement basis reveals the Bell-pair correlation curve.",
+        "Every expectation value in the two-observable sweep is compared within an absolute tolerance.",
+        "Estimator workloads become attractive when many large circuits share a stable execution path; this small sweep emphasizes semantics.",
+    ),
+    "qiskit/05_deutsch_jozsa.ipynb": TutorialGuide(
+        "Deutsch-Jozsa distinguishes constant and balanced Boolean oracles with a single quantum query in the ideal model.",
+        "The probability vectors must agree numerically and the inferred oracle class must match exactly.",
+        "This is an algorithm tutorial and regression test. Four qubits are far below any GPU crossover.",
+    ),
+    "qiskit/06_bernstein_vazirani.ipynb": TutorialGuide(
+        "Bernstein-Vazirani encodes a hidden bitstring in phase and recovers it after a final Hadamard layer.",
+        "The complete probability vectors are compared and the most likely hidden string must be identical.",
+        "The backend substitution is representative, but the compact deterministic circuit should normally remain CPU-bound.",
+    ),
+    "qiskit/07_grover_search.ipynb": TutorialGuide(
+        "Grover's iterate combines a phase oracle with inversion about the mean to amplify one marked basis state.",
+        "The state probabilities must agree and both simulators must identify the same marked item.",
+        "Larger Grover simulations can benefit from statevector acceleration; this two-qubit example is deliberately inspectable.",
+    ),
+    "qiskit/08_qft_and_phase_estimation.ipynb": TutorialGuide(
+        "Quantum phase estimation stores the eigenphase in a counting register and decodes it with an inverse QFT.",
+        "We compare the counting-register distribution and require the same modal phase estimate.",
+        "Use this structure for local ideal QPE studies; benefit depends on total register width and circuit depth.",
+    ),
+    "qiskit/09_shor_order_finding.ipynb": TutorialGuide(
+        "The quantum core of Shor's algorithm estimates a modular order; classical post-processing converts phase candidates into factors.",
+        "The compiled phase distribution must agree and the recovered factors of 15 must be exactly 3 and 5.",
+        "This is a small pedagogical order-finding instance, not a claim that useful cryptographic factoring is locally tractable.",
+    ),
+    "qiskit/10_vqe.ipynb": TutorialGuide(
+        "VQE repeatedly evaluates a parameterized ansatz against a Hamiltonian. Simulator overhead is paid once per energy evaluation.",
+        "The complete energy trace is compared, not merely the final minimum.",
+        "Real advantage requires wider ansatzes or batched evaluations; a two-qubit VQE is dominated by Python and adapter overhead.",
+    ),
+    "qiskit/11_qaoa_maxcut.ipynb": TutorialGuide(
+        "QAOA alternates cost and mixer layers. Here a parameter grid produces a MaxCut cost landscape.",
+        "Every landscape point must agree within the declared tolerance.",
+        "Use MettleQ for larger statevector sweeps after profiling; this tiny landscape is a correctness lesson.",
+    ),
+    "qiskit/12_hamiltonian_simulation.ipynb": TutorialGuide(
+        "Product-formula time evolution approximates a Hamiltonian with a sequence of local exponentials.",
+        "The observable trajectory over all requested times must agree, exposing errors that a single endpoint could hide.",
+        "Deeper, wider dynamics are a natural GPU workload once state evolution dominates construction and readback.",
+    ),
+    "qiskit/13_quantum_kernel.ipynb": TutorialGuide(
+        "A fidelity quantum kernel compares data-encoding states through squared overlaps.",
+        "Every entry of the symmetric kernel matrix is compared numerically.",
+        "Kernel workloads offer reuse and batching opportunities, but this small matrix is intended to show the contract clearly.",
+    ),
+    "qiskit/14_mps_topology_and_convergence.ipynb": TutorialGuide(
+        "MPS cost depends on entanglement and routing-induced bond growth, not qubit count alone. Dmax caps the retained bond dimension.",
+        "The MPS state is checked against an exact reference, local accuracy telemetry must pass, and successive Dmax values must converge.",
+        "MPS is valuable for wide, weakly entangled circuits. It is not a general GPU speedup and approximation evidence must be inspected.",
+    ),
+    "qiskit/15_apple_gpu_scaling.ipynb": TutorialGuide(
+        "Qiskit's reference statevector already uses the Apple CPU. MettleQ adds an MLX/Metal GPU path and selects it only after a measured crossover.",
+        "Every width is compared to Qiskit's full statevector before its timing is interpreted.",
+        "This is the performance-decision notebook: below crossover use the reference or CPU path; above crossover the same circuit can amortize GPU dispatch.",
+    ),
+    "qiskit/16_peaked_circuit_smoke.ipynb": TutorialGuide(
+        "A mirrored peaked circuit creates temporary entanglement and then concentrates probability on a known bitstring.",
+        "The expected mode, peak probability, and total-variation distance must all pass; this is stronger than checking only runtime.",
+        "Use it as a quick MPS regression. The full 56-qubit P9 benchmark uses the separate midpoint-MPO method.",
+    ),
+    "pennylane/01_qnodes_and_measurements.ipynb": TutorialGuide(
+        "A PennyLane QNode binds a quantum function to a device. Replacing default.qubit with MettleQ leaves the circuit function unchanged.",
+        "State, probabilities, expectation value, and variance are all compared.",
+        "This two-wire example teaches device substitution; it is too small to amortize MettleQ planning.",
+    ),
+    "pennylane/02_finite_shots.ipynb": TutorialGuide(
+        "Finite-shot QNodes return sampled counts. Even equal distributions usually yield different count dictionaries.",
+        "The observed supports and total-variation distance are checked rather than requiring identical random samples.",
+        "Choose this contract when training or analysis consumes shot noise; speed depends strongly on shot count and batching.",
+    ),
+    "pennylane/03_parameter_shift_gradients.ipynb": TutorialGuide(
+        "Parameter-shift differentiation evaluates shifted circuits and combines their expectation values into a gradient.",
+        "Both the forward value and gradient must agree with default.qubit.",
+        "Small gradients are call-overhead bound. Larger parameter batches are the meaningful acceleration target.",
+    ),
+    "pennylane/04_variational_optimization.ipynb": TutorialGuide(
+        "A hybrid loop repeatedly evaluates a QNode, computes gradients, and updates classical parameters.",
+        "The full optimization loss trace is compared to catch divergence at any step.",
+        "Use MettleQ when quantum evaluations dominate the optimizer; two-wire training is mostly Python overhead.",
+    ),
+    "pennylane/05_vqe.ipynb": TutorialGuide(
+        "VQE minimizes a Hamiltonian expectation using a parameterized quantum state and a classical optimizer.",
+        "Every energy in the optimization trace must match within tolerance.",
+        "The backend becomes relevant as the ansatz widens; this minimal molecule-style example emphasizes workflow compatibility.",
+    ),
+    "pennylane/06_qaoa_maxcut.ipynb": TutorialGuide(
+        "QAOA represents a combinatorial objective as a cost Hamiltonian and alternates cost and mixer evolution.",
+        "The complete parameter landscape must agree between devices.",
+        "Larger graphs may justify acceleration, while this three-wire landscape remains overhead-bound.",
+    ),
+    "pennylane/07_qft_and_qpe.ipynb": TutorialGuide(
+        "QPE combines controlled phase accumulation with an inverse QFT to produce a phase distribution.",
+        "The distributions and most likely phase bin must match.",
+        "This shows a drop-in device change; meaningful speedups require a larger counting-plus-system register.",
+    ),
+    "pennylane/08_variational_classifier.ipynb": TutorialGuide(
+        "A variational classifier encodes classical features, evaluates a trainable QNode, and updates parameters from labeled data.",
+        "Training losses and final predictions are compared, not only classification accuracy.",
+        "For tiny datasets the Python training loop dominates. Device acceleration matters when circuits or batches grow.",
+    ),
+    "pennylane/09_quantum_kernel.ipynb": TutorialGuide(
+        "The kernel is built from overlaps between data-encoding quantum states.",
+        "The complete Gram matrix must agree numerically and retain its symmetry.",
+        "This pattern can scale through batched state preparation; the compact example is an integration check.",
+    ),
+    "pennylane/10_teleportation_deferred.ipynb": TutorialGuide(
+        "Deferred measurement rewrites measurement-conditioned operations into an equivalent unitary circuit suitable for this backend.",
+        "Receiver observables are compared across several input states.",
+        "MettleQ currently targets the deferred unitary form, not native mid-circuit classical control.",
+    ),
+    "pennylane/11_hamiltonian_simulation.ipynb": TutorialGuide(
+        "This QNode evolves a small Ising system and measures an observable trajectory over time.",
+        "Every time point must agree with default.qubit.",
+        "Wider and deeper dynamics can cross into GPU-beneficial territory; the small example remains readable and CPU-friendly.",
+    ),
+    "pennylane/12_mps_convergence.ipynb": TutorialGuide(
+        "The MPS device trades dense memory for bounded bond dimension and may truncate entanglement.",
+        "The exact state and expectation are checked, local telemetry must pass, and Dmax 16-to-32 agreement must meet tolerance.",
+        "Use MPS for wide, structured circuits only after inspecting convergence; it is not automatically faster for small dense examples.",
+    ),
+    "pennylane/13_apple_gpu_scaling.ipynb": TutorialGuide(
+        "default.qubit runs on the Apple CPU. MettleQ keeps small work on CPU and moves sufficiently large exact states to MLX on the integrated GPU.",
+        "Each full state is phase-aligned against default.qubit before reporting a speed ratio.",
+        "Use the per-width table to choose a crossover on your Mac; do not infer a universal advantage from one width.",
+    ),
+}
+
+
 QISKIT_SETUP = """
 import numpy as np
 from qiskit import QuantumCircuit, transpile
@@ -40,6 +197,7 @@ from tutorials._support import (
     emit_result,
     max_abs_error,
     phase_aligned_statevector_error,
+    print_scaling_table,
     qiskit_selection,
     total_variation_distance,
 )
@@ -58,6 +216,7 @@ from tutorials._support import (
     max_abs_error,
     pennylane_selection,
     phase_aligned_statevector_error,
+    print_scaling_table,
     total_variation_distance,
 )
 """
@@ -739,20 +898,25 @@ tutorial_result = emit_result(
             """
 import statistics
 
-widths = [12, 14, 16]
+widths = [12, 14, 16, 18, 20]
 rows = []
 for width in widths:
     circuit = QuantumCircuit(width)
-    for wire in range(width):
-        circuit.ry(0.03 * (wire + 1), wire)
-    for wire in range(width - 1):
-        circuit.cx(wire, wire + 1)
-    reference, reference_ms, _ = benchmark(lambda c=circuit: np.asarray(Statevector.from_instruction(c).data), repeats=2)
+    for layer in range(3):
+        for wire in range(width):
+            circuit.ry(0.01 * (layer + 1) * (wire + 1), wire)
+        for wire in range(layer % 2, width - 1, 2):
+            circuit.cx(wire, wire + 1)
+    reference, reference_ms, _ = benchmark(
+        lambda c=circuit: np.asarray(Statevector.from_instruction(c).data),
+        warmups=2,
+        repeats=5,
+    )
     backend = MettleQBackend(method="statevector", device="auto")
     compiled = transpile(circuit, backend, optimization_level=1)
     def run_mettleq(c=compiled, b=backend):
         return np.asarray(b.run(c, shots=1, return_statevector=True).result().data(0)["statevector"])
-    candidate, mettleq_ms, _ = benchmark(run_mettleq, repeats=2)
+    candidate, mettleq_ms, _ = benchmark(run_mettleq, warmups=2, repeats=5)
     method, device = qiskit_selection(backend)
     rows.append({
         "width": width,
@@ -763,19 +927,25 @@ for width in widths:
         "device": device,
     })
 
-passed = all(row["error"] <= 3e-6 for row in rows) and rows[-1]["device"] == "gpu"
+print_scaling_table(rows)
+largest_width_speedup = rows[-1]["reference_ms"] / rows[-1]["mettleq_ms"]
+passed = (
+    all(row["error"] <= 3e-6 for row in rows)
+    and rows[-1]["device"] == "gpu"
+    and largest_width_speedup >= 1.5
+)
 tutorial_result = emit_result(
     notebook="qiskit/15_apple_gpu_scaling.ipynb",
     framework="qiskit",
     reference_ms=statistics.median(row["reference_ms"] for row in rows),
     mettleq_ms=statistics.median(row["mettleq_ms"] for row in rows),
-    check="per-width statevector atol=3e-6 and policy-selected GPU",
+    check="per-width statevector atol=3e-6, policy-selected GPU, and 20q speedup >=1.5x",
     passed=passed,
     exact_match=all(row["error"] == 0.0 for row in rows),
     selected_method=rows[-1]["method"],
     selected_device=rows[-1]["device"],
     metrics={"widths": rows},
-    notes="The aggregate medians summarize different widths; use the per-width rows for timing interpretation.",
+    notes="The aggregate medians summarize different widths. The printed per-width table is the performance evidence; ratios above 1 mean MettleQ was faster.",
 )
 """,
         ),
@@ -1379,20 +1549,21 @@ import statistics
 def make_qnode(device, width):
     @qml.qnode(device)
     def circuit():
-        for wire in range(width):
-            qml.RY(0.03 * (wire + 1), wires=wire)
-        for wire in range(width - 1):
-            qml.CNOT(wires=[wire, wire + 1])
+        for layer in range(3):
+            for wire in range(width):
+                qml.RY(0.01 * (layer + 1) * (wire + 1), wires=wire)
+            for wire in range(layer % 2, width - 1, 2):
+                qml.CNOT(wires=[wire, wire + 1])
         return qml.state()
     return circuit
 
 rows = []
-for width in (12, 14, 16):
+for width in (12, 14, 16, 18, 20):
     reference_qnode = make_qnode(qml.device("default.qubit", wires=width), width)
-    reference, reference_ms, _ = benchmark(reference_qnode, repeats=2)
+    reference, reference_ms, _ = benchmark(reference_qnode, warmups=2, repeats=5)
     mettleq_device = MettleQDevice(wires=width, method="statevector", device="auto")
     mettleq_qnode = make_qnode(mettleq_device, width)
-    candidate, mettleq_ms, _ = benchmark(mettleq_qnode, repeats=2)
+    candidate, mettleq_ms, _ = benchmark(mettleq_qnode, warmups=2, repeats=5)
     method, device = pennylane_selection(mettleq_device)
     rows.append({
         "width": width,
@@ -1403,26 +1574,120 @@ for width in (12, 14, 16):
         "device": device,
     })
 
+print_scaling_table(rows)
+largest_width_speedup = rows[-1]["reference_ms"] / rows[-1]["mettleq_ms"]
 tutorial_result = emit_result(
     notebook="pennylane/13_apple_gpu_scaling.ipynb",
     framework="pennylane",
     reference_ms=statistics.median(row["reference_ms"] for row in rows),
     mettleq_ms=statistics.median(row["mettleq_ms"] for row in rows),
-    check="per-width statevector atol=3e-6 and policy-selected GPU",
-    passed=all(row["error"] <= 3e-6 for row in rows) and rows[-1]["device"] == "gpu",
+    check="per-width statevector atol=3e-6, policy-selected GPU, and 20q speedup >=1.5x",
+    passed=(
+        all(row["error"] <= 3e-6 for row in rows)
+        and rows[-1]["device"] == "gpu"
+        and largest_width_speedup >= 1.5
+    ),
     exact_match=all(row["error"] == 0.0 for row in rows),
     selected_method=rows[-1]["method"],
     selected_device=rows[-1]["device"],
     metrics={"widths": rows},
-    notes="The aggregate medians summarize different widths; use per-width timings for interpretation.",
+    notes="The aggregate medians summarize different widths. The printed per-width table is the performance evidence; ratios above 1 mean MettleQ was faster.",
 )
 """,
         ),
     ]
 
 
+def _source_slice(lines: list[str], nodes: list[ast.stmt], start: int, end: int) -> str:
+    first_line = nodes[start].lineno - 1
+    last_line = nodes[end].lineno - 1 if end < len(nodes) else len(lines)
+    return "\n".join(lines[first_line:last_line]).strip()
+
+
+def _code_sections(spec: NotebookSpec) -> list[tuple[str, str, str]]:
+    """Split a reviewed source program at top-level semantic boundaries."""
+    source = textwrap.dedent(spec.source).strip()
+    lines = source.splitlines()
+    nodes = ast.parse(source).body
+
+    def text_for(node: ast.stmt) -> str:
+        return "\n".join(lines[node.lineno - 1 : node.end_lineno])
+
+    report_index = next(
+        index
+        for index, node in enumerate(nodes)
+        if "tutorial_result = emit_result" in text_for(node)
+    )
+    guide = GUIDES[f"{spec.framework}/{spec.filename}"]
+
+    if "apple_gpu_scaling" in spec.filename:
+        sweep_index = next(
+            index
+            for index, node in enumerate(nodes)
+            if isinstance(node, ast.For) and "MettleQ" in text_for(node)
+        )
+        return [
+            (
+                "1. Define the scalable workload",
+                guide.background,
+                _source_slice(lines, nodes, 0, sweep_index),
+            ),
+            (
+                "2. Run the same workload through both simulators",
+                "For each width we warm up both paths twice, take five measured runs, "
+                "compare the complete state, record MettleQ's selected device, and "
+                "print the result as a per-width table. A ratio above 1.0 means "
+                "MettleQ was faster; below 1.0 means the SDK reference was faster.",
+                _source_slice(lines, nodes, sweep_index, report_index),
+            ),
+            (
+                "3. Enforce correctness and publish the evidence",
+                guide.correctness,
+                _source_slice(lines, nodes, report_index, len(nodes)),
+            ),
+        ]
+
+    reference_index = next(
+        index
+        for index, node in enumerate(nodes)
+        if "reference, reference_ms" in text_for(node)
+    )
+    mettleq_index = next(
+        index
+        for index, node in enumerate(nodes)
+        if "MettleQBackend(" in text_for(node) or "MettleQDevice(" in text_for(node)
+    )
+    return [
+        (
+            "1. Define the quantum problem",
+            guide.background,
+            _source_slice(lines, nodes, 0, reference_index),
+        ),
+        (
+            "2. Run and time the SDK reference",
+            "This is the baseline a user would normally run. `benchmark` performs "
+            "an unmeasured warm-up, synchronizes lazy results, and reports the "
+            "median of repeated complete calls—not just a selected kernel.",
+            _source_slice(lines, nodes, reference_index, mettleq_index),
+        ),
+        (
+            "3. Run the same problem with MettleQ",
+            "Only the execution target changes. MettleQ records whether it selected "
+            "exact statevector or MPS and whether that method ran on CPU or GPU. "
+            "The candidate result is timed under the same warm-up and repeat policy.",
+            _source_slice(lines, nodes, mettleq_index, report_index),
+        ),
+        (
+            "4. Check correctness before discussing speed",
+            guide.correctness,
+            _source_slice(lines, nodes, report_index, len(nodes)),
+        ),
+    ]
+
+
 def build_notebook(spec: NotebookSpec):
     setup = QISKIT_SETUP if spec.framework == "qiskit" else PENNYLANE_SETUP
+    guide = GUIDES[f"{spec.framework}/{spec.filename}"]
     notebook = nbformat.v4.new_notebook()
     notebook.metadata.update(
         {
@@ -1435,15 +1700,53 @@ def build_notebook(spec: NotebookSpec):
             "mettleq": {"generated": True, "framework": spec.framework},
         }
     )
-    notebook.cells = [
+    cells = [
         nbformat.v4.new_markdown_cell(
             f"# {spec.title}\n\n{spec.summary}\n\n"
-            "The SDK reference and MettleQ calls below use the same circuit and "
-            "result contract. Timing includes the complete call shown."
+            "## What you will learn\n\n"
+            f"- How to express this workflow with {('Qiskit' if spec.framework == 'qiskit' else 'PennyLane')}'s reference simulator.\n"
+            "- How to change only the execution target to MettleQ.\n"
+            "- How correctness is checked before comparing timings.\n"
+            "- How to decide whether this workload is large enough to benefit from Apple-native execution."
+        ),
+        nbformat.v4.new_markdown_cell(
+            "## Performance model: what is actually being compared?\n\n"
+            "The reference simulator is **already running on this Mac's Apple CPU**. "
+            "MettleQ is not comparing Apple Silicon with a machine that ignores it. "
+            "Its opportunity is to reduce state-evolution cost through its MLX/Metal "
+            "path, while paying extra planning, adapter, dispatch, synchronization, "
+            "and result-conversion overhead.\n\n"
+            "Consequently, small circuits should often be faster on the SDK reference. "
+            "MettleQ becomes useful only when the simulated state or repeated workload "
+            "is large enough to amortize that overhead. The final result says which "
+            "path won this particular measurement; it never assumes MettleQ won."
+        ),
+        nbformat.v4.new_markdown_cell(
+            "## Imports and measurement helpers\n\n"
+            "The SDK imports define the circuit and reference simulator. MettleQ's "
+            "adapter supplies the alternate backend/device. The shared helpers make "
+            "timing and numerical checks identical across the suite."
         ),
         nbformat.v4.new_code_cell(textwrap.dedent(setup).strip()),
-        nbformat.v4.new_code_cell(textwrap.dedent(spec.source).strip()),
     ]
+    for heading, explanation, source in _code_sections(spec):
+        cells.append(nbformat.v4.new_markdown_cell(f"## {heading}\n\n{explanation}"))
+        cells.append(nbformat.v4.new_code_cell(source))
+    cells.append(
+        nbformat.v4.new_markdown_cell(
+            "## What should you conclude?\n\n"
+            f"{guide.practical_use}\n\n"
+            "Read the output in this order:\n\n"
+            "1. **Correctness contract** must pass. A fast wrong result is not useful.\n"
+            "2. **Reference / MettleQ ratio** above `1.0×` means MettleQ was faster; "
+            "below `1.0×` means the SDK reference was faster.\n"
+            "3. **Selected method/device** explains whether MettleQ used statevector "
+            "or MPS and CPU or GPU.\n"
+            "4. Treat this notebook as a reproducible observation on this Mac, not a "
+            "universal performance claim."
+        )
+    )
+    notebook.cells = cells
     stem = Path(spec.filename).stem.replace("_", "-")
     for index, cell in enumerate(notebook.cells):
         cell["id"] = f"{spec.framework}-{stem}-{index}"

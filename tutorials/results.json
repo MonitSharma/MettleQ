@@ -1,7 +1,7 @@
 {
   "all_passed": true,
-  "created_at": "2026-07-17T11:39:26+0800",
-  "elapsed_s": 44.698025916994084,
+  "created_at": "2026-07-18T13:44:22+0800",
+  "elapsed_s": 64.84121933300048,
   "environment": {
     "mettleq": "0.2.0",
     "mlx": "0.32.0",
@@ -10,8 +10,8 @@
     "qiskit": "2.5.0",
     "qiskit_aer": "0.17.2"
   },
-  "git_commit": "3586359e0fc692c9186d773ba026efab14228744",
-  "git_dirty": false,
+  "git_commit": "433f35fb9146eaee1f58f0c6ff0d2d596d63d510",
+  "git_dirty": true,
   "machine": "arm64",
   "passed_notebooks": 29,
   "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
@@ -25,13 +25,13 @@
         "execution_status": "evaluated",
         "max_amplitude_error": 1.2101617041793133e-08
       },
-      "mettleq_median_ms": 0.2738329931162298,
+      "mettleq_median_ms": 0.31820801086723804,
       "notebook": "qiskit/01_backend_quickstart.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 0.06329201278276742,
-      "reference_over_mettleq": 0.23113362660394543,
+      "reference_median_ms": 0.06483300239779055,
+      "reference_over_mettleq": 0.2037440924918764,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -45,13 +45,13 @@
         "max_amplitude_error": 4.350176504536388e-08,
         "norm": 1.0
       },
-      "mettleq_median_ms": 0.8893749909475446,
+      "mettleq_median_ms": 0.9304590057581663,
       "notebook": "qiskit/02_statevectors_and_gates.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 0.1451660064049065,
-      "reference_over_mettleq": 0.1632224965649708,
+      "reference_median_ms": 0.15924999024719,
+      "reference_over_mettleq": 0.17115207576225056,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -63,22 +63,22 @@
       "machine": "arm64",
       "metrics": {
         "mettleq_counts": {
-          "000": 2104,
-          "111": 1992
+          "000": 2044,
+          "111": 2052
         },
         "reference_counts": {
           "000": 2053,
           "111": 2043
         },
-        "tvd": 0.012451171875
+        "tvd": 0.002197265625
       },
-      "mettleq_median_ms": 6.793832988478243,
+      "mettleq_median_ms": 8.728667016839609,
       "notebook": "qiskit/03_sampler_and_counts.ipynb",
       "notes": "Independent sampler RNGs are compared statistically, not byte-for-byte.",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 4.4669169874396175,
-      "reference_over_mettleq": 0.6574958488109914,
+      "reference_median_ms": 6.213082990143448,
+      "reference_over_mettleq": 0.7118020401233064,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -178,13 +178,13 @@
           ]
         ]
       },
-      "mettleq_median_ms": 24.58916700561531,
+      "mettleq_median_ms": 29.11420800955966,
       "notebook": "qiskit/04_estimator_chsh.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 3.273875016020611,
-      "reference_over_mettleq": 0.13314298183720383,
+      "reference_median_ms": 6.450500019127503,
+      "reference_over_mettleq": 0.2215584918885473,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -201,13 +201,13 @@
         ],
         "max_probability_error": 2.0281592438831098e-07
       },
-      "mettleq_median_ms": 0.8406249980907887,
+      "mettleq_median_ms": 1.2974999845027924,
       "notebook": "qiskit/05_deutsch_jozsa.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 0.4109170113224536,
-      "reference_over_mettleq": 0.48882321160531794,
+      "reference_median_ms": 0.6257499917410314,
+      "reference_over_mettleq": 0.4822736024777846,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -222,13 +222,13 @@
         "recovered": "101101",
         "secret": "101101"
       },
-      "mettleq_median_ms": 0.7220409752335399,
+      "mettleq_median_ms": 1.071709004463628,
       "notebook": "qiskit/06_bernstein_vazirani.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 0.3286669962108135,
-      "reference_over_mettleq": 0.45519161305839756,
+      "reference_median_ms": 0.5611249944195151,
+      "reference_over_mettleq": 0.5235796210374742,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -243,13 +243,13 @@
         "marked_probability": 0.9999997615814209,
         "max_probability_error": 2.3841857821338408e-07
       },
-      "mettleq_median_ms": 0.3936669963877648,
+      "mettleq_median_ms": 0.502375012729317,
       "notebook": "qiskit/07_grover_search.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 0.18579198513180017,
-      "reference_over_mettleq": 0.4719521494984399,
+      "reference_median_ms": 0.18958401051349938,
+      "reference_over_mettleq": 0.3773754778995119,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -265,13 +265,13 @@
         "mettleq_mode": 3,
         "reference_mode": 3
       },
-      "mettleq_median_ms": 0.5248749803286046,
+      "mettleq_median_ms": 0.6497499998658895,
       "notebook": "qiskit/08_qft_and_phase_estimation.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 0.3643750096671283,
-      "reference_over_mettleq": 0.6942129522710471,
+      "reference_median_ms": 1.5377920062746853,
+      "reference_over_mettleq": 2.3667441425041793,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -290,13 +290,13 @@
         "order": 4,
         "phase_integer": 4
       },
-      "mettleq_median_ms": 0.6129170069471002,
+      "mettleq_median_ms": 0.9175839950330555,
       "notebook": "qiskit/09_shor_order_finding.ipynb",
       "notes": "This is the small compiled order-finding core, not a scalable modular-arithmetic implementation.",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 0.40729198371991515,
-      "reference_over_mettleq": 0.6645140844575518,
+      "reference_median_ms": 0.49641699297353625,
+      "reference_over_mettleq": 0.5410044155746778,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -312,13 +312,13 @@
         "minimum_index": 7,
         "reference_minimum": -1.2243289931098607
       },
-      "mettleq_median_ms": 81.27641698229127,
+      "mettleq_median_ms": 120.08591601625085,
       "notebook": "qiskit/10_vqe.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 7.833499985281378,
-      "reference_over_mettleq": 0.09638097096465464,
+      "reference_median_ms": 16.986750008072704,
+      "reference_over_mettleq": 0.14145497300261206,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -337,13 +337,13 @@
         "mettleq_best": 1.9620184302330017,
         "reference_best": 1.9620190528383281
       },
-      "mettleq_median_ms": 139.26999998511747,
+      "mettleq_median_ms": 162.67458299989812,
       "notebook": "qiskit/11_qaoa_maxcut.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 13.176207983633503,
-      "reference_over_mettleq": 0.09460909014893032,
+      "reference_median_ms": 22.666375007247552,
+      "reference_over_mettleq": 0.13933568839860955,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -401,13 +401,13 @@
           1.2
         ]
       },
-      "mettleq_median_ms": 40.46845802804455,
+      "mettleq_median_ms": 46.79970900178887,
       "notebook": "qiskit/12_hamiltonian_simulation.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 7.672584004467353,
-      "reference_over_mettleq": 0.18959417725158367,
+      "reference_median_ms": 9.320624987594783,
+      "reference_over_mettleq": 0.19915989193946723,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -472,13 +472,13 @@
           ]
         ]
       },
-      "mettleq_median_ms": 2.5476669834461063,
+      "mettleq_median_ms": 3.072624997003004,
       "notebook": "qiskit/13_quantum_kernel.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 0.5586670013144612,
-      "reference_over_mettleq": 0.2192857249179323,
+      "reference_median_ms": 0.8709999965503812,
+      "reference_over_mettleq": 0.28347097266992966,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -579,7 +579,7 @@
                     "relative_discarded_weight": 0.00017159427220714608,
                     "renormalized": true,
                     "svd_driver": "scipy_gesdd",
-                    "svd_elapsed_ms": 0.029417,
+                    "svd_elapsed_ms": 0.031166,
                     "svd_failed_attempts": []
                   },
                   "last_pre_normalization_norm": 1.0000000427357996,
@@ -608,11 +608,11 @@
                   },
                   "svd_fallback_count": 0,
                   "svd_requested_driver": "auto",
-                  "svd_total_ms": 1.201459,
+                  "svd_total_ms": 1.360124,
                   "tensor_device": "cpu",
                   "truncated": true,
                   "two_site_calls": 71,
-                  "two_site_contraction_total_ms": 0.90708,
+                  "two_site_contraction_total_ms": 1.037917,
                   "two_site_matrix_shape_calls": {
                     "16x16": 18,
                     "16x4": 6,
@@ -637,7 +637,7 @@
                     "8x8": 1
                   },
                   "two_site_max_matrix_elements": 256,
-                  "two_site_split_total_ms": 1.635206
+                  "two_site_split_total_ms": 1.8302069999999997
                 }
               ],
               "dmax": 8,
@@ -696,7 +696,7 @@
                     "relative_discarded_weight": 3.911641115255437e-06,
                     "renormalized": true,
                     "svd_driver": "scipy_gesdd",
-                    "svd_elapsed_ms": 0.110792,
+                    "svd_elapsed_ms": 0.105458,
                     "svd_failed_attempts": []
                   },
                   "last_pre_normalization_norm": 1.0000000217781373,
@@ -725,11 +725,11 @@
                   },
                   "svd_fallback_count": 0,
                   "svd_requested_driver": "auto",
-                  "svd_total_ms": 1.8064139999999997,
+                  "svd_total_ms": 2.568753,
                   "tensor_device": "cpu",
                   "truncated": true,
                   "two_site_calls": 71,
-                  "two_site_contraction_total_ms": 1.0196680000000005,
+                  "two_site_contraction_total_ms": 1.6982530000000007,
                   "two_site_matrix_shape_calls": {
                     "16x16": 1,
                     "16x32": 5,
@@ -761,7 +761,7 @@
                     "8x8": 1
                   },
                   "two_site_max_matrix_elements": 1024,
-                  "two_site_split_total_ms": 2.2722900000000004
+                  "two_site_split_total_ms": 3.2727470000000003
                 }
               ],
               "dmax": 16,
@@ -814,7 +814,7 @@
                     "relative_discarded_weight": 1.0708523621277513e-25,
                     "renormalized": true,
                     "svd_driver": "scipy_gesdd",
-                    "svd_elapsed_ms": 0.024875,
+                    "svd_elapsed_ms": 0.031125,
                     "svd_failed_attempts": []
                   },
                   "last_pre_normalization_norm": 0.999999967795993,
@@ -843,11 +843,11 @@
                   },
                   "svd_fallback_count": 0,
                   "svd_requested_driver": "auto",
-                  "svd_total_ms": 1.900915,
+                  "svd_total_ms": 2.1604950000000005,
                   "tensor_device": "cpu",
                   "truncated": true,
                   "two_site_calls": 71,
-                  "two_site_contraction_total_ms": 0.9955809999999999,
+                  "two_site_contraction_total_ms": 1.1419119999999996,
                   "two_site_matrix_shape_calls": {
                     "16x16": 1,
                     "16x32": 1,
@@ -881,7 +881,7 @@
                     "8x8": 1
                   },
                   "two_site_max_matrix_elements": 1024,
-                  "two_site_split_total_ms": 2.353625
+                  "two_site_split_total_ms": 2.7152489999999996
                 }
               ],
               "dmax": 32,
@@ -894,19 +894,19 @@
         "max_amplitude_error": 6.866811360298427e-07,
         "peak_bond": 32
       },
-      "mettleq_median_ms": 10.052666009869426,
+      "mettleq_median_ms": 12.101500004064292,
       "notebook": "qiskit/14_mps_topology_and_convergence.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 0.7809170056134462,
-      "reference_over_mettleq": 0.07768257742242345,
+      "reference_median_ms": 0.8689580135978758,
+      "reference_over_mettleq": 0.07180581029674306,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "matrix_product_state"
     },
     {
-      "check": "per-width statevector atol=3e-6 and policy-selected GPU",
+      "check": "per-width statevector atol=3e-6, policy-selected GPU, and 20q speedup >=1.5x",
       "exact_match": false,
       "framework": "qiskit",
       "machine": "arm64",
@@ -914,37 +914,53 @@
         "widths": [
           {
             "device": "cpu",
-            "error": 1.0412182105401513e-07,
+            "error": 2.26429405669748e-07,
             "method": "statevector",
-            "mettleq_ms": 0.9884165046969429,
-            "reference_ms": 0.6587079988094047,
+            "mettleq_ms": 2.864792011678219,
+            "reference_ms": 2.3859579814597964,
             "width": 12
           },
           {
-            "device": "gpu",
-            "error": 1.3858108138808944e-07,
+            "device": "cpu",
+            "error": 2.2651331799128371e-07,
             "method": "statevector",
-            "mettleq_ms": 2.1048954949947074,
-            "reference_ms": 1.4170835056575015,
+            "mettleq_ms": 5.77191699994728,
+            "reference_ms": 5.03766699694097,
             "width": 14
           },
           {
             "device": "gpu",
-            "error": 9.131542633156187e-08,
+            "error": 8.762698933129087e-08,
             "method": "statevector",
-            "mettleq_ms": 3.471666990662925,
-            "reference_ms": 4.250521000358276,
+            "mettleq_ms": 3.4598330094013363,
+            "reference_ms": 10.67795802373439,
             "width": 16
+          },
+          {
+            "device": "gpu",
+            "error": 1.205287913919051e-07,
+            "method": "statevector",
+            "mettleq_ms": 5.704417009837925,
+            "reference_ms": 63.26520899892785,
+            "width": 18
+          },
+          {
+            "device": "gpu",
+            "error": 8.314292040956239e-08,
+            "method": "statevector",
+            "mettleq_ms": 5.888041981961578,
+            "reference_ms": 441.5097080054693,
+            "width": 20
           }
         ]
       },
-      "mettleq_median_ms": 2.1048954949947074,
+      "mettleq_median_ms": 5.704417009837925,
       "notebook": "qiskit/15_apple_gpu_scaling.ipynb",
-      "notes": "The aggregate medians summarize different widths; use the per-width rows for timing interpretation.",
+      "notes": "The aggregate medians summarize different widths. The printed per-width table is the performance evidence; ratios above 1 mean MettleQ was faster.",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 1.4170835056575015,
-      "reference_over_mettleq": 0.6732322383829629,
+      "reference_median_ms": 10.67795802373439,
+      "reference_over_mettleq": 1.8718754265894342,
       "schema_version": 1,
       "selected_device": "gpu",
       "selected_method": "statevector"
@@ -961,13 +977,13 @@
         "observed_probability": 0.955078125,
         "tvd": 0.0048828125
       },
-      "mettleq_median_ms": 29.768083011731505,
+      "mettleq_median_ms": 36.33541698218323,
       "notebook": "qiskit/16_peaked_circuit_smoke.ipynb",
       "notes": "This mirrored regression is not the full 56-qubit P9 quantum-advantage instance.",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 5.589250009506941,
-      "reference_over_mettleq": 0.18775982340899264,
+      "reference_median_ms": 9.364792000269517,
+      "reference_over_mettleq": 0.2577317883777545,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "matrix_product_state"
@@ -985,13 +1001,13 @@
           1.2212453270876722e-15
         ]
       },
-      "mettleq_median_ms": 2.5569999997969717,
+      "mettleq_median_ms": 4.091332986718044,
       "notebook": "pennylane/01_qnodes_and_measurements.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 0.6353749777190387,
-      "reference_over_mettleq": 0.2484845435156387,
+      "reference_median_ms": 0.7526669942308217,
+      "reference_over_mettleq": 0.1839662028669514,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -1012,13 +1028,13 @@
         },
         "tvd": 0.001708984375
       },
-      "mettleq_median_ms": 3.8671249931212515,
+      "mettleq_median_ms": 6.429249973734841,
       "notebook": "pennylane/02_finite_shots.ipynb",
       "notes": "Independent device RNG implementations need not return identical count dictionaries.",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 3.6904580192640424,
-      "reference_over_mettleq": 0.9543156804676705,
+      "reference_median_ms": 6.040915992343798,
+      "reference_over_mettleq": 0.9395988672119628,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -1039,13 +1055,13 @@
           -0.38811250739410824
         ]
       },
-      "mettleq_median_ms": 4.005708993645385,
+      "mettleq_median_ms": 8.029583987081423,
       "notebook": "pennylane/03_parameter_shift_gradients.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 1.468832982936874,
-      "reference_over_mettleq": 0.36668489529993703,
+      "reference_median_ms": 2.8279999969527125,
+      "reference_over_mettleq": 0.35219757356079767,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -1080,13 +1096,13 @@
           0.012694577493989834
         ]
       },
-      "mettleq_median_ms": 50.576562993228436,
+      "mettleq_median_ms": 99.57802049757447,
       "notebook": "pennylane/04_variational_optimization.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 24.82808350760024,
-      "reference_over_mettleq": 0.49090096357327423,
+      "reference_median_ms": 46.59139600698836,
+      "reference_over_mettleq": 0.4678883530138384,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -1101,13 +1117,13 @@
         "mettleq_final": -1.0538829098641873,
         "reference_final": -1.0538829210415113
       },
-      "mettleq_median_ms": 176.08364550687838,
+      "mettleq_median_ms": 321.8692084919894,
       "notebook": "pennylane/05_vqe.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 28.81266649637837,
-      "reference_over_mettleq": 0.16363056553854036,
+      "reference_median_ms": 64.78208350017667,
+      "reference_over_mettleq": 0.2012683468657703,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -1125,13 +1141,13 @@
         ],
         "max_cost_error": 1.0100355170017394e-06
       },
-      "mettleq_median_ms": 77.59083301061764,
+      "mettleq_median_ms": 105.1137079775799,
       "notebook": "pennylane/06_qaoa_maxcut.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 19.335833989316598,
-      "reference_over_mettleq": 0.24920255704266836,
+      "reference_median_ms": 31.58904198789969,
+      "reference_over_mettleq": 0.30052257308473446,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -1146,13 +1162,13 @@
         "max_probability_error": 3.543330795441335e-08,
         "mode": 3
       },
-      "mettleq_median_ms": 1.5974999987520278,
+      "mettleq_median_ms": 1.4072910125833005,
       "notebook": "pennylane/07_qft_and_qpe.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 0.6339999963529408,
-      "reference_over_mettleq": 0.39687010757322294,
+      "reference_median_ms": 1.270791981369257,
+      "reference_over_mettleq": 0.9030058246705644,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -1172,13 +1188,13 @@
         ],
         "trace_error": 1.565388414812713e-08
       },
-      "mettleq_median_ms": 166.6328124993015,
+      "mettleq_median_ms": 291.5786875091726,
       "notebook": "pennylane/08_variational_classifier.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 69.27462501334958,
-      "reference_over_mettleq": 0.4157321956840881,
+      "reference_median_ms": 133.50700000592042,
+      "reference_over_mettleq": 0.4578764008659601,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -1243,13 +1259,13 @@
           ]
         ]
       },
-      "mettleq_median_ms": 1.9045420049224049,
+      "mettleq_median_ms": 3.22995797614567,
       "notebook": "pennylane/09_quantum_kernel.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 1.2101670145057142,
-      "reference_over_mettleq": 0.6354110391779041,
+      "reference_median_ms": 2.400124998530373,
+      "reference_over_mettleq": 0.7430824228228684,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -1263,13 +1279,13 @@
         "analytic_receiver_error": 1.819067652064632e-07,
         "reference_error": 1.819067652064632e-07
       },
-      "mettleq_median_ms": 13.50816700141877,
+      "mettleq_median_ms": 26.814250013558194,
       "notebook": "pennylane/10_teleportation_deferred.ipynb",
       "notes": "MettleQ does not claim native mid-circuit control; this notebook applies the deferred coherent circuit explicitly.",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 4.785667028045282,
-      "reference_over_mettleq": 0.3542795278991325,
+      "reference_median_ms": 7.966916979057714,
+      "reference_over_mettleq": 0.29711504051127186,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -1327,13 +1343,13 @@
           1.2
         ]
       },
-      "mettleq_median_ms": 21.754750021500513,
+      "mettleq_median_ms": 45.98758299835026,
       "notebook": "pennylane/11_hamiltonian_simulation.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 11.421291012084112,
-      "reference_over_mettleq": 0.5250021719760648,
+      "reference_median_ms": 18.79174998612143,
+      "reference_over_mettleq": 0.40862660659499234,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "statevector"
@@ -1401,19 +1417,19 @@
         "expectation_error": 4.2955840662273204e-08,
         "max_amplitude_error": 5.484279513658395e-07
       },
-      "mettleq_median_ms": 27.27508297539316,
+      "mettleq_median_ms": 47.12862498126924,
       "notebook": "pennylane/12_mps_convergence.ipynb",
       "notes": "",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 2.2385419870261103,
-      "reference_over_mettleq": 0.08207278375818919,
+      "reference_median_ms": 4.558167012874037,
+      "reference_over_mettleq": 0.0967175896747599,
       "schema_version": 1,
       "selected_device": "cpu",
       "selected_method": "matrix_product_state"
     },
     {
-      "check": "per-width statevector atol=3e-6 and policy-selected GPU",
+      "check": "per-width statevector atol=3e-6, policy-selected GPU, and 20q speedup >=1.5x",
       "exact_match": false,
       "framework": "pennylane",
       "machine": "arm64",
@@ -1421,37 +1437,53 @@
         "widths": [
           {
             "device": "cpu",
-            "error": 1.0412182105401513e-07,
+            "error": 1.3119846298259574e-07,
             "method": "statevector",
-            "mettleq_ms": 1.6983749956125394,
-            "reference_ms": 1.3478539913194254,
+            "mettleq_ms": 4.4152080081403255,
+            "reference_ms": 3.561208985047415,
             "width": 12
           },
           {
-            "device": "gpu",
-            "error": 1.3858108138808944e-07,
+            "device": "cpu",
+            "error": 1.669086732158931e-07,
             "method": "statevector",
-            "mettleq_ms": 2.9038954962743446,
-            "reference_ms": 1.8154374993173406,
+            "mettleq_ms": 7.052333006868139,
+            "reference_ms": 6.698582990793511,
             "width": 14
           },
           {
             "device": "gpu",
-            "error": 9.131542633156187e-08,
+            "error": 6.964216717197935e-08,
             "method": "statevector",
-            "mettleq_ms": 4.002208501333371,
-            "reference_ms": 4.051854513818398,
+            "mettleq_ms": 5.738000007113442,
+            "reference_ms": 14.105624984949827,
             "width": 16
+          },
+          {
+            "device": "gpu",
+            "error": 1.1788978770965741e-07,
+            "method": "statevector",
+            "mettleq_ms": 6.760082993423566,
+            "reference_ms": 49.70725000021048,
+            "width": 18
+          },
+          {
+            "device": "gpu",
+            "error": 1.6067298935773522e-07,
+            "method": "statevector",
+            "mettleq_ms": 7.528624992119148,
+            "reference_ms": 380.6843330094125,
+            "width": 20
           }
         ]
       },
-      "mettleq_median_ms": 2.9038954962743446,
+      "mettleq_median_ms": 6.760082993423566,
       "notebook": "pennylane/13_apple_gpu_scaling.ipynb",
-      "notes": "The aggregate medians summarize different widths; use per-width timings for interpretation.",
+      "notes": "The aggregate medians summarize different widths. The printed per-width table is the performance evidence; ratios above 1 mean MettleQ was faster.",
       "passed": true,
       "python": "3.13.2",
-      "reference_median_ms": 1.8154374993173406,
-      "reference_over_mettleq": 0.6251731515980931,
+      "reference_median_ms": 14.105624984949827,
+      "reference_over_mettleq": 2.0866052974012668,
       "schema_version": 1,
       "selected_device": "gpu",
       "selected_method": "statevector"

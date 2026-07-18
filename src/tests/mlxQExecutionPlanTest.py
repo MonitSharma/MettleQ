@@ -40,11 +40,12 @@ def _qft_ops(n):
     return ops
 
 
-def test_metal_policy_is_explicit_and_invalid_values_fail_closed(monkeypatch):
+def test_metal_policy_defaults_to_capability_probed_auto(monkeypatch):
     monkeypatch.delenv("METTLEQ_METAL_KERNELS", raising=False)
-    off = metal_runtime_status(4)
-    assert off["policy"] == "off_by_default"
-    assert not off["enabled"]
+    automatic = metal_runtime_status(4)
+    assert automatic["policy"] == "auto_default"
+    assert automatic["requested"]
+    assert automatic["enabled"] == all(automatic["checks"].values())
 
     monkeypatch.setenv("METTLEQ_METAL_KERNELS", "not-a-policy")
     invalid = metal_runtime_status(4)
@@ -317,8 +318,8 @@ def _streaming_ops(kind, n):
 @pytest.mark.parametrize(
     ("kind", "family", "expected_launches"),
     [
-        ("uniform_u2", "uniform_single_qubit_layer", 3),
-        ("per_qubit_u2", "per_qubit_single_qubit_layer", 3),
+        ("uniform_u2", "uniform_single_qubit_layer", 2),
+        ("per_qubit_u2", "per_qubit_single_qubit_layer", 2),
         ("xx", "xx_layer", 5),
         ("yy", "yy_layer", 7),
     ],

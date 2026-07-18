@@ -1,8 +1,8 @@
 # MettleQ Metal shaders
 
-Every hand-tuned Metal kernel in MettleQ lives in this package. All kernels are
-**opt-in** (`METTLEQ_METAL_KERNELS=1`); with the flag unset the simulator uses the
-pure-MLX structured dispatch path unchanged. Each kernel entry records the
+Every hand-tuned Metal kernel in MettleQ lives in this package. Supported Apple
+GPUs select the kernels automatically; `METTLEQ_METAL_KERNELS=0` forces the
+pure-MLX structured dispatch path. Each kernel entry records the
 design, the derivation where non-obvious, measured numbers at 25 qubits on an
 idle M1 Max (mean over ≥10 repeats after warmup), the parity error vs the
 pure-MLX path, and the codex CLI review outcome.
@@ -45,6 +45,11 @@ a hard allocator ceiling.
   before implementation. History: `paper/tqc-acm-2026/reviews_20260704_shaders/`.
 
 ### single_qubit.py — fused all-qubit 1q layers (`rx_layer_all`, `u2_layer_all`)
+
+Generic uniform and per-qubit matrix layers use radix-16 passes: four adjacent
+single-qubit matrices are applied while 16 amplitudes remain in registers.
+This reduces full-state memory traversals from approximately `n/2` to `n/4`;
+pair and single kernels handle the remaining one to three qubits.
 - Layers of the same 1q gate on every qubit run as ⌊n/2⌋ tensor-product
   (U⊗U) pair passes + one single pass for odd n. RX has a specialized
   real-coefficient kernel; `u2_layer_all` takes an arbitrary 2×2.

@@ -1,16 +1,15 @@
-"""Hand-written Metal shaders for structured gate layers (opt-in).
+"""Hand-written Metal shaders for structured gate layers.
 
 This package is the single home for every hand-tuned Metal kernel in MettleQ.
-The kernels quantify — and, when enabled, deliver — the headroom above the
-pure-MLX structured dispatch path. They are OFF by default: set
-METTLEQ_METAL_KERNELS=1 to route supported layers through them. The pure-MLX
-path is untouched when the flag is unset.
+The kernels quantify — and deliver — the headroom above the pure-MLX structured
+dispatch path. Supported Apple GPUs select them automatically. Set
+METTLEQ_METAL_KERNELS=0 to force the pure-MLX compatibility/ablation path.
 
 Modules:
   zz            fused exp(-i*theta*sum Z_a Z_b) layers (parity + phase LUT)
   qft           radix-4 fused QFT stages (+ single-stage fallback)
   single_qubit  fused all-qubit single-qubit layers (RX-specialized and
-                generic U (x) U tensor-product passes)
+                generic radix-16 tensor-product passes)
 
 Design notes, derivations, measured numbers, and codex-review verdicts for
 each shader live in shaders/README.md.

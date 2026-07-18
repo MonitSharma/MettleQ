@@ -31,6 +31,14 @@ def test_automatic_planner_uses_cpu_below_and_gpu_above_crossover(monkeypatch):
     assert "not combined into a speed claim" in large.cpu_gpu_policy
 
 
+def test_default_statevector_crossover_matches_complete_sdk_evidence(monkeypatch):
+    monkeypatch.setattr(planning, "_gpu_available", lambda: True)
+
+    assert planning.DEFAULT_STATEVECTOR_GPU_MIN_QUBITS == 16
+    assert planning.select_execution(14, []).selected_device == "cpu"
+    assert planning.select_execution(16, []).selected_device == "gpu"
+
+
 def test_automatic_mps_requires_opt_in_and_conservative_compatibility(monkeypatch):
     monkeypatch.setattr(planning, "_gpu_available", lambda: False)
     compatible = planning.select_execution(

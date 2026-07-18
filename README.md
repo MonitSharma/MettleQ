@@ -13,6 +13,7 @@
     <a href="#quick-start">Quick start</a> ·
     <a href="#paired-qiskit-and-pennylane-tutorials">Tutorials</a> ·
     <a href="#performance">Performance</a> ·
+    <a href="output/pdf/MettleQ_technical_report.pdf">Technical report</a> ·
     <a href="#trust-correctness-and-observability">Trust &amp; correctness</a> ·
     <a href="#sdk-integration-status">SDK status</a> ·
     <a href="#reproducing-the-results">Reproduce</a>
@@ -26,6 +27,12 @@
 > the Mac CPU for small work and the integrated GPU only when measured overhead
 > is amortized.
 
+The primary product is the Apple-GPU engine. CPU execution is a compatibility
+path and calibration baseline; Qiskit users can continue to use Aer when its
+CPU statevector or MPS implementation is faster. MettleQ's differentiator is a
+trustworthy Metal/MLX backend for Macs, analogous in role—not implementation—to
+the CUDA acceleration available on NVIDIA systems.
+
 MettleQ exposes exact statevector and bounded matrix-product-state (MPS)
 simulation through a Qiskit `BackendV2`, Qiskit SamplerV2/EstimatorV2, and a
 registered PennyLane device. Every execution selects one numerical device. It
@@ -36,15 +43,29 @@ acceleration.
 
 | Area | Current capability |
 | --- | --- |
-| Accelerated engine | MLX on Apple Silicon, plus opt-in hand-written Metal kernels |
+| Accelerated engine | Capability-probed hand-written Metal kernels on supported Apple GPUs, with MLX fallback and explicit pure-MLX ablation |
 | Simulation backends | Exact statevector (`sv`), forward matrix-product state (`mps`), and explicit midpoint-MPO/TNO plus unswapping |
 | Circuit inputs | Native Python operations, strict unitary OpenQASM 2.0, Qiskit circuits, and PennyLane QNodes |
 | Workloads | QFT, phase estimation, Grover, QAOA, VQE, QCBM, QNN, random circuits, and spin dynamics |
 | Trust model | Pre-allocation statevector checks, capability-gated dispatch, recoverable SVDs, MPS accuracy thresholds and convergence reports, explicit plans, numerical parity tests, synchronized benchmarks, and safe fallbacks |
-| Current test suite | **368 tests** across the simulator, SDK adapters, planner, algorithms, MPS/MPO, peaked circuits, QASM, Metal dispatch, campaign analysis, and MettleQ Studio backend |
+| Current test suite | **372 tests** across the simulator, SDK adapters, planner, algorithms, MPS/MPO, peaked circuits, QASM, Metal dispatch, campaign analysis, and MettleQ Studio backend |
 | Desktop product | MettleQ Studio orchestration, monitoring, plotting, and export |
 | SDK adapters | Native Qiskit backend and registered PennyLane device, plus the original internal `mettleq.qml` teaching wrapper |
 | SDK tutorials | 29 paired, executable Qiskit/PennyLane notebooks with reference parity, timing, statistical sampling checks, MPS trust evidence, and Apple GPU selection |
+
+### Reference benchmark machine
+
+The current frozen results were measured on a **14-inch MacBook Pro
+(`Mac15,7`) with an Apple M3 Pro, 12 CPU cores (6 performance + 6 efficiency),
+18 integrated GPU cores, and 36 GB unified memory**, running an arm64 build of
+macOS with Metal 4 support. The environment records MettleQ 0.2.0, MLX 0.32.0,
+Qiskit 2.5.0, Qiskit Aer 0.17.2, PennyLane 0.45.1, and PennyLane Lightning
+0.45.0. Results should be recalibrated on other Apple Silicon models.
+
+For a paper-style description of the architecture, kernel design, validation,
+matched experiments, safety model, limitations, and research roadmap, read the
+[`MettleQ technical report`](output/pdf/MettleQ_technical_report.pdf). Its
+editable source is in [`paper/MettleQ_technical_report.md`](paper/MettleQ_technical_report.md).
 
 ## Project lineage
 
@@ -239,11 +260,13 @@ print(circuit(0.3))
 ### Paired Qiskit and PennyLane tutorials
 
 [`tutorials/`](tutorials/) contains 16 Qiskit and 13 PennyLane notebooks. Each
-one runs the SDK reference path and the MettleQ path, records warm-up-aware
-median wall time, and enforces a declared agreement check. Analytic results use
-explicit numerical tolerances; deterministic algorithms also require the same
-answer; independent finite-shot RNG streams are compared statistically rather
-than being mislabeled as byte-for-byte identical.
+one is an 11–13-cell lesson with learning goals, conceptual background,
+separate problem/reference/MettleQ code blocks, warm-up-aware median wall time,
+a declared agreement check, a readable timing conclusion, and a practical
+“when should I use this?” section. Analytic results use explicit numerical
+tolerances; deterministic algorithms also require the same answer; independent
+finite-shot RNG streams are compared statistically rather than being
+mislabeled as byte-for-byte identical.
 
 The detailed [`tutorial coverage audit`](tutorials/COVERAGE.md) maps the current
 official catalogs to direct local counterparts, locally represented unitary
@@ -257,26 +280,138 @@ python tools/run_tutorial_notebooks.py
 
 Verified per-notebook timings and comparison metrics are written to
 [`tutorials/results.md`](tutorials/results.md) and
-[`tutorials/results.json`](tutorials/results.json).
+[`tutorials/results.json`](tutorials/results.json). The separate
+[`correctness audit`](tutorials/correctness_audit.md) explains why byte-for-byte
+`exact_match=False` is compatible with a passing numerical or statistical
+check: all 29 notebooks pass, and the largest primary error uses only 0.408 of
+its declared tolerance.
 
-The clean Apple M3 Pro execution on 2026-07-17 passed **29/29** notebooks in
-44.70 seconds. These are complete SDK-call timings, so they include adapter and
-dispatch overhead rather than timing only a favorable kernel.
+The clean Apple M3 Pro execution on 2026-07-18 passed **29/29** notebooks in 64.84
+seconds. These are complete SDK-call timings, so they include adapter and
+dispatch overhead rather than timing only a favorable kernel. Qiskit and
+PennyLane references already use the Apple CPU; MettleQ's additional
+opportunity is its MLX/Metal GPU path once the state is large enough.
 
 | Tutorial evidence | Qiskit | PennyLane |
 | --- | ---: | ---: |
 | Notebooks passing declared parity check | 16 / 16 | 13 / 13 |
-| 16q SDK reference statevector | 4.251 ms | 4.052 ms |
-| 16q MettleQ Apple-GPU statevector | **3.472 ms** | **4.002 ms** |
-| Reference / MettleQ at 16q | **1.224×** | **1.012×** |
+| 12q reference / MettleQ | 0.833× | 0.807× |
+| 14q reference / MettleQ | 0.873× | 0.950× |
+| 16q reference / MettleQ | **3.086×** | **2.458×** |
+| 18q reference / MettleQ | **11.091×** | **7.353×** |
+| 20q SDK reference statevector | 441.510 ms | 380.684 ms |
+| 20q MettleQ Apple-GPU statevector | **5.888 ms** | **7.529 ms** |
+| Reference / MettleQ at 20q | **74.984×** | **50.565×** |
 
-This 16-qubit crossover is a narrow result on one machine, not a universal SDK
-speedup. At 12 and 14 qubits the SDK reference remained faster, and every small
-algorithm notebook's aggregate call was reference-faster because MettleQ's
-planning and adapter overhead had not yet been amortized. Deterministic answer
-checks matched exactly in 9 notebooks; floating-point and finite-shot cases
-passed their declared numerical or statistical contracts instead of claiming
-byte-for-byte identity.
+The crossover is the reason to use MettleQ—not the expectation that every
+circuit wins. At 12 qubits the reference remained faster; from 16 through 20
+qubits this three-layer exact-state workload increasingly amortized GPU
+dispatch. Small algorithms, optimizers, sampling examples, and MPS trust
+lessons can still be reference-faster because Python, adapter, gradient, or SVD
+work dominates. Every scaling state passed the full-state error threshold;
+deterministic answers, floating-point values, and finite-shot distributions use
+their appropriate exact, numerical, or statistical contracts.
+
+#### Large-state comparison against the fastest local SDK baselines
+
+The tutorial table above is pedagogical and does not use the fastest available
+reference in every SDK. A stricter same-Mac experiment uses Qiskit Aer
+statevector and Aer MPS, selecting the faster measured CPU method at each
+width, and PennyLane `lightning.qubit` in complex128. Every arm executes the
+same depth-three circuit and returns the complete analytic statevector;
+transpilation is excluded and SDK execution plus result materialization is
+included.
+
+| Qubits | Aer fastest CPU / MettleQ GPU | Lightning CPU / MettleQ GPU | Worst full-state error |
+| ---: | ---: | ---: | ---: |
+| 16 | 0.255× | **1.445×** | `3.75e-7` |
+| 18 | 0.627× | **3.710×** | `3.98e-7` |
+| 20 | **1.327×** | **11.097×** | `4.02e-7` |
+| 22 | **3.160×** | **16.429×** | `3.35e-7` |
+| 24 | **4.554×** | **18.713×** | `1.99e-7` |
+| 26 | **4.256×** | **19.229×** | `2.60e-7` |
+| 27 | **3.561×** | **18.186×** | `2.21e-7` |
+| 28 | **2.833×** | **21.177×** | `1.22e-7` |
+| 29 | **2.739×** | **16.005×** | `1.33e-7` |
+
+Ratios above 1.0× favor MettleQ. Capability-probed native Metal selection,
+dependency-preserving frontend scheduling, sparse synthesized-U2/U3 fusion,
+and radix-16 single-qubit layers move the Qiskit crossover to 20 qubits. The
+radix-16 kernel applies four different 2x2 matrices while 16 amplitudes remain
+in registers, reducing full-state traversals from approximately `n/2` to
+`n/4`. MettleQ is 2.74–4.55× faster than Aer from 22 through 29 qubits and
+16.01–21.18× faster than Lightning over the same range. Aer MPS remains slower
+for this contract because forcing a
+complete dense state removes its compact-representation advantage.
+
+<p align="center">
+  <img src="assets/benchmarks-frozen/fork-m3pro-20260718-sdk-crossover-radix16-idle/sdk_cpu_gpu_crossover.png" alt="MettleQ radix-16 Metal GPU crossover against Qiskit Aer and PennyLane Lightning on an Apple M3 Pro from 16 to 29 qubits" width="1050"/>
+</p>
+
+The frozen [`raw data and protocol`](assets/benchmarks-frozen/fork-m3pro-20260718-sdk-crossover-radix16-idle/)
+include three timed samples per arm and a `5e-6` global-phase-aligned accuracy
+gate. Aer truncation is explicitly disabled: the pilot's subset-observable
+result disagreed with both Qiskit `Statevector` and MettleQ, while disabling
+truncation restored agreement. Full-state validation avoids that ambiguous
+contract.
+
+<p align="center">
+  <img src="assets/benchmarks-frozen/fork-m3pro-20260718-sdk-crossover-radix16-idle/radix16_idle_optimization.png" alt="Pair-fused Metal results compared with the clean radix-16 MettleQ rerun" width="980"/>
+</p>
+
+The previous/current comparison uses the same Mac and full-state contract, but
+the current run was intentionally made while the machine was otherwise idle;
+it therefore captures the combined effect of radix-16 fusion and removal of
+external load, rather than pretending to be an isolated microbenchmark.
+Dependency-aware layer recovery and native sparse fusion turn the previous Aer
+loss into a sustained large-state win. The historical generic-MLX evidence remains frozen
+in [`fork-m3pro-20260718-sdk-crossover-large/`](assets/benchmarks-frozen/fork-m3pro-20260718-sdk-crossover-large/).
+
+#### Safe dense and MPS capacity boundaries
+
+The full-state campaign safely completed 29 qubits and refused 30 qubits before
+allocation: simultaneous reference/GPU validation modeled 36 GiB at 30 qubits,
+equal to this Mac's entire physical memory. A separate scalar-observable
+campaign avoids returning giant host states and still enforces fresh workers,
+a 45%-of-RAM projected-peak cap, 6 GiB pre-launch headroom, a 5 GiB runtime
+termination guard, zero MLX free cache, and per-worker timeouts.
+
+| Qubits | Aer CPU statevector | MettleQ GPU statevector | Aer / MettleQ | Absolute Z0 error |
+| ---: | ---: | ---: | ---: | ---: |
+| 27 | 2,388.091 ms | 696.868 ms | **3.427×** | `6.76e-10` |
+| 28 | 4,696.781 ms | 1,088.176 ms | **4.316×** | `6.76e-10` |
+| 29 | 7,994.548 ms | 2,569.355 ms | **3.111×** | `2.99e-7` |
+| 30 | safety refused | safety refused | — | — |
+
+These are shallow structured capacity probes, not a promise that arbitrary
+29-qubit circuits fit. The [`safe-limit evidence`](assets/benchmarks-frozen/fork-m3pro-20260718-safe-dense-limits-radix16-idle/)
+contains the preflight and runtime-monitor records.
+
+MPS has a different limit. Matched Aer/MettleQ CPU-MPS runs completed a
+100-qubit GHZ chain and 30–40-qubit line, rainbow, and random-long-range cases.
+The line cases passed MettleQ's local thresholds; rainbow and random-long-range
+completed but exceeded the `Dmax=64` discarded-weight threshold and therefore
+need higher-bond convergence before being trusted. Aer remains substantially
+faster than MettleQ's current CPU MPS implementation. See the
+[`matched 40q MPS evidence`](assets/benchmarks-frozen/fork-m3pro-20260718-mps-40q-matched-idle/).
+
+#### Precision: why the Apple GPU uses complex64
+
+MettleQ's Metal statevector uses complex64 intentionally. MLX supports
+complex64 as its GPU complex type, while float64 arrays are CPU-only and raise
+on the GPU. Complex64 also halves state memory and memory traffic relative to
+complex128: at 29 qubits one dense state is 4 GiB instead of 8 GiB. That is a
+major performance and capacity advantage for bandwidth-bound gate kernels.
+
+The tradeoff is approximately seven decimal digits of mantissa precision.
+MettleQ therefore does not label byte inequality as failure: it validates
+global-phase-aligned states, uses float64/complex128 for sensitive host-side
+reductions where practical, reports norm/truncation evidence, and keeps CPU
+double-precision references in the benchmark pipeline. In the full-state sweep
+the worst complex64-vs-complex128 amplitude difference was `4.02e-7`, below
+the `5e-6` acceptance threshold. A future precision policy can expose
+single-GPU versus double-CPU modes explicitly, but pretending Metal provides a
+native complex128 path would be misleading.
 
 ### Choose a simulation method and device
 
@@ -312,7 +447,7 @@ backend = MettleQBackend(
 )
 ```
 
-The current M3 Pro calibration selects statevector GPU execution from 14
+The current shared M3 Pro calibration selects statevector GPU execution from 16
 qubits. MPS tensor operations can be forced onto CPU or GPU, while the stable
 SVD ladder runs on CPU. A matched seven-topology campaign found CPU faster than
 GPU tensors in every case, so automatic MPS stays on CPU unless the caller
@@ -350,14 +485,14 @@ Accuracy thresholds are based on local truncation and norm telemetry; passing
 them is not a global fidelity proof. Use convergence or an independent
 reference for results that matter.
 
-Launch the Python process with `METTLEQ_METAL_KERNELS=auto` to request custom
-Metal kernels when all capability checks pass. Without it, both SDK adapters
-use the safe pure-MLX path.
+Supported Apple GPUs now request custom Metal kernels automatically when all
+capability checks pass. Set `METTLEQ_METAL_KERNELS=0` only when you deliberately
+want the pure-MLX compatibility/ablation path.
 
 ### Run a first accelerated circuit
 
 ```bash
-METTLEQ_METAL_KERNELS=auto PYTHONPATH=src .venv/bin/python - <<'PY'
+PYTHONPATH=src .venv/bin/python - <<'PY'
 from mettleq import Device, metal_runtime_status
 
 operations = [
@@ -376,10 +511,10 @@ print("execution plan:", device.last_execution_plan)
 PY
 ```
 
-`METTLEQ_METAL_KERNELS=auto` requests custom kernels only when the runtime proves
-that the platform, GPU device, dtype, backend, indexing, and memory constraints
-are compatible. The unset default remains off; unsupported configurations fall
-back safely.
+The automatic policy selects custom kernels only when the runtime proves that
+the platform, GPU device, dtype, backend, indexing, and memory constraints are
+compatible. Unsupported configurations fall back safely. Explicit
+`METTLEQ_METAL_KERNELS=1` still requires the capable path; `0` disables it.
 
 Every exact statevector now receives a memory preflight before MLX constructs
 the array. It reports the state size, the minimum two-state out-of-place cost,
@@ -1123,10 +1258,10 @@ auditable. This fork adds explicit evidence at each layer:
 | Benchmark protocol and plotting | 10 |
 | Peaked-circuit fixtures, topology regressions, and backend recovery | 6 |
 | Custom Metal parity and dispatch | 19 |
-| Execution plans, memory policy, planner, and capability reporting | 33 |
+| Execution plans, memory policy, planner, and capability reporting | 34 |
 | Native Qiskit and PennyLane integrations and rebrand compatibility | 18 |
 | MettleQ Studio backend and MCP API | 18 |
-| **Total** | **368** |
+| **Total** | **369** |
 
 Run everything with:
 

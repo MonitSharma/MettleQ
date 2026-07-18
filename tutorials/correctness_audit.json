@@ -1,0 +1,300 @@
+{
+  "all_passed": true,
+  "bit_for_bit_matches": 9,
+  "largest_primary_error_over_tolerance": 0.40726740975956705,
+  "notebooks": 29,
+  "rows": [
+    {
+      "check": "phase-aligned statevector atol=2e-6",
+      "classification": "numerically equivalent within an explicit tolerance",
+      "declared_tolerance": 2e-06,
+      "error_over_tolerance": 0.006050808520896567,
+      "exact_match": false,
+      "notebook": "qiskit/01_backend_quickstart.ipynb",
+      "passed": true,
+      "primary_error": 1.2101617041793133e-08
+    },
+    {
+      "check": "phase-aligned statevector atol=2e-6",
+      "classification": "numerically equivalent within an explicit tolerance",
+      "declared_tolerance": 2e-06,
+      "error_over_tolerance": 0.02175088252268194,
+      "exact_match": false,
+      "notebook": "qiskit/02_statevectors_and_gates.ipynb",
+      "passed": true,
+      "primary_error": 4.350176504536388e-08
+    },
+    {
+      "check": "finite-shot total-variation distance <= 0.05",
+      "classification": "statistical agreement (independent random samples)",
+      "declared_tolerance": 0.05,
+      "error_over_tolerance": 0.0439453125,
+      "exact_match": false,
+      "notebook": "qiskit/03_sampler_and_counts.ipynb",
+      "passed": true,
+      "primary_error": 0.002197265625
+    },
+    {
+      "check": "EstimatorV2 correlation curve atol=2e-6",
+      "classification": "numerically equivalent within an explicit tolerance",
+      "declared_tolerance": 2e-06,
+      "error_over_tolerance": 0.05960464466436832,
+      "exact_match": false,
+      "notebook": "qiskit/04_estimator_chsh.ipynb",
+      "passed": true,
+      "primary_error": 1.1920928932873665e-07
+    },
+    {
+      "check": "probability vector atol=2e-6 and exact oracle class",
+      "classification": "bit-for-bit match",
+      "declared_tolerance": 2e-06,
+      "error_over_tolerance": 0.10140796219415549,
+      "exact_match": true,
+      "notebook": "qiskit/05_deutsch_jozsa.ipynb",
+      "passed": true,
+      "primary_error": 2.0281592438831098e-07
+    },
+    {
+      "check": "probability vector atol=2e-6 and exact hidden string",
+      "classification": "bit-for-bit match",
+      "declared_tolerance": 2e-06,
+      "error_over_tolerance": 0.10140796186108858,
+      "exact_match": true,
+      "notebook": "qiskit/06_bernstein_vazirani.ipynb",
+      "passed": true,
+      "primary_error": 2.0281592372217716e-07
+    },
+    {
+      "check": "probability vector atol=2e-6 and exact marked item",
+      "classification": "bit-for-bit match",
+      "declared_tolerance": 2e-06,
+      "error_over_tolerance": 0.11920928910669204,
+      "exact_match": true,
+      "notebook": "qiskit/07_grover_search.ipynb",
+      "passed": true,
+      "primary_error": 2.3841857821338408e-07
+    },
+    {
+      "check": "phase-register probabilities atol=2e-6 and identical mode",
+      "classification": "bit-for-bit match",
+      "declared_tolerance": 2e-06,
+      "error_over_tolerance": 0.11920928200126468,
+      "exact_match": true,
+      "notebook": "qiskit/08_qft_and_phase_estimation.ipynb",
+      "passed": true,
+      "primary_error": 2.3841856400252937e-07
+    },
+    {
+      "check": "compiled phase distribution atol=2e-6 and factors 3,5",
+      "classification": "bit-for-bit match",
+      "declared_tolerance": 2e-06,
+      "error_over_tolerance": 0.11920928888464744,
+      "exact_match": true,
+      "notebook": "qiskit/09_shor_order_finding.ipynb",
+      "passed": true,
+      "primary_error": 2.3841857776929487e-07
+    },
+    {
+      "check": "VQE energy trace atol=3e-6",
+      "classification": "bit-for-bit match",
+      "declared_tolerance": 3e-06,
+      "error_over_tolerance": 0.04483757927905193,
+      "exact_match": true,
+      "notebook": "qiskit/10_vqe.ipynb",
+      "passed": true,
+      "primary_error": 1.3451273783715578e-07
+    },
+    {
+      "check": "QAOA cost landscape atol=3e-6",
+      "classification": "bit-for-bit match",
+      "declared_tolerance": 3e-06,
+      "error_over_tolerance": 0.3267443982046814,
+      "exact_match": true,
+      "notebook": "qiskit/11_qaoa_maxcut.ipynb",
+      "passed": true,
+      "primary_error": 9.802331946140441e-07
+    },
+    {
+      "check": "observable trajectory atol=3e-6",
+      "classification": "numerically equivalent within an explicit tolerance",
+      "declared_tolerance": 3e-06,
+      "error_over_tolerance": 0.40726740975956705,
+      "exact_match": false,
+      "notebook": "qiskit/12_hamiltonian_simulation.ipynb",
+      "passed": true,
+      "primary_error": 1.2218022292787012e-06
+    },
+    {
+      "check": "fidelity kernel matrix atol=4e-6",
+      "classification": "numerically equivalent within an explicit tolerance",
+      "declared_tolerance": 4e-06,
+      "error_over_tolerance": 0.09656013466585733,
+      "exact_match": false,
+      "notebook": "qiskit/13_quantum_kernel.ipynb",
+      "passed": true,
+      "primary_error": 3.8624053866342933e-07
+    },
+    {
+      "check": "phase-aligned MPS state atol=8e-5 and convergence report",
+      "classification": "approximate MPS, independently checked with convergence evidence",
+      "declared_tolerance": 8e-05,
+      "error_over_tolerance": 0.008583514200373033,
+      "exact_match": false,
+      "notebook": "qiskit/14_mps_topology_and_convergence.ipynb",
+      "passed": true,
+      "primary_error": 6.866811360298427e-07
+    },
+    {
+      "check": "per-width statevector atol=3e-6, policy-selected GPU, and 20q speedup >=1.5x",
+      "classification": "numerically equivalent within an explicit tolerance",
+      "declared_tolerance": 3e-06,
+      "error_over_tolerance": 0.0755044393304279,
+      "exact_match": false,
+      "notebook": "qiskit/15_apple_gpu_scaling.ipynb",
+      "passed": true,
+      "primary_error": 2.2651331799128371e-07
+    },
+    {
+      "check": "expected mode, peak probability atol=0.025, and TVD<=0.06",
+      "classification": "statistical agreement (independent random samples)",
+      "declared_tolerance": 0.025,
+      "error_over_tolerance": 0.1953125,
+      "exact_match": false,
+      "notebook": "qiskit/16_peaked_circuit_smoke.ipynb",
+      "passed": true,
+      "primary_error": 0.0048828125
+    },
+    {
+      "check": "all analytic measurements atol=2e-6",
+      "classification": "numerically equivalent within an explicit tolerance",
+      "declared_tolerance": 2e-06,
+      "error_over_tolerance": 0.009000103527115328,
+      "exact_match": false,
+      "notebook": "pennylane/01_qnodes_and_measurements.ipynb",
+      "passed": true,
+      "primary_error": 1.8000207054230655e-08
+    },
+    {
+      "check": "finite-shot total-variation distance <= 0.05",
+      "classification": "statistical agreement (independent random samples)",
+      "declared_tolerance": 0.05,
+      "error_over_tolerance": 0.0341796875,
+      "exact_match": false,
+      "notebook": "pennylane/02_finite_shots.ipynb",
+      "passed": true,
+      "primary_error": 0.001708984375
+    },
+    {
+      "check": "value and parameter-shift gradient atol=3e-6",
+      "classification": "numerically equivalent within an explicit tolerance",
+      "declared_tolerance": 3e-06,
+      "error_over_tolerance": 0.0023613879925517742,
+      "exact_match": false,
+      "notebook": "pennylane/03_parameter_shift_gradients.ipynb",
+      "passed": true,
+      "primary_error": 7.084163977655322e-09
+    },
+    {
+      "check": "optimization trace atol=4e-5",
+      "classification": "numerically equivalent within an explicit tolerance",
+      "declared_tolerance": 4e-05,
+      "error_over_tolerance": 0.0024313769664274787,
+      "exact_match": false,
+      "notebook": "pennylane/04_variational_optimization.ipynb",
+      "passed": true,
+      "primary_error": 9.725507865709915e-08
+    },
+    {
+      "check": "VQE energy trace atol=5e-5",
+      "classification": "numerically equivalent within an explicit tolerance",
+      "declared_tolerance": 5e-05,
+      "error_over_tolerance": 0.0027551144343718192,
+      "exact_match": false,
+      "notebook": "pennylane/05_vqe.ipynb",
+      "passed": true,
+      "primary_error": 1.3775572171859096e-07
+    },
+    {
+      "check": "QAOA landscape atol=4e-6",
+      "classification": "bit-for-bit match",
+      "declared_tolerance": 4e-06,
+      "error_over_tolerance": 0.25250887925043486,
+      "exact_match": true,
+      "notebook": "pennylane/06_qaoa_maxcut.ipynb",
+      "passed": true,
+      "primary_error": 1.0100355170017394e-06
+    },
+    {
+      "check": "phase probabilities atol=3e-6 and identical mode",
+      "classification": "bit-for-bit match",
+      "declared_tolerance": 3e-06,
+      "error_over_tolerance": 0.011811102651471117,
+      "exact_match": true,
+      "notebook": "pennylane/07_qft_and_qpe.ipynb",
+      "passed": true,
+      "primary_error": 3.543330795441335e-08
+    },
+    {
+      "check": "training trace and predictions atol=8e-5",
+      "classification": "numerically equivalent within an explicit tolerance",
+      "declared_tolerance": 8e-05,
+      "error_over_tolerance": 0.0013893288505761878,
+      "exact_match": false,
+      "notebook": "pennylane/08_variational_classifier.ipynb",
+      "passed": true,
+      "primary_error": 1.1114630804609504e-07
+    },
+    {
+      "check": "kernel matrix atol=4e-6",
+      "classification": "numerically equivalent within an explicit tolerance",
+      "declared_tolerance": 4e-06,
+      "error_over_tolerance": 0.05960464466436832,
+      "exact_match": false,
+      "notebook": "pennylane/09_quantum_kernel.ipynb",
+      "passed": true,
+      "primary_error": 2.384185786574733e-07
+    },
+    {
+      "check": "receiver observables atol=3e-6",
+      "classification": "numerically equivalent within an explicit tolerance",
+      "declared_tolerance": 3e-06,
+      "error_over_tolerance": 0.0606355884021544,
+      "exact_match": false,
+      "notebook": "pennylane/10_teleportation_deferred.ipynb",
+      "passed": true,
+      "primary_error": 1.819067652064632e-07
+    },
+    {
+      "check": "observable trajectory atol=3e-6",
+      "classification": "numerically equivalent within an explicit tolerance",
+      "declared_tolerance": 3e-06,
+      "error_over_tolerance": 0.29714754819683736,
+      "exact_match": false,
+      "notebook": "pennylane/11_hamiltonian_simulation.ipynb",
+      "passed": true,
+      "primary_error": 8.914426445905121e-07
+    },
+    {
+      "check": "MPS state atol=8e-5 and Dmax convergence atol=5e-4",
+      "classification": "approximate MPS, independently checked with convergence evidence",
+      "declared_tolerance": 8e-05,
+      "error_over_tolerance": 0.006855349392072994,
+      "exact_match": false,
+      "notebook": "pennylane/12_mps_convergence.ipynb",
+      "passed": true,
+      "primary_error": 5.484279513658395e-07
+    },
+    {
+      "check": "per-width statevector atol=3e-6, policy-selected GPU, and 20q speedup >=1.5x",
+      "classification": "numerically equivalent within an explicit tolerance",
+      "declared_tolerance": 3e-06,
+      "error_over_tolerance": 0.055636224405297696,
+      "exact_match": false,
+      "notebook": "pennylane/13_apple_gpu_scaling.ipynb",
+      "passed": true,
+      "primary_error": 1.669086732158931e-07
+    }
+  ],
+  "schema_version": 1,
+  "tolerance_validated_matches": 20
+}

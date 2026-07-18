@@ -1,0 +1,8 @@
+family,qubits,depth,mettleq_cpu_routed_median_ms,mettleq_cpu_restore_median_ms,mettleq_gpu_routed_median_ms,qiskit_aer_cpu_mps_median_ms,routing_speedup,cpu_over_gpu_speedup,mettleq_over_aer_speedup,maximum_mettleq_exact_error,routed_swaps,restore_baseline_swaps,accuracy_classification
+ghz_chain,100,1,102.113833,,,3.419542,,,0.03348754913548294,,0,0,no_local_truncation_observed
+line_brickwork,30,4,76.454458,,,4.689709,,,0.06133990250771249,,0,0,within_configured_local_thresholds
+line_brickwork,40,4,78.041917,,,5.790458,,,0.07419676787283429,,0,0,within_configured_local_thresholds
+rainbow,30,1,583.906458,,,3.794917,,,0.0064991865529255705,,420,420,threshold_exceeded
+rainbow,40,1,1370.300459,,,5.7095,,,0.004166604457074038,,760,760,threshold_exceeded
+random_long_range,30,1,379.085375,,,6.71675,,,0.017718304221047834,,214,240,threshold_exceeded
+random_long_range,40,1,953.882583,,,6.423125,,,0.006733664199842089,,458,524,threshold_exceeded

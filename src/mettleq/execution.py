@@ -128,7 +128,7 @@ def _metal_policy() -> tuple[Optional[str], str, bool, bool]:
     raw = os.environ.get("METTLEQ_METAL_KERNELS")
     normalized = "" if raw is None else raw.strip().lower()
     if raw is None:
-        return raw, "off_by_default", False, True
+        return raw, "auto_default", True, True
     if normalized == "auto":
         return raw, "auto", True, True
     if normalized in _TRUE_VALUES:
@@ -467,9 +467,9 @@ def metal_runtime_status(
     """Explain whether the custom Metal path is requested and usable.
 
     ``METTLEQ_METAL_KERNELS`` accepts explicit on/off values plus ``auto``.
-    Unset remains off for compatibility.  ``auto`` enables custom kernels only
-    when every hard capability check passes.  Explicit on is still safely
-    refused when the platform or kernel constraints are unsupported.
+    Unset uses capability-probed automatic selection. ``0`` remains a stable
+    pure-MLX ablation/compatibility path. Explicit on is still safely refused
+    when the platform or kernel constraints are unsupported.
     """
     raw, policy, requested, valid_policy = _metal_policy()
     static = _static_metal_capabilities()
@@ -662,16 +662,25 @@ def _custom_dispatch_spec(op: Dict[str, Any], n: int) -> Optional[Dict[str, Any]
         kernels = ["mettleq_rx_pair"] + (["mettleq_rx_single"] if n % 2 else [])
         launches, family = n // 2 + n % 2, "uniform_rx_layer"
     elif name == "_U2LAYER":
-        kernels = ["mettleq_u2_pair"] + (["mettleq_u2_single"] if n % 2 else [])
-        launches, family = n // 2 + n % 2, "uniform_single_qubit_layer"
+        tail = n % 4
+        kernels = ["mettleq_u2_list_quad"]
+        if tail >= 2:
+            kernels.append("mettleq_u2_pair")
+        if tail % 2:
+            kernels.append("mettleq_u2_single")
+        launches, family = n // 4 + tail // 2 + tail % 2, "uniform_single_qubit_layer"
     elif name == "_U2LISTLAYER":
         active = set(op.get("active") or range(n))
-        launches = sum(
-            1 for q in range(0, n - 1, 2) if q in active or q + 1 in active
-        )
+        launches = sum(1 for q in range(0, n - 3, 4)
+                       if any(q + offset in active for offset in range(4)))
+        tail_start = n - (n % 4)
+        if n % 4 >= 2 and (tail_start in active or tail_start + 1 in active):
+            launches += 1
         if n % 2 and n - 1 in active:
             launches += 1
-        kernels = ["mettleq_u2_list_pair"]
+        kernels = ["mettleq_u2_list_quad"]
+        if n % 4 >= 2:
+            kernels.append("mettleq_u2_list_pair")
         if n % 2 and n - 1 in active:
             kernels.append("mettleq_u2_single")
         family = "per_qubit_single_qubit_layer"

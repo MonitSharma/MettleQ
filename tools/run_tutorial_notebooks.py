@@ -117,6 +117,40 @@ def _write_markdown(path: Path, payload: dict) -> None:
             f"{record['mettleq_median_ms']:.3f} | {ratio_label} | "
             f"{method_device} | {exact_label} |"
         )
+    scaling_records = [
+        record
+        for record in payload["results"]
+        if "apple_gpu_scaling" in record["notebook"]
+    ]
+    lines.extend(
+        [
+            "",
+            "## Apple Silicon crossover by width",
+            "",
+            "The SDK references already use the Apple CPU. MettleQ's additional opportunity is its MLX/Metal GPU path. Ratios above 1.0 mean MettleQ was faster for the complete statevector call; ratios below 1.0 mean the reference was faster.",
+            "",
+        ]
+    )
+    for record in scaling_records:
+        framework = {"qiskit": "Qiskit", "pennylane": "PennyLane"}.get(
+            record["framework"], record["framework"]
+        )
+        lines.extend(
+            [
+                f"### {framework}",
+                "",
+                "| Qubits | Reference (ms) | MettleQ (ms) | Reference / MettleQ | MettleQ path | Max state error |",
+                "| ---: | ---: | ---: | ---: | --- | ---: |",
+            ]
+        )
+        for row in record["metrics"]["widths"]:
+            ratio = float(row["reference_ms"]) / float(row["mettleq_ms"])
+            lines.append(
+                f"| {row['width']} | {row['reference_ms']:.3f} | "
+                f"{row['mettleq_ms']:.3f} | **{ratio:.3f}x** | "
+                f"{row['method']}/{row['device']} | `{row['error']:.2e}` |"
+            )
+        lines.append("")
     lines.extend(
         [
             "",

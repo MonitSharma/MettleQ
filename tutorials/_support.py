@@ -101,6 +101,20 @@ def total_variation_distance(
     )
 
 
+def print_scaling_table(rows: list[Mapping[str, Any]]) -> None:
+    """Print a compact per-width table without requiring pandas."""
+    print("qubits | reference ms | MettleQ ms | ref/MettleQ | path | max error")
+    print("------ | ------------ | ---------- | ----------- | ---- | ---------")
+    for row in rows:
+        ratio = float(row["reference_ms"]) / float(row["mettleq_ms"])
+        path = f"{row.get('method', '?')}/{row.get('device', '?')}"
+        print(
+            f"{int(row['width']):>6} | {float(row['reference_ms']):>12.3f} | "
+            f"{float(row['mettleq_ms']):>10.3f} | {ratio:>10.3f}x | "
+            f"{path:<15} | {float(row['error']):.2e}"
+        )
+
+
 def json_value(value: Any) -> Any:
     if isinstance(value, np.ndarray):
         return value.tolist()
@@ -151,6 +165,29 @@ def emit_result(
         "machine": platform.machine(),
         "python": platform.python_version(),
     }
+    ratio = record["reference_over_mettleq"]
+    print("\nComparison summary")
+    print("------------------")
+    print(f"Correctness contract: {'PASS' if passed else 'FAIL'} — {check}")
+    print(f"SDK reference median: {float(reference_ms):.3f} ms")
+    print(f"MettleQ median:       {float(mettleq_ms):.3f} ms")
+    if ratio is not None and ratio >= 1.0:
+        print(f"Timing interpretation: MettleQ was {ratio:.3f}x faster in this run.")
+    elif ratio is not None and ratio > 0.0:
+        print(
+            "Timing interpretation: the SDK reference was "
+            f"{(1.0 / ratio):.3f}x faster in this run."
+        )
+    if selected_method or selected_device:
+        print(f"MettleQ selected: {selected_method or '?'} / {selected_device or '?'}")
+    if exact_match is not None:
+        print(
+            "Byte-for-byte result equality: "
+            f"{'yes' if exact_match else 'no (see the declared tolerance/statistical check)'}"
+        )
+    if notes:
+        print(f"Note: {notes}")
+    print("\nMachine-readable record (used by the suite runner):")
     print(RESULT_PREFIX + json.dumps(record, sort_keys=True))
     if not passed:
         raise AssertionError(f"{notebook} comparison failed: {metrics}")

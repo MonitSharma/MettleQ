@@ -1,0 +1,14 @@
+{
+  "depth": 1,
+  "engine": "aer_cpu_statevector",
+  "engine_peak_bytes": null,
+  "evidence": {
+    "device": "CPU",
+    "method": "statevector",
+    "parallel_threads": 12
+  },
+  "execution_ms": 2388.091416010866,
+  "expectation_z0": 0.999939500610039,
+  "status": "completed",
+  "width": 27
+}

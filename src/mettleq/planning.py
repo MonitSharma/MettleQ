@@ -24,9 +24,11 @@ DEVICE_ALIASES = {
     "gpu": "gpu",
 }
 
-# Conservative defaults. The calibration benchmark records crossovers and can
-# override these per backend/device instance without changing circuit code.
-DEFAULT_STATEVECTOR_GPU_MIN_QUBITS = 14
+# Conservative defaults. Matched complete-call Qiskit/PennyLane measurements
+# on the reference M3 Pro keep 14-qubit work on CPU and cross to GPU at 16
+# qubits. The calibration benchmark can override this per backend/device
+# instance without changing circuit code.
+DEFAULT_STATEVECTOR_GPU_MIN_QUBITS = 16
 # MLX 0.32 performs MPS SVD on CPU. On the reference M3 Pro, the explicit GPU
 # tensor path did not beat the all-CPU path through 32 qubits, so automatic
 # MPS remains on CPU unless a caller supplies a measured crossover.

@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-07-18T05:43:02.120506+00:00",
+  "command": "tools/benchmark_mps_phase8.py --outdir assets/benchmarks-frozen/fork-m3pro-20260718-mps-40q-matched-idle --case ghz_chain:100:1 --case line_brickwork:30:4 --case line_brickwork:40:4 --case rainbow:30:1 --case rainbow:40:1 --case random_long_range:30:1 --case random_long_range:40:1 --implementations mettleq_cpu_routed qiskit_aer_cpu_mps --dmax 64 --eps 1e-10 --warmups 0 --repeats 1 --exact-max-qubits 20 --timeout-seconds 300",
+  "git_commit": "433f35fb9146eaee1f58f0c6ff0d2d596d63d510",
+  "git_status_porcelain": "M README.md\n M src/mettleq/device.py\n M src/mettleq/execution.py\n M src/mettleq/planning.py\n M src/mettleq/shaders/README.md\n M src/mettleq/shaders/__init__.py\n M src/mettleq/shaders/single_qubit.py\n M src/tests/mlxQExecutionPlanTest.py\n M src/tests/mlxQExecutionPlanningTest.py\n M src/tests/mlxQMetalKernelsTest.py\n M tools/build_tutorial_notebooks.py\n M tools/run_tutorial_notebooks.py\n M tutorials/README.md\n M tutorials/_support.py\n M tutorials/pennylane/01_qnodes_and_measurements.ipynb\n M tutorials/pennylane/02_finite_shots.ipynb\n M tutorials/pennylane/03_parameter_shift_gradients.ipynb\n M tutorials/pennylane/04_variational_optimization.ipynb\n M tutorials/pennylane/05_vqe.ipynb\n M tutorials/pennylane/06_qaoa_maxcut.ipynb\n M tutorials/pennylane/07_qft_and_qpe.ipynb\n M tutorials/pennylane/08_variational_classifier.ipynb\n M tutorials/pennylane/09_quantum_kernel.ipynb\n M tutorials/pennylane/10_teleportation_deferred.ipynb\n M tutorials/pennylane/11_hamiltonian_simulation.ipynb\n M tutorials/pennylane/12_mps_convergence.ipynb\n M tutorials/pennylane/13_apple_gpu_scaling.ipynb\n M tutorials/qiskit/01_backend_quickstart.ipynb\n M tutorials/qiskit/02_statevectors_and_gates.ipynb\n M tutorials/qiskit/03_sampler_and_counts.ipynb\n M tutorials/qiskit/04_estimator_chsh.ipynb\n M tutorials/qiskit/05_deutsch_jozsa.ipynb\n M tutorials/qiskit/06_bernstein_vazirani.ipynb\n M tutorials/qiskit/07_grover_search.ipynb\n M tutorials/qiskit/08_qft_and_phase_estimation.ipynb\n M tutorials/qiskit/09_shor_order_finding.ipynb\n M tutorials/qiskit/10_vqe.ipynb\n M tutorials/qiskit/11_qaoa_maxcut.ipynb\n M tutorials/qiskit/12_hamiltonian_simulation.ipynb\n M tutorials/qiskit/13_quantum_kernel.ipynb\n M tutorials/qiskit/14_mps_topology_and_convergence.ipynb\n M tutorials/qiskit/15_apple_gpu_scaling.ipynb\n M tutorials/qiskit/16_peaked_circuit_smoke.ipynb\n M tutorials/results.json\n M tutorials/results.md\n?? assets/benchmarks-frozen/fork-m3pro-20260718-mps-40q-matched-idle/\n?? assets/benchmarks-frozen/fork-m3pro-20260718-mps-40q-matched/\n?? assets/benchmarks-frozen/fork-m3pro-20260718-safe-dense-limits-radix16-idle/\n?? assets/benchmarks-frozen/fork-m3pro-20260718-safe-dense-limits/\n?? assets/benchmarks-frozen/fork-m3pro-20260718-sdk-crossover-large/\n?? assets/benchmarks-frozen/fork-m3pro-20260718-sdk-crossover-native-metal/\n?? assets/benchmarks-frozen/fork-m3pro-20260718-sdk-crossover-radix16-idle/\n?? src/tests/mlxQSafeLimitCampaignTest.py\n?? tools/audit_tutorial_correctness.py\n?? tools/benchmark_safe_dense_limits.py\n?? tools/benchmark_sdk_crossover_large.py\n?? tools/build_large_crossover_notebook.py\n?? tools/plot_native_metal_optimization.py\n?? tutorials/correctness_audit.json\n?? tutorials/correctness_audit.md\n?? tutorials/experiments/",
+  "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "python": "3.13.2",
+  "mlx": "0.32.0",
+  "qiskit": "2.5.0",
+  "qiskit_aer": "0.17.2",
+  "cases": [
+    [
+      "ghz_chain",
+      100,
+      1
+    ],
+    [
+      "line_brickwork",
+      30,
+      4
+    ],
+    [
+      "line_brickwork",
+      40,
+      4
+    ],
+    [
+      "rainbow",
+      30,
+      1
+    ],
+    [
+      "rainbow",
+      40,
+      1
+    ],
+    [
+      "random_long_range",
+      30,
+      1
+    ],
+    [
+      "random_long_range",
+      40,
+      1
+    ]
+  ],
+  "implementations": [
+    "mettleq_cpu_routed",
+    "qiskit_aer_cpu_mps"
+  ],
+  "dmax": 64,
+  "eps": 1e-10,
+  "svd_driver": "auto",
+  "routing_lookahead": 8,
+  "warmups": 0,
+  "repeats": 1,
+  "timeout_seconds_per_case": 300.0,
+  "protocol": "same Qiskit circuit and analytic Z0 EstimatorV2 contract; implementation order rotates each repeat; fresh process per case"
+}

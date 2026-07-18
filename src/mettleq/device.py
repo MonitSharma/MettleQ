@@ -489,6 +489,58 @@ class Device:
         mark_synchronized(self.last_execution_plan)
         return state
 
+    @staticmethod
+    def _dependency_schedule_for_fusion(
+        operations: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Expose frontend-independent layers without changing wire order.
+
+        SDK transpilers may emit a valid topological order that starts a
+        two-qubit gate as soon as its two wires are ready.  That serialization
+        hides otherwise parallel single-qubit layers from the Metal fusion
+        pass.  Build the per-wire dependency DAG and choose ready one-qubit
+        operations before ready multi-qubit operations.  Operations sharing a
+        wire retain their exact input order; only disjoint operations move.
+        """
+        count = len(operations)
+        if count < 2:
+            return list(operations)
+        indegree = [0] * count
+        successors = [set() for _ in range(count)]
+        last_on_wire: Dict[int, int] = {}
+        for index, operation in enumerate(operations):
+            predecessors = {
+                last_on_wire[wire]
+                for wire in operation.get("wires", [])
+                if wire in last_on_wire
+            }
+            indegree[index] = len(predecessors)
+            for predecessor in predecessors:
+                successors[predecessor].add(index)
+            for wire in operation.get("wires", []):
+                last_on_wire[wire] = index
+
+        ready = {index for index, degree in enumerate(indegree) if degree == 0}
+        scheduled: List[Dict[str, Any]] = []
+        while ready:
+            single = [
+                index
+                for index in ready
+                if len(operations[index].get("wires", [])) == 1
+            ]
+            batch = sorted(single if single else ready)
+            for index in batch:
+                ready.remove(index)
+                scheduled.append(operations[index])
+            for index in batch:
+                for successor in successors[index]:
+                    indegree[successor] -= 1
+                    if indegree[successor] == 0:
+                        ready.add(successor)
+        if len(scheduled) != count:
+            raise RuntimeError("operation dependency graph contains a cycle")
+        return scheduled
+
     def _fuse_zz_layers(self, operations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Runtime gate fusion: collapse runs of consecutive ZZPHASE ops that
         share one angle (a Trotter layer) into a single cached diagonal
@@ -504,6 +556,15 @@ class Device:
                            and hasattr(self.sim, "state"))
         except Exception:
             rx_layer_ok = False
+        # Qiskit commonly collapses rotation pairs to U2/U3 and then emits an
+        # ASAP order that hides the layer.  Do not reschedule native structured
+        # streams such as QFT: their ordered ladders already have stronger,
+        # lower-pass Metal matches.
+        if rx_layer_ok and any(
+            str(operation.get("name", "")).upper() in {"U2", "U3"}
+            for operation in operations
+        ):
+            operations = self._dependency_schedule_for_fusion(operations)
         fused: List[Dict[str, Any]] = []
         i = 0
         n_ops = len(operations)
@@ -529,6 +590,11 @@ class Device:
                     j += 1
                 k_ops = j - i
                 seqs = list(per_wire.values())
+                synthesized_u_window = bool(seqs) and all(
+                    gate_name in {"U2", "U3"}
+                    for sequence in seqs
+                    for gate_name, _ in sequence
+                )
                 uniform = (sorted(per_wire.keys()) == list(range(self.wires))
                            and all(s == seqs[0] for s in seqs))
                 if uniform and len(seqs[0]) == 1:
@@ -556,7 +622,9 @@ class Device:
                 # ops than the layer has passes. Also catches algebraic
                 # collapses (H*H = I drops out; H,H,X windows become a pure
                 # bit-flip gather).
-                if k_ops > self.wires // 2 + 1 or (uniform and len(seqs[0]) > 1):
+                if (k_ops > self.wires // 2 + 1
+                        or (uniform and len(seqs[0]) > 1)
+                        or synthesized_u_window):
                     import numpy as _np
                     # Products in complex128 with rtol=0 collapse tests:
                     # true algebraic cancellation (H*H = I) lands within
@@ -608,7 +676,9 @@ class Device:
                                   if a in active or b in active)
                         if self.wires % 2 == 1 and (self.wires - 1) in active:
                             est += 1
-                        if k_ops > est or (uniform and len(seqs[0]) > 1):
+                        if (k_ops > est
+                                or (uniform and len(seqs[0]) > 1)
+                                or (synthesized_u_window and k_ops >= est)):
                             mats = _np.tile(
                                 _np.eye(2, dtype=_np.complex64).reshape(1, 4),
                                 (self.wires, 1))
