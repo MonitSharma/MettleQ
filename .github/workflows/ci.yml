@@ -33,7 +33,15 @@ jobs:
       - name: Run backend tests
         run: python -m pytest quantumstudio/tests -q
       - name: Require a clean checkout
-        run: test -z "$(git status --porcelain)"
+        run: |
+          status="$(git status --porcelain)"
+          if [[ -n "$status" ]]; then
+            echo "Tests or generators changed the checkout:"
+            echo "$status"
+            git diff --stat
+            git diff --check
+            exit 1
+          fi
 
   apple-metal:
     name: Apple Silicon simulator and Metal tests
@@ -64,4 +72,12 @@ jobs:
       - name: Execute Qiskit and PennyLane tutorial parity suite
         run: python tools/run_tutorial_notebooks.py --no-write
       - name: Require a clean checkout
-        run: test -z "$(git status --porcelain)"
+        run: |
+          status="$(git status --porcelain)"
+          if [[ -n "$status" ]]; then
+            echo "Tests or generators changed the checkout:"
+            echo "$status"
+            git diff --stat
+            git diff --check
+            exit 1
+          fi
