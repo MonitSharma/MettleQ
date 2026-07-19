@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: >-
+  If you use MettleQ, please cite this software and identify the exact version,
+  commit, backend, hardware, precision, and result contract used.
+title: MettleQ
+type: software
+version: 0.2.0
+date-released: 2026-07-19
+license: MIT
+authors:
+  - family-names: Sharma
+    given-names: Monit
+repository-code: https://github.com/MonitSharma/MettleQ
+url: https://github.com/MonitSharma/MettleQ
+abstract: >-
+  A trustworthy local quantum-circuit simulation engine for Apple Silicon,
+  with Qiskit and PennyLane adapters, exact statevector and bounded MPS methods,
+  MLX and custom Metal execution, memory preflight, and reproducible evidence.
+keywords:
+  - quantum simulation
+  - Apple Silicon
+  - Metal
+  - MLX
+  - Qiskit
+  - PennyLane

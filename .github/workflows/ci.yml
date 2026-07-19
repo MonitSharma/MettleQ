@@ -28,6 +28,22 @@ jobs:
         run: python -m compileall -q src/mettleq src/mlxq quantumstudio/backend quantumstudio/bin
       - name: Verify generated tutorial sources
         run: python tools/build_tutorial_notebooks.py --check
+      - name: Build distributable wheel
+        run: |
+          python -m pip wheel . --no-deps --wheel-dir dist
+          python - <<'PY'
+          import glob
+          import zipfile
+
+          wheels = glob.glob("dist/mettleq-*.whl")
+          assert len(wheels) == 1, wheels
+          with zipfile.ZipFile(wheels[0]) as archive:
+              names = set(archive.namelist())
+          assert "mettleq/__init__.py" in names
+          assert any(name.endswith(".dist-info/METADATA") for name in names)
+          assert any(name.endswith(".dist-info/entry_points.txt") for name in names)
+          print("verified", wheels[0], len(names), "files")
+          PY
       - name: Verify backend test collection
         run: python -m pytest quantumstudio/tests --collect-only -q
       - name: Run backend tests
@@ -71,6 +87,10 @@ jobs:
         run: python -m pytest --cov=mettleq --cov-report=term-missing
       - name: Execute Qiskit and PennyLane tutorial parity suite
         run: python tools/run_tutorial_notebooks.py --no-write
+      - name: Run installed-SDK quickstarts
+        run: |
+          python examples/qiskit_quickstart.py
+          python examples/pennylane_quickstart.py
       - name: Require a clean checkout
         run: |
           status="$(git status --porcelain)"

@@ -1,0 +1,28 @@
+{
+  "status": "measured",
+  "backend": "cudaq_qpp",
+  "python": "3.11.13 (main, Jun  4 2025, 08:57:29) [GCC 11.4.0]",
+  "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.35",
+  "benchmarks": [
+    "qft",
+    "qaoa_ring",
+    "ghz",
+    "grover_proxy",
+    "phase_estimation",
+    "tfim_trotter"
+  ],
+  "qubits": [
+    15,
+    20,
+    24,
+    26,
+    28
+  ],
+  "warmups": 1,
+  "repeats": 3,
+  "layers": 6,
+  "files": {
+    "raw_runs": "cudaq_qpp_raw_runs.csv",
+    "summary": "cudaq_qpp_summary.csv"
+  }
+}

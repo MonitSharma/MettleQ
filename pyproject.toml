@@ -6,7 +6,34 @@ build-backend = "setuptools.build_meta"
 name = "mettleq"
 version = "0.2.0"
 description = "Trustworthy Apple Silicon quantum simulation with MLX and Metal"
-requires-python = ">=3.9"
+readme = {file = "PYPI_README.md", content-type = "text/markdown"}
+license = {file = "LICENSE"}
+authors = [
+  {name = "Monit Sharma"},
+]
+keywords = [
+  "quantum-computing",
+  "quantum-simulation",
+  "apple-silicon",
+  "metal",
+  "mlx",
+  "qiskit",
+  "pennylane",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS :: MacOS X",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering",
+]
+requires-python = ">=3.11"
 dependencies = [
   "mlx>=0.6.0",
   "rich>=13.0.0",
@@ -43,13 +70,17 @@ tests = [
 ]
 qiskit = [
   "qiskit>=2.0,<3",
+  "qiskit-aer>=0.17,<0.18",
 ]
 pennylane = [
   "pennylane>=0.45,<0.46",
+  "pennylane-lightning>=0.45,<0.46",
 ]
 sdk = [
   "pennylane>=0.45,<0.46",
+  "pennylane-lightning>=0.45,<0.46",
   "qiskit>=2.0,<3",
+  "qiskit-aer>=0.17,<0.18",
 ]
 baselines = [
   "pennylane>=0.45,<0.46",
@@ -68,6 +99,12 @@ tutorials = [
 
 [project.scripts]
 mettleq-mpo = "mettleq.midpoint_mpo:main"
+
+[project.urls]
+Homepage = "https://github.com/MonitSharma/MettleQ"
+Documentation = "https://github.com/MonitSharma/MettleQ#readme"
+Repository = "https://github.com/MonitSharma/MettleQ"
+Issues = "https://github.com/MonitSharma/MettleQ/issues"
 
 [project.entry-points."pennylane.plugins"]
 mettleq = "mettleq.integrations.pennylane:MettleQDevice"

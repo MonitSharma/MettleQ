@@ -5,7 +5,7 @@
   <p>
     <a href="https://github.com/MonitSharma/MettleQ/actions/workflows/ci.yml"><img src="https://github.com/MonitSharma/MettleQ/actions/workflows/ci.yml/badge.svg" alt="CI status"/></a>
     <img src="https://img.shields.io/badge/platform-Apple%20Silicon-111111" alt="Apple Silicon"/>
-    <img src="https://img.shields.io/badge/Python-3.9%2B-3776AB" alt="Python 3.9+"/>
+    <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB" alt="Python 3.11+"/>
     <img src="https://img.shields.io/badge/MLX-0.6%2B-6E56CF" alt="MLX 0.6+"/>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2EA44F" alt="MIT license"/></a>
   </p>
@@ -13,6 +13,7 @@
     <a href="#quick-start">Quick start</a> ·
     <a href="#paired-qiskit-and-pennylane-tutorials">Tutorials</a> ·
     <a href="#performance">Performance</a> ·
+    <a href="#apple-metal-versus-windowswsl-nvidia">NVIDIA comparison</a> ·
     <a href="output/pdf/MettleQ_technical_report.pdf">Technical report</a> ·
     <a href="#trust-correctness-and-observability">Trust &amp; correctness</a> ·
     <a href="#sdk-integration-status">SDK status</a> ·
@@ -52,6 +53,7 @@ acceleration.
 | Desktop product | MettleQ Studio orchestration, monitoring, plotting, and export |
 | SDK adapters | Native Qiskit backend and registered PennyLane device, plus the original internal `mettleq.qml` teaching wrapper |
 | SDK tutorials | 29 paired, executable Qiskit/PennyLane notebooks with reference parity, timing, statistical sampling checks, MPS trust evidence, and Apple GPU selection |
+| Cross-platform evidence | Gate-matched Windows/WSL measurements for CUDA-Q NVIDIA, PennyLane Lightning GPU/CPU, and Qiskit Aer CPU, with raw runs and explicit contract limitations |
 
 ### Reference benchmark machine
 
@@ -120,10 +122,49 @@ speedup.
 
 - Apple Silicon Mac (M1, M2, M3, or M4 family)
 - macOS 13.3 or newer recommended
-- Python 3.9 or newer
+- Python 3.11 or newer
 - Xcode command-line tools recommended for development and profiling
 
-### Install
+### Install for normal use
+
+After this repository is public, install the recommended Qiskit and PennyLane
+SDK stack directly from GitHub:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install \
+  'mettleq[sdk] @ git+https://github.com/MonitSharma/MettleQ.git'
+```
+
+The `sdk` extra includes Qiskit Aer and PennyLane Lightning so adaptive mode
+has the intended high-performance CPU fallback for small circuits and
+double-precision work. Once an official PyPI release exists, the equivalent
+command will be:
+
+```bash
+python -m pip install 'mettleq[sdk]'
+```
+
+Verify the installed distribution and both SDK entry points:
+
+```bash
+python - <<'PY'
+import mettleq
+from mettleq.integrations.qiskit import AdaptiveQiskitBackend
+from mettleq.integrations.pennylane import AdaptivePennyLaneDevice
+
+print("MettleQ", mettleq.__version__)
+print("Qiskit backend:", AdaptiveQiskitBackend.__name__)
+print("PennyLane device:", AdaptivePennyLaneDevice.__name__)
+PY
+```
+
+Clone the repository to run the complete scripts in [`examples/`](examples/)
+or the progressive lessons in [`tutorials/`](tutorials/).
+
+### Install for development
 
 ```bash
 git clone git@github.com:MonitSharma/MettleQ.git
@@ -135,7 +176,7 @@ python -m pip install --upgrade pip
 python -m pip install -e '.[plot,tests,backend]'
 ```
 
-For an SDK-focused install without the development and desktop extras:
+For an editable SDK-focused install without the development and desktop extras:
 
 ```bash
 python -m pip install -e '.[sdk]'
@@ -366,6 +407,61 @@ external load, rather than pretending to be an isolated microbenchmark.
 Dependency-aware layer recovery and native sparse fusion turn the previous Aer
 loss into a sustained large-state win. The historical generic-MLX evidence remains frozen
 in [`fork-m3pro-20260718-sdk-crossover-large/`](assets/benchmarks-frozen/fork-m3pro-20260718-sdk-crossover-large/).
+
+### Apple Metal versus Windows/WSL NVIDIA
+
+The `windows-wsl-baseline` branch added a gate-matched campaign run under WSL2
+on an NVIDIA RTX 3070 8 GB. Only its [`windows_baseline/`](windows_baseline/)
+evidence folder has been imported into `main`; none of the branch's older
+project files or `.gitignore` changes were merged. The circuits use the same
+QFT ladder, six-layer ring QAOA, GHZ chain, Grover proxy, phase-estimation
+schedule, and 20-step TFIM schedule as MettleQ's workload campaign.
+
+The Windows run measured 24 and 26 qubits, while the frozen MettleQ campaign
+measured 25. The table therefore shows the two measured Windows widths around
+the Apple result. It does not interpolate a fictional 25-qubit Windows value.
+All values below return a complete state and are mean wall times; lower is
+better.
+
+| Workload | MettleQ Metal, M3 Pro, 25q | CUDA-Q NVIDIA, RTX 3070, 24q / 26q | Lightning GPU, RTX 3070, 24q / 26q | Aer CPU under WSL, 24q |
+| --- | ---: | ---: | ---: | ---: |
+| QFT | **158.20 ms** | 82.93 / 150.64 ms | 323.40 / 1,529.23 ms | 868.87 ms |
+| Ring QAOA, 6 layers | **424.51 ms** | 85.68 / 155.19 ms | 413.74 / 1,611.73 ms | 1,259.16 ms |
+| GHZ | **27.67 ms** | 70.08 / 91.78 ms | 70.15 / 312.64 ms | 231.42 ms |
+| Grover proxy | **137.03 ms** | 63.17 / 83.31 ms | 275.62 / 1,018.28 ms | 223.16 ms |
+| Phase estimation | **233.37 ms** | 84.99 / 140.96 ms | 360.20 / 1,481.04 ms | 1,091.58 ms |
+| TFIM Trotter, 20 steps | **1,257.13 ms** | 204.35 / 463.70 ms | 1,513.36 / 6,300.58 ms | 3,614.34 ms |
+
+<p align="center">
+  <img src="windows_baseline/plots/mettleq_vs_windows_adjacent_widths.png" alt="MettleQ Apple M3 Pro Metal full-state timing beside Windows WSL RTX 3070 CUDA-Q and PennyLane Lightning GPU at adjacent widths" width="1050"/>
+</p>
+
+The result is mixed and informative:
+
+- Against Windows CPU statevector, MettleQ at 25q is 1.63–8.36× faster than
+  Aer at 24q and 9.42–19.22× faster than Lightning CPU at 24q, despite
+  simulating one additional qubit.
+- Against PennyLane `lightning.gpu`, MettleQ 25q is faster in five of six
+  comparisons at the smaller 24q Windows width and faster than every 26q row.
+  Those are adjacent-width observations, not matched-width speedups.
+- CUDA-Q's specialized NVIDIA backend is faster on QFT, QAOA, Grover proxy,
+  phase estimation, and TFIM. MettleQ is 2.53× faster than CUDA-Q NVIDIA on
+  the 24q GHZ row while executing 25q. This identifies structured shallow
+  circuits as a current Metal strength and deep controlled/interaction-heavy
+  schedules as the clearest optimization gap.
+
+Aer MPS is deliberately excluded from this chart. The historical script
+returned a full state through 25q but changed to one-shot counts above 25q;
+the apparent drop from seconds at 24q to milliseconds at 26q is a result-contract
+change, not a simulation breakthrough. The raw data remains available for
+audit, but those two regions must not be connected as one scaling curve.
+
+The detailed methodology, package versions, limitations, raw-run inventory,
+and reproducible analysis command are documented in
+[`windows_baseline/README.md`](windows_baseline/README.md). The Windows
+manifests did not record CPU model, RAM, NVIDIA driver, CUDA version, power
+mode, or thermal state, so this is useful cross-system evidence rather than a
+controlled device-efficiency claim.
 
 #### Safe dense and MPS capacity boundaries
 
