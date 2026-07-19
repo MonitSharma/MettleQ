@@ -324,6 +324,10 @@ class Device:
                 self.sim.state = metal_kernels.qft_stage_sub(
                     self.sim.state, self.sim.n, op["j"], op["m"],
                     inverse=op["inverse"])
+            elif op_name == "_QFTLAYER":
+                from . import shaders as metal_kernels
+                self.sim.state = metal_kernels.qft_stage_all(
+                    self.sim.state, self.sim.n)
             elif op_name in ("_XXLAYER", "_YYLAYER"):
                 from . import shaders as metal_kernels
                 fn = (metal_kernels.xx_layer if op_name == "_XXLAYER"
@@ -961,6 +965,43 @@ class Device:
                         continue
             fused.append(op)
             i += 1
+        # A decomposed forward QFT arrives as n-1 structured stages followed
+        # by the final H. The complete transform can use the existing radix-4
+        # kernel and execute two dependent stages per state traversal.
+        full_qft_enabled = (
+            rx_layer_ok
+            and self.wires >= 2
+            and _os.environ.get(
+                "METTLEQ_FULL_QFT_RADIX4", "1"
+            ).strip().lower() not in {"0", "false", "off", "no"}
+        )
+        if full_qft_enabled:
+            collapsed: List[Dict[str, Any]] = []
+            index = 0
+            while index < len(fused):
+                end = index + self.wires
+                candidate = fused[index:end]
+                stages = candidate[:-1]
+                final = candidate[-1] if candidate else None
+                if (
+                    len(candidate) == self.wires
+                    and all(
+                        stage.get("name") == "_QFTSTAGE"
+                        and stage.get("j") == offset
+                        and stage.get("m") == self.wires
+                        and not stage.get("inverse", False)
+                        for offset, stage in enumerate(stages)
+                    )
+                    and str((final or {}).get("name", "")).upper() == "H"
+                    and list((final or {}).get("wires", []))
+                    == [self.wires - 1]
+                ):
+                    collapsed.append({"name": "_QFTLAYER"})
+                    index = end
+                    continue
+                collapsed.append(fused[index])
+                index += 1
+            fused = collapsed
         phase_rx_enabled = (
             rx_layer_ok
             and self.wires >= 4

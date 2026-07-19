@@ -500,8 +500,7 @@ def test_metal_zz_weighted_all_distinct_angles(metal_env):
 
 
 def test_metal_qft_stage_detector_matches_mlx(metal_env):
-    """Gate-stream QFT (H + ascending CPHASE ladders) fuses to one pass per
-    stage via the forward stage detector."""
+    """A complete gate-stream QFT selects two-stage radix-4 passes."""
     import math
     n = 8
     ops = []
@@ -516,10 +515,15 @@ def test_metal_qft_stage_detector_matches_mlx(metal_env):
     mx.eval(d1.sim.state)
     os.environ["METTLEQ_METAL_KERNELS"] = "1"
     d2 = Device(n)
-    d2.execute(ops)
+    d2.execute(ops, report=True)
     mx.eval(d2.sim.state)
     err = float(mx.max(mx.abs(d1.sim.state - d2.sim.state)).item().real)
     assert err < 5e-6
+    assert d2.last_execution_plan["optimized_operation_count"] == 1
+    assert d2.last_execution_plan["expected_custom_kernel_launches"] == n // 2
+    assert d2.last_execution_plan["matched_structured_patterns"] == {
+        "full_qft_radix4": 1
+    }
 
 
 def test_metal_iqft_stage_detector_matches_mlx(metal_env):

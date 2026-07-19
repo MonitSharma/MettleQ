@@ -219,6 +219,9 @@ def test_checkpoint_budget_policy_is_opt_in_and_rejects_invalid_values(monkeypat
 
 def test_checkpointing_occurs_between_fused_layers_and_preserves_state(monkeypatch):
     monkeypatch.setenv("METTLEQ_METAL_KERNELS", "1")
+    # Retain the multi-stage plan so this test continues to exercise a
+    # checkpoint between optimized operations rather than full-QFT collapse.
+    monkeypatch.setenv("METTLEQ_FULL_QFT_RADIX4", "0")
     capability = metal_runtime_status(4)
     if not capability["enabled"]:
         pytest.skip(capability["reason"])
@@ -402,10 +405,10 @@ def test_metal_plan_observes_qft_dispatch_and_synchronized_evaluation(monkeypatc
     dev.execute(_qft_ops(4), report=True)
     plan = dev.last_execution_plan
     assert plan is not None
-    assert plan["matched_structured_patterns"] == {"qft_stage": 3}
-    assert plan["selected_concrete_kernels"] == ["mettleq_qft_stage_gen"]
-    assert plan["expected_custom_kernel_launches"] == 3
-    assert len(plan["observed_custom_dispatches"]) == 3
+    assert plan["matched_structured_patterns"] == {"full_qft_radix4": 1}
+    assert plan["selected_concrete_kernels"] == ["mettleq_qft_radix4"]
+    assert plan["expected_custom_kernel_launches"] == 2
+    assert len(plan["observed_custom_dispatches"]) == 1
     assert plan["execution_status"] == "lazy_graph_built"
 
     dev.synchronize()

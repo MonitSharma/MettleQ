@@ -661,6 +661,11 @@ def _custom_dispatch_spec(op: Dict[str, Any], n: int) -> Optional[Dict[str, Any]
         kernels, launches, family = ["mettleq_diag_weighted_layer"], 1, "diagonal_weighted"
     elif name == "_QFTSTAGE":
         kernels, launches, family = ["mettleq_qft_stage_gen"], 1, "qft_stage"
+    elif name == "_QFTLAYER":
+        kernels = ["mettleq_qft_radix4"]
+        if n % 2:
+            kernels.append("mettleq_qft_stage_pair")
+        launches, family = n // 2 + n % 2, "full_qft_radix4"
     elif name == "_RXLAYER":
         rx_radix16 = os.environ.get(
             "METTLEQ_RX_RADIX16", "1"
