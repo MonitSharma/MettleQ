@@ -41,7 +41,7 @@ jobs:
           --baseline assets/benchmarks-frozen/fork-m3pro-20260718-sdk-crossover-radix16-idle/results.json
           --current performance/crossover/results.json
           --maximum-regression 0.15
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: mettleq-performance-${{ github.sha }}
           path: performance/
