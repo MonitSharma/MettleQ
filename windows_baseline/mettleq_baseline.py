@@ -64,16 +64,36 @@ def _sync(state) -> None:
         synchronize()
 
 
+def _release_metal_cache() -> None:
+    """Release both lazy-graph and Metal allocator caches between cells."""
+    gc.collect()
+    mx.clear_cache()
+    metal_clear_cache = getattr(getattr(mx, "metal", None), "clear_cache", None)
+    if callable(metal_clear_cache):
+        metal_clear_cache()
+    gc.collect()
+
+
 def _memory_gate(n_qubits: int, minimum_headroom_gib: float) -> dict:
     preflight = statevector_preflight(n_qubits)
     memory = psutil.virtual_memory()
     minimum_headroom = int(minimum_headroom_gib * (1 << 30))
-    allowed = bool(preflight["allowed"] and memory.available >= minimum_headroom)
+    minimum_peak = int(
+        preflight.get("cost_model", {}).get(
+            "minimum_input_plus_output_bytes", 0
+        )
+    )
+    required_available = minimum_peak + minimum_headroom
+    allowed = bool(
+        preflight["allowed"] and memory.available >= required_available
+    )
     return {
         "allowed": allowed,
         "statevector_preflight": preflight,
         "available_memory_bytes": int(memory.available),
         "minimum_headroom_bytes": minimum_headroom,
+        "minimum_peak_bytes": minimum_peak,
+        "required_available_bytes": required_available,
     }
 
 
@@ -146,8 +166,7 @@ def run(args: argparse.Namespace) -> int:
                     samples.append(elapsed_ms)
                 if run_index + 1 < args.warmups + args.repeats:
                     del device
-                    gc.collect()
-                    mx.clear_cache()
+                    _release_metal_cache()
             assert last_state is not None and last_plan is not None
             norm = float(mx.sum(mx.abs(last_state) ** 2).item())
             max_error = ""
@@ -183,8 +202,7 @@ def run(args: argparse.Namespace) -> int:
                 flush=True,
             )
             del device, last_state
-            gc.collect()
-            mx.clear_cache()
+            _release_metal_cache()
 
     if not raw_rows:
         raise RuntimeError("no benchmark cells completed")
