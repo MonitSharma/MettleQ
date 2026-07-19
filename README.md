@@ -417,38 +417,36 @@ project files or `.gitignore` changes were merged. The circuits use the same
 QFT ladder, six-layer ring QAOA, GHZ chain, Grover proxy, phase-estimation
 schedule, and 20-step TFIM schedule as MettleQ's workload campaign.
 
-The Windows run measured 24 and 26 qubits, while the frozen MettleQ campaign
-measured 25. The table therefore shows the two measured Windows widths around
-the Apple result. It does not interpolate a fictional 25-qubit Windows value.
-All values below return a complete state and are mean wall times; lower is
-better.
+MettleQ was rerun at the Windows campaign's exact 15, 20, 24, 26, and
+28-qubit widths after adding radix-16 RX and combined chain-phase/RX Metal
+passes. Both campaigns use one warm-up, three measured repeats, the same
+circuits, and a synchronized complete-state result. The 28-qubit endpoint is
+shown below; lower is better.
 
-| Workload | MettleQ Metal, M3 Pro, 25q | CUDA-Q NVIDIA, RTX 3070, 24q / 26q | Lightning GPU, RTX 3070, 24q / 26q | Aer CPU under WSL, 24q |
+| Workload | MettleQ Metal, M3 Pro | CUDA-Q NVIDIA, RTX 3070 | Lightning GPU, RTX 3070 | Aer CPU under WSL |
 | --- | ---: | ---: | ---: | ---: |
-| QFT | **158.20 ms** | 82.93 / 150.64 ms | 323.40 / 1,529.23 ms | 868.87 ms |
-| Ring QAOA, 6 layers | **424.51 ms** | 85.68 / 155.19 ms | 413.74 / 1,611.73 ms | 1,259.16 ms |
-| GHZ | **27.67 ms** | 70.08 / 91.78 ms | 70.15 / 312.64 ms | 231.42 ms |
-| Grover proxy | **137.03 ms** | 63.17 / 83.31 ms | 275.62 / 1,018.28 ms | 223.16 ms |
-| Phase estimation | **233.37 ms** | 84.99 / 140.96 ms | 360.20 / 1,481.04 ms | 1,091.58 ms |
-| TFIM Trotter, 20 steps | **1,257.13 ms** | 204.35 / 463.70 ms | 1,513.36 / 6,300.58 ms | 3,614.34 ms |
+| QFT | **1,916.77 ms** | 340.38 ms | 6,635.45 ms | 13,860.52 ms |
+| Ring QAOA, 6 layers | **2,405.73 ms** | 463.80 ms | 7,254.50 ms | 17,438.65 ms |
+| GHZ | **327.17 ms** | 173.24 ms | 1,141.82 ms | 3,332.40 ms |
+| Grover proxy | **969.01 ms** | 165.94 ms | 4,350.20 ms | 3,001.91 ms |
+| Phase estimation | **2,342.78 ms** | 363.80 ms | 6,881.60 ms | 16,894.65 ms |
+| TFIM Trotter, 20 steps | **7,645.69 ms** | 1,565.92 ms | 27,163.63 ms | 54,528.06 ms |
 
 <p align="center">
-  <img src="windows_baseline/plots/mettleq_vs_windows_adjacent_widths.png" alt="MettleQ Apple M3 Pro Metal full-state timing beside Windows WSL RTX 3070 CUDA-Q and PennyLane Lightning GPU at adjacent widths" width="1050"/>
+  <img src="windows_baseline/plots/mettleq_vs_windows_matched_widths.png" alt="Matched-width MettleQ Apple M3 Pro Metal and Windows WSL RTX 3070 full-state scaling" width="1050"/>
 </p>
 
 The result is mixed and informative:
 
-- Against Windows CPU statevector, MettleQ at 25q is 1.63–8.36× faster than
-  Aer at 24q and 9.42–19.22× faster than Lightning CPU at 24q, despite
-  simulating one additional qubit.
-- Against PennyLane `lightning.gpu`, MettleQ 25q is faster in five of six
-  comparisons at the smaller 24q Windows width and faster than every 26q row.
-  Those are adjacent-width observations, not matched-width speedups.
-- CUDA-Q's specialized NVIDIA backend is faster on QFT, QAOA, Grover proxy,
-  phase estimation, and TFIM. MettleQ is 2.53× faster than CUDA-Q NVIDIA on
-  the 24q GHZ row while executing 25q. This identifies structured shallow
-  circuits as a current Metal strength and deep controlled/interaction-heavy
-  schedules as the clearest optimization gap.
+- At 28 qubits MettleQ is 3.10–10.19× faster than the Windows Aer CPU
+  statevector and 19.53–46.58× faster than Windows Lightning CPU.
+- MettleQ beats PennyLane `lightning.gpu` on every workload at every measured
+  width. At 28 qubits the advantage is 2.94–4.49×.
+- CUDA-Q's specialized NVIDIA backend is faster at 28 qubits by 1.89–6.44×.
+  MettleQ wins every CUDA-Q comparison at 15 and 20 qubits, remains 1.03×
+  faster on 24-qubit Grover proxy, and 1.09× faster on 26-qubit GHZ. The
+  crossover identifies launch amortization as an Apple strength and sustained
+  high-width bandwidth as the remaining NVIDIA gap.
 
 Aer MPS is deliberately excluded from this chart. The historical script
 returned a full state through 25q but changed to one-shot counts above 25q;
@@ -456,6 +454,7 @@ the apparent drop from seconds at 24q to milliseconds at 26q is a result-contrac
 change, not a simulation breakthrough. The raw data remains available for
 audit, but those two regions must not be connected as one scaling curve.
 
+The plot connects only exact-width observations—there is no interpolation.
 The detailed methodology, package versions, limitations, raw-run inventory,
 and reproducible analysis command are documented in
 [`windows_baseline/README.md`](windows_baseline/README.md). The Windows

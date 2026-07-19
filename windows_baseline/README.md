@@ -1,105 +1,99 @@
 # Windows/WSL NVIDIA baseline
 
 This folder preserves the benchmark scripts and measurements added by commit
-`ca9a1f5` on the `windows-wsl-baseline` branch. It was imported into MettleQ
-`main` as a folder-only change so the newer Apple engine, documentation,
-packaging, and release safeguards on `main` remain authoritative.
+`ca9a1f5` on `windows-wsl-baseline`. Only this evidence folder was imported;
+the maintained source, packaging, and documentation remain those from `main`.
 
-## Recorded environment
+## Systems and measurement contract
 
-The campaign ran under WSL2 Ubuntu on Windows with an NVIDIA RTX 3070 8 GB.
-The manifests record Linux
-`6.18.33.2-microsoft-standard-WSL2`, x86-64, Python 3.11.13, PennyLane 0.45.1,
-PennyLane Lightning 0.45.0, and NumPy 2.4.6. The CUDA-Q, Qiskit, Aer, NVIDIA
-driver, and CUDA versions were not captured in the existing manifests. Neither
-were the Windows CPU model, system RAM, power mode, or thermal state. Future
-runs should record all of them before making device-level efficiency claims.
+The Windows campaign ran in WSL2 Ubuntu on an NVIDIA RTX 3070 8 GB with
+Python 3.11.13. Its manifests capture PennyLane 0.45.1, Lightning 0.45.0,
+NumPy 2.4.6, and Linux `6.18.33.2-microsoft-standard-WSL2`. They do not capture
+the Windows CPU, RAM, CUDA-Q/Qiskit/Aer versions, NVIDIA driver, CUDA version,
+power mode, or thermal state, so this is framework evidence—not a controlled
+device-efficiency comparison.
 
-The Apple comparison uses the frozen MettleQ campaign on a 14-inch MacBook Pro
-with an M3 Pro, 12 CPU cores, 18 integrated GPU cores, and 36 GB unified memory.
-That campaign used macOS 26.5.2, Python 3.13.2, MLX 0.32.0, one warmup, and ten
-paired measured repeats at 25 qubits.
+The matched Apple campaign ran on a 14-inch MacBook Pro with an M3 Pro
+(12 CPU cores, 18 GPU cores), 36 GB unified memory, macOS 26.5.2, Python
+3.13.2, MLX 0.32.0, and MettleQ commit `3b445a1`. Each workload ran in a fresh
+process so a 28-qubit MLX allocation could not contaminate the next workload's
+memory gate. The preflight required the two-state lower bound plus 6 GiB of
+available reserve; every 28-qubit cell passed.
 
-## Workloads and timing contract
-
-The six families are gate-matched across the Windows framework scripts and the
-MettleQ workload implementation:
+Both campaigns use the same six circuit families at 15, 20, 24, 26, and 28
+qubits, one warm-up, three measured repetitions, and a complete final-state
+result:
 
 | Workload | Circuit contract |
 | --- | --- |
 | `qft` | Explicit H/controlled-phase ladder without final swaps |
-| `qaoa_ring` | Six ring layers with the same gamma and beta schedule |
-| `ghz` | One Hadamard followed by a nearest-neighbor CNOT chain |
+| `qaoa_ring` | Six ring layers with identical gamma/beta schedule |
+| `ghz` | Hadamard followed by a nearest-neighbor CNOT chain |
 | `grover_proxy` | Uniform initialization and one CZ-chain diffusion proxy |
-| `phase_estimation` | Base phase 0.4 followed by the same inverse-QFT ladder |
+| `phase_estimation` | Base phase 0.4 and the same inverse-QFT ladder |
 | `tfim_trotter` | 20 open-boundary ZZ/RX Trotter steps |
 
-CUDA-Q, PennyLane, and Aer statevector request a complete final state. Each
-Windows cell has one warmup and three measured runs and reports the arithmetic
-mean. Framework construction and transpilation are outside the Aer timing;
-QNode/kernel execution and state materialization are inside the timed region.
+MettleQ additionally checks norm at every width and compares the complete state
+against Qiskit `Statevector` through 20 qubits after global-phase alignment.
+Every accuracy check passed the `5e-6` threshold; the largest recorded checked
+amplitude error is below it. TFIM's 28-qubit norm is 0.9999736 after 20
+complex64 steps.
 
-## What the measurements say
+## Matched-width result
 
-The Windows GPU hierarchy is clear at larger widths. CUDA-Q NVIDIA is the
-strongest general dense-state backend in five of six families. Lightning GPU
-substantially outscales Lightning CPU and `default.qubit`, but remains behind
-CUDA-Q NVIDIA on these runs. GHZ is the exception: fixed CUDA-Q launch/setup
-cost remains visible on a very shallow circuit.
+The 28-qubit endpoint is:
 
-Against those results, the adjacent-width Apple comparison is:
+| Workload | MettleQ M3 Pro Metal | CUDA-Q RTX 3070 | Lightning GPU RTX 3070 | Aer CPU WSL | Lightning CPU WSL |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| QFT | **1,916.77 ms** | 340.38 | 6,635.45 | 13,860.52 | 63,080.18 |
+| Ring QAOA | **2,405.73 ms** | 463.80 | 7,254.50 | 17,438.65 | 72,095.43 |
+| GHZ | **327.17 ms** | 173.24 | 1,141.82 | 3,332.40 | 6,389.85 |
+| Grover proxy | **969.01 ms** | 165.94 | 4,350.20 | 3,001.91 | 45,135.60 |
+| Phase estimation | **2,342.78 ms** | 363.80 | 6,881.60 | 16,894.65 | 70,061.67 |
+| TFIM Trotter | **7,645.69 ms** | 1,565.92 | 27,163.63 | 54,528.06 | 276,929.24 |
 
-| Workload | MettleQ Metal M3 Pro, 25q | CUDA-Q NVIDIA RTX 3070, 24q / 26q | Lightning GPU RTX 3070, 24q / 26q |
-| --- | ---: | ---: | ---: |
-| QFT | **158.20 ms** | 82.93 / 150.64 ms | 323.40 / 1,529.23 ms |
-| Ring QAOA | **424.51 ms** | 85.68 / 155.19 ms | 413.74 / 1,611.73 ms |
-| GHZ | **27.67 ms** | 70.08 / 91.78 ms | 70.15 / 312.64 ms |
-| Grover proxy | **137.03 ms** | 63.17 / 83.31 ms | 275.62 / 1,018.28 ms |
-| Phase estimation | **233.37 ms** | 84.99 / 140.96 ms | 360.20 / 1,481.04 ms |
-| TFIM Trotter | **1,257.13 ms** | 204.35 / 463.70 ms | 1,513.36 / 6,300.58 ms |
+At 28 qubits MettleQ is 3.10–10.19× faster than Aer CPU, 19.53–46.58× faster
+than Lightning CPU, and 2.94–4.49× faster than Lightning GPU. CUDA-Q NVIDIA is
+1.89–6.44× faster at that width. At smaller widths, fixed NVIDIA launch cost is
+visible: MettleQ wins all six CUDA-Q rows at 15 and 20 qubits, and retains
+narrow wins for Grover proxy at 24 qubits and GHZ at 26 qubits.
 
-MettleQ 25q beats the Windows Aer CPU 24q result by 1.63–8.36× across all six
-families and the Windows Lightning CPU 24q result by 9.42–19.22×. Against
-Lightning GPU, MettleQ is faster than five of six 24q rows and every 26q row.
-CUDA-Q NVIDIA wins five dense, interaction-heavy families; MettleQ wins GHZ by
-2.53× versus CUDA-Q's 24q row while simulating one more qubit.
+![Matched-width Apple Metal and Windows comparison](plots/mettleq_vs_windows_matched_widths.png)
 
-These are not same-hardware or same-width speedup claims. Windows did not record
-25q, so the report shows the actual 24q and 26q measurements around MettleQ's
-25q point. It does not interpolate between them.
+The long-form, machine-readable table is
+[`results/mettleq_windows_matched_widths.csv`](results/mettleq_windows_matched_widths.csv).
+Raw Apple results and manifests are frozen under
+[`assets/benchmarks-frozen/fork-m3pro-20260719-windows-matched-metal/`](../assets/benchmarks-frozen/fork-m3pro-20260719-windows-matched-metal/).
 
-![Adjacent-width Apple Metal and Windows NVIDIA comparison](plots/mettleq_vs_windows_adjacent_widths.png)
+## Metal changes measured here
 
-The machine-readable comparison is
-[`results/mettleq_windows_adjacent_widths.csv`](results/mettleq_windows_adjacent_widths.csv).
+- All-qubit RX uses radix-16 traversal: four adjacent qubits per pass instead
+  of two. Isolated RX improved 3.07× at 20q, 1.93× at 24q, and 1.65× at 26q.
+- Chain/ring CPHASE or ZZ plus the next RX layer execute in one Metal pass.
+  Versus radix-16 alone, this improved 24q QAOA by 1.15× and TFIM by 1.14×.
+- Cumulatively, the 24q controlled-phase/ZZ-heavy paths are about 2× faster
+  than the previous pair-RX schedule while preserving exact tested parity.
 
-## MPS contract warning
+## Aer MPS contract warning
 
-The historical Aer MPS script calls `save_statevector()` at 25 qubits and
-below, but calls `measure_all()` with one shot above 25 qubits. Consequently,
-the 24q rows include full-state materialization while the 26–40q rows return a
-single sampled count. The dramatic runtime discontinuity is caused by this
-contract switch.
+The historical Aer MPS script calls `save_statevector()` through 25 qubits but
+switches to one-shot `measure_all()` above 25. The resulting runtime drop is a
+result-contract change, not a scaling breakthrough. Those raw rows remain for
+provenance but are excluded from the matched full-state plot.
 
-The raw files are retained unchanged for provenance, but the MPS points must be
-split into two experiments. A future rerun should use one result contract at
-every width—preferably fixed-shot sampling or a fixed local expectation for
-large MPS—and validate accuracy or sampling agreement separately.
+## Reproduce
 
-## Reproduce the comparison artifact
-
-From the repository root on macOS with the plotting extra installed:
+Install MettleQ with plotting dependencies, then run one workload per process
+to ensure allocator isolation:
 
 ```bash
-python -m pip install -e '.[plot]'
+python -m pip install -e '.[baselines,plot]'
+for workload in qft qaoa_ring ghz grover_proxy phase_estimation tfim_trotter; do
+  PYTHONPATH=src python windows_baseline/mettleq_baseline.py \
+    --output-dir "matched/$workload" --benchmarks "$workload"
+done
 python windows_baseline/analyze_comparison.py
 ```
 
-To rerun the Windows frameworks, create separate pinned environments for
-CUDA-Q, Qiskit Aer, and PennyLane Lightning GPU, then invoke their scripts with
-the same qubits, workloads, warmups, and repeats. Do not aggregate a failed
-backend run with stale CSV files from an older campaign; start from an empty
-results directory and archive the environment manifest with the output.
-
 The original all-backend tables are in [`results_summary.md`](results_summary.md),
-and every raw run, summary, and available manifest is in [`results/`](results/).
+and unchanged Windows raw runs and manifests are in [`results/`](results/).

@@ -76,6 +76,20 @@ pair and single kernels handle the remaining one to three qubits.
 - Codex round 1 (reviews_shaders_v2/round1_s1_diag_s2_xor_affine.md):
   CORRECT; adopted wire validation, chain/ring fast path, exact CZ LUT.
 
+### chain_phase.py — phase plus radix-16 RX (`mettleq_chain_phase_u2_quad`)
+
+- A chain/ring CPHASE layer or full-chain ZZ phase and the immediately
+  following all-qubit RX layer share each radix-16 state traversal. The kernel
+  evaluates the diagonal phase while loading 16 amplitudes, then applies four
+  adjacent RX matrices in registers. This preserves diagonal-then-RX program
+  order; incompatible topologies and dependency-bearing schedules fall back.
+- Six-layer 24q ring QAOA improved 138.04→119.99 ms and 20-step TFIM
+  458.30→401.14 ms versus the radix-16 unfused path, with launch counts falling
+  42→36 and 140→120 respectively. Direct state parity is exact in the covered
+  chain/ring tests.
+- `METTLEQ_CHAINPHASE_RX_FUSION=0` disables the combined pass for controlled
+  A/B measurement. `METTLEQ_RX_RADIX16=0` retains the older RX pair schedule.
+
 ### xor_affine.py — GF(2) affine permutation (`xor_affine_gather`) [S2]
 - Any run of CNOT/X/SWAP gates acts on basis indices as f(x)=Mx⊕c; the block
   is ONE amplitude permutation, out[y]=state[f⁻¹(y)], with f⁻¹ composed by

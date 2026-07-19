@@ -1,0 +1,151 @@
+workload,qubits,backend,mean_ms,ci95_ms,backend_over_mettleq,result_contract
+qft,15,MettleQ Metal,1.5191250034452726,1.002594487653256,1.0,synchronized full state
+qft,15,CUDA-Q NVIDIA GPU,61.518926988355815,6.420558461644051,40.496290199183775,synchronized full state
+qft,15,PennyLane Lightning GPU,11.564175332750892,1.0424662839436114,7.612392203751585,synchronized full state
+qft,15,Qiskit Aer statevector CPU,24.12081200054672,7.4091132195847695,15.878095578601073,synchronized full state
+qft,15,PennyLane Lightning CPU,6.116650667536305,0.3126461863413642,4.026430118432753,synchronized full state
+qft,20,MettleQ Metal,8.688305329997092,1.2107562239920608,1.0,synchronized full state
+qft,20,CUDA-Q NVIDIA GPU,63.01978633079367,11.00838247088613,7.25340373492776,synchronized full state
+qft,20,PennyLane Lightning GPU,33.254696666214535,0.5124995401812465,3.8275239420281357,synchronized full state
+qft,20,Qiskit Aer statevector CPU,70.79493733363051,27.066687215962038,8.148302188368673,synchronized full state
+qft,20,PennyLane Lightning CPU,90.70203233325931,2.535998715283686,10.439553962278817,synchronized full state
+qft,24,MettleQ Metal,124.89448600293447,1.7402607184879457,1.0,synchronized full state
+qft,24,CUDA-Q NVIDIA GPU,82.93042700582494,3.8696133228702854,0.6640039096992355,synchronized full state
+qft,24,PennyLane Lightning GPU,323.4035936669291,8.082032658281973,2.5894145051314,synchronized full state
+qft,24,Qiskit Aer statevector CPU,868.8719329996578,29.21860955459796,6.9568478225631445,synchronized full state
+qft,24,PennyLane Lightning CPU,3040.0172193337007,40.47738269547108,24.340684017565625,synchronized full state
+qft,26,MettleQ Metal,456.13677765747224,6.528266014109286,1.0,synchronized full state
+qft,26,CUDA-Q NVIDIA GPU,150.63998499924006,19.12261182168013,0.33025178494236757,synchronized full state
+qft,26,PennyLane Lightning GPU,1529.2323929994989,141.9567989637649,3.3525742012143747,synchronized full state
+qft,26,Qiskit Aer statevector CPU,3380.673993999759,148.18187090458943,7.411535661214356,synchronized full state
+qft,26,PennyLane Lightning CPU,14185.429014666928,65.82558002342422,31.09906876511331,synchronized full state
+qft,28,MettleQ Metal,1916.772735993921,9.878162802547374,1.0,synchronized full state
+qft,28,CUDA-Q NVIDIA GPU,340.3785153350327,47.462390743442924,0.1775789632976667,synchronized full state
+qft,28,PennyLane Lightning GPU,6635.448992667079,415.42436503578625,3.461781810677906,synchronized full state
+qft,28,Qiskit Aer statevector CPU,13860.515678999946,571.4669680112678,7.231173220863208,synchronized full state
+qft,28,PennyLane Lightning CPU,63080.18121899961,559.3370340781668,32.909577663775615,synchronized full state
+qaoa_ring,15,MettleQ Metal,2.29183366172947,1.1757182237544332,1.0,synchronized full state
+qaoa_ring,15,CUDA-Q NVIDIA GPU,58.05604233561704,8.44727369561945,25.33169981097434,synchronized full state
+qaoa_ring,15,PennyLane Lightning GPU,14.067068666918203,0.19841916868093942,6.1379099634582,synchronized full state
+qaoa_ring,15,Qiskit Aer statevector CPU,33.36896099972364,40.22613385974629,14.559940172334612,synchronized full state
+qaoa_ring,15,PennyLane Lightning CPU,9.469343999929455,0.4507815695765987,4.131776296881717,synchronized full state
+qaoa_ring,20,MettleQ Metal,10.042750004989406,1.2788459451483252,1.0,synchronized full state
+qaoa_ring,20,CUDA-Q NVIDIA GPU,70.46663066527496,6.405689200385418,7.016666812403571,synchronized full state
+qaoa_ring,20,PennyLane Lightning GPU,35.837791335022,1.0675362013189467,3.5685236929344235,synchronized full state
+qaoa_ring,20,Qiskit Aer statevector CPU,367.63285100096255,29.941339419053755,36.6067910500925,synchronized full state
+qaoa_ring,20,PennyLane Lightning CPU,139.83744333321133,10.012540202182022,13.92421829317047,synchronized full state
+qaoa_ring,24,MettleQ Metal,157.95695834094658,0.5636780786109069,1.0,synchronized full state
+qaoa_ring,24,CUDA-Q NVIDIA GPU,85.67640433708827,10.321983285825185,0.5424034828029396,synchronized full state
+qaoa_ring,24,PennyLane Lightning GPU,413.73645033309003,26.029096449849906,2.619298666412967,synchronized full state
+qaoa_ring,24,Qiskit Aer statevector CPU,1259.1551393331126,9.401390416909729,7.971507887707323,synchronized full state
+qaoa_ring,24,PennyLane Lightning CPU,3997.976191999745,150.36182999017458,25.310541770310632,synchronized full state
+qaoa_ring,26,MettleQ Metal,598.2915833398389,15.22858150163592,1.0,synchronized full state
+qaoa_ring,26,CUDA-Q NVIDIA GPU,155.19405333907343,3.5291112453400593,0.25939534778800455,synchronized full state
+qaoa_ring,26,PennyLane Lightning GPU,1611.733980000281,11.912218544518176,2.6938937883817617,synchronized full state
+qaoa_ring,26,Qiskit Aer statevector CPU,4232.510365332928,86.92220213418466,7.074327106033842,synchronized full state
+qaoa_ring,26,PennyLane Lightning CPU,17305.845624000238,65.20796921336948,28.925437204705332,synchronized full state
+qaoa_ring,28,MettleQ Metal,2405.7322640049583,16.927075786758564,1.0,synchronized full state
+qaoa_ring,28,CUDA-Q NVIDIA GPU,463.79505334577215,5.211517417944218,0.19278747692965065,synchronized full state
+qaoa_ring,28,PennyLane Lightning GPU,7254.496251665842,359.6285046355834,3.0155044101162245,synchronized full state
+qaoa_ring,28,Qiskit Aer statevector CPU,17438.648160666464,1574.6019576520735,7.248790075931127,synchronized full state
+qaoa_ring,28,PennyLane Lightning CPU,72095.42899533335,1434.3638469150724,29.968184770200494,synchronized full state
+ghz,15,MettleQ Metal,1.1653889960143715,1.2829376061464806,1.0,synchronized full state
+ghz,15,CUDA-Q NVIDIA GPU,64.79973766060236,3.1849436660987585,55.60352627510416,synchronized full state
+ghz,15,PennyLane Lightning GPU,3.354119665649099,0.07220123639980204,2.8781116666796946,synchronized full state
+ghz,15,Qiskit Aer statevector CPU,52.248574666615845,50.67161291341387,44.833591912490924,synchronized full state
+ghz,15,PennyLane Lightning CPU,2.9226783335616346,0.16713221247070784,2.5078993739920232,synchronized full state
+ghz,20,MettleQ Metal,4.816166668509443,3.0686062837110297,1.0,synchronized full state
+ghz,20,CUDA-Q NVIDIA GPU,68.81096200474228,11.572391122293135,14.287495998563232,synchronized full state
+ghz,20,PennyLane Lightning GPU,7.741389666383232,0.4423125527709821,1.607375782279378,synchronized full state
+ghz,20,Qiskit Aer statevector CPU,29.529625666934106,13.55242591728773,6.1313546019937135,synchronized full state
+ghz,20,PennyLane Lightning CPU,15.521783332587802,0.5140544019706077,3.222850121462188,synchronized full state
+ghz,24,MettleQ Metal,21.66936132319582,1.4244826597253843,1.0,synchronized full state
+ghz,24,CUDA-Q NVIDIA GPU,70.08001366436172,14.158398832752264,3.2340599530889285,synchronized full state
+ghz,24,PennyLane Lightning GPU,70.14802800040343,2.6298764040372697,3.2371986859305335,synchronized full state
+ghz,24,Qiskit Aer statevector CPU,231.4232076666182,23.922771396109386,10.67974289666271,synchronized full state
+ghz,24,PennyLane Lightning CPU,361.5493886669962,14.317018842038097,16.684819791157302,synchronized full state
+ghz,26,MettleQ Metal,84.50111132697202,1.1239621931664199,1.0,synchronized full state
+ghz,26,CUDA-Q NVIDIA GPU,91.78402167162858,10.926548287540772,1.0861871545863553,synchronized full state
+ghz,26,PennyLane Lightning GPU,312.6357043329335,112.89818918775973,3.699782161718658,synchronized full state
+ghz,26,Qiskit Aer statevector CPU,803.081531999851,24.498708002075105,9.503798463577299,synchronized full state
+ghz,26,PennyLane Lightning CPU,1353.7560436676965,46.01551622560303,16.020570882546362,synchronized full state
+ghz,28,MettleQ Metal,327.1662076682939,7.746063423712128,1.0,synchronized full state
+ghz,28,CUDA-Q NVIDIA GPU,173.24052000185475,10.789289863073948,0.5295183791643274,synchronized full state
+ghz,28,PennyLane Lightning GPU,1141.8163386673161,63.29108018501761,3.490019176506691,synchronized full state
+ghz,28,Qiskit Aer statevector CPU,3332.4006886675,359.67716068083155,10.185650628215683,synchronized full state
+ghz,28,PennyLane Lightning CPU,6389.845945333339,768.6146842883852,19.53088612321433,synchronized full state
+grover_proxy,15,MettleQ Metal,3.312222669289137,3.0419756572092322,1.0,synchronized full state
+grover_proxy,15,CUDA-Q NVIDIA GPU,55.78263333882205,10.07252487655807,16.84145026119093,synchronized full state
+grover_proxy,15,PennyLane Lightning GPU,7.747668999703213,0.25934073503306915,2.339114779794078,synchronized full state
+grover_proxy,15,Qiskit Aer statevector CPU,21.644486999624252,0.5663278096199017,6.53473185855272,synchronized full state
+grover_proxy,15,PennyLane Lightning CPU,3.742595999938203,0.4089232530993035,1.1299349028190282,synchronized full state
+grover_proxy,20,MettleQ Metal,10.717180334419632,6.57024553005996,1.0,synchronized full state
+grover_proxy,20,CUDA-Q NVIDIA GPU,58.12052132872244,2.573643886458332,5.423116856778154,synchronized full state
+grover_proxy,20,PennyLane Lightning GPU,21.16743733495241,0.4174436638110267,1.9750938842533428,synchronized full state
+grover_proxy,20,Qiskit Aer statevector CPU,52.64921233295657,22.175197040643972,4.912599274257494,synchronized full state
+grover_proxy,20,PennyLane Lightning CPU,74.33642833348131,2.630930940894037,6.936192731099252,synchronized full state
+grover_proxy,24,MettleQ Metal,61.09994433548612,2.280377236215885,1.0,synchronized full state
+grover_proxy,24,CUDA-Q NVIDIA GPU,63.16629499391032,10.059405415867381,1.0338191905229623,synchronized full state
+grover_proxy,24,PennyLane Lightning GPU,275.61825033383985,50.50605120869565,4.510941103652758,synchronized full state
+grover_proxy,24,Qiskit Aer statevector CPU,223.15775166741028,23.848885152443312,3.652339688594494,synchronized full state
+grover_proxy,24,PennyLane Lightning CPU,2379.646360000455,33.455793949972346,38.94678441823694,synchronized full state
+grover_proxy,26,MettleQ Metal,258.2083193216628,7.326757522020272,1.0,synchronized full state
+grover_proxy,26,CUDA-Q NVIDIA GPU,83.30687234411016,6.84955992883233,0.32263434641829136,synchronized full state
+grover_proxy,26,PennyLane Lightning GPU,1018.2827973318732,17.136227240321755,3.9436482914531816,synchronized full state
+grover_proxy,26,Qiskit Aer statevector CPU,706.2044670001342,21.378816419258428,2.7350182552421187,synchronized full state
+grover_proxy,26,PennyLane Lightning CPU,9977.801762333911,340.86575010023984,38.64244881244152,synchronized full state
+grover_proxy,28,MettleQ Metal,969.0132083293671,13.734467115525625,1.0,synchronized full state
+grover_proxy,28,CUDA-Q NVIDIA GPU,165.93639999822094,6.9516525022600515,0.17124266064887242,synchronized full state
+grover_proxy,28,PennyLane Lightning GPU,4350.198032666715,44.12903138799131,4.4893072615250516,synchronized full state
+grover_proxy,28,Qiskit Aer statevector CPU,3001.905016333694,305.6721110856152,3.097898966216514,synchronized full state
+grover_proxy,28,PennyLane Lightning CPU,45135.59875566716,1316.0683440343662,46.57893036719639,synchronized full state
+phase_estimation,15,MettleQ Metal,4.526957995646323,3.2454747982248837,1.0,synchronized full state
+phase_estimation,15,CUDA-Q NVIDIA GPU,52.56107833702117,6.20554157799903,11.610683904637582,synchronized full state
+phase_estimation,15,PennyLane Lightning GPU,10.459908998503428,1.0375472012865876,2.310582295785151,synchronized full state
+phase_estimation,15,Qiskit Aer statevector CPU,13.071722999181171,12.927022610655587,2.887529111547432,synchronized full state
+phase_estimation,15,PennyLane Lightning CPU,7.415245665470138,0.6942480232948831,1.6380195426159345,synchronized full state
+phase_estimation,20,MettleQ Metal,9.479777664334202,1.2446875968052682,1.0,synchronized full state
+phase_estimation,20,CUDA-Q NVIDIA GPU,60.234938660869375,6.237515473647369,6.354045505464909,synchronized full state
+phase_estimation,20,PennyLane Lightning GPU,30.886243667434126,0.5505168063109445,3.2581189940390205,synchronized full state
+phase_estimation,20,Qiskit Aer statevector CPU,42.18444366718662,0.6415059381605296,4.449940194894791,synchronized full state
+phase_estimation,20,PennyLane Lightning CPU,114.98472866636196,1.0857837861597404,12.129475261742622,synchronized full state
+phase_estimation,24,MettleQ Metal,152.06825033722757,2.6478306996476055,1.0,synchronized full state
+phase_estimation,24,CUDA-Q NVIDIA GPU,84.99033000164975,2.858855283048454,0.5588959550279209,synchronized full state
+phase_estimation,24,PennyLane Lightning GPU,360.1978583331705,40.57877618505085,2.36865918779491,synchronized full state
+phase_estimation,24,Qiskit Aer statevector CPU,1091.581127999234,105.08245008638497,7.178231653080353,synchronized full state
+phase_estimation,24,PennyLane Lightning CPU,3773.3171146671034,41.34426443143456,24.813313142614387,synchronized full state
+phase_estimation,26,MettleQ Metal,567.6849586695122,8.881400374413458,1.0,synchronized full state
+phase_estimation,26,CUDA-Q NVIDIA GPU,140.9612336816887,2.0746503762347897,0.24830891065364966,synchronized full state
+phase_estimation,26,PennyLane Lightning GPU,1481.037205667235,33.32614347072024,2.608906899943859,synchronized full state
+phase_estimation,26,Qiskit Aer statevector CPU,4285.585137332721,128.5850064790152,7.549231438819309,synchronized full state
+phase_estimation,26,PennyLane Lightning CPU,16568.18103966604,70.96053815225704,29.18552057200356,synchronized full state
+phase_estimation,28,MettleQ Metal,2342.784680008966,41.58954642840419,1.0,synchronized full state
+phase_estimation,28,CUDA-Q NVIDIA GPU,363.80000766560744,9.401156275973074,0.15528529393670748,synchronized full state
+phase_estimation,28,PennyLane Lightning GPU,6881.598971665274,304.3167219626987,2.937358704103758,synchronized full state
+phase_estimation,28,Qiskit Aer statevector CPU,16894.65114633337,477.18498779836756,7.211354628744077,synchronized full state
+phase_estimation,28,PennyLane Lightning CPU,70061.67164800111,2294.4261815818722,29.905296993718167,synchronized full state
+tfim_trotter,15,MettleQ Metal,2.656138996826485,0.09296083844364861,1.0,synchronized full state
+tfim_trotter,15,CUDA-Q NVIDIA GPU,95.48624134428489,18.63777366790841,35.94926374650213,synchronized full state
+tfim_trotter,15,PennyLane Lightning GPU,31.205375666710705,1.3639129018151313,11.748397092168151,synchronized full state
+tfim_trotter,15,Qiskit Aer statevector CPU,26.531433333730092,10.317392617117129,9.988721736862962,synchronized full state
+tfim_trotter,15,PennyLane Lightning CPU,14.945742666895967,1.4709705005797817,5.62686767701273,synchronized full state
+tfim_trotter,20,MettleQ Metal,30.061097000725567,0.4470585383488284,1.0,synchronized full state
+tfim_trotter,20,CUDA-Q NVIDIA GPU,118.2430973276496,12.717614077214307,3.9334258934328186,synchronized full state
+tfim_trotter,20,PennyLane Lightning GPU,119.67773200012743,10.53882414597507,3.981149856149256,synchronized full state
+tfim_trotter,20,Qiskit Aer statevector CPU,310.1291663333541,173.68401512780875,10.316628376065873,synchronized full state
+tfim_trotter,20,PennyLane Lightning CPU,501.41813933320617,7.539720821733978,16.679968110315592,synchronized full state
+tfim_trotter,24,MettleQ Metal,434.9543750092077,8.695468010973277,1.0,synchronized full state
+tfim_trotter,24,CUDA-Q NVIDIA GPU,204.35114732633033,10.277562449168693,0.46982202977497206,synchronized full state
+tfim_trotter,24,PennyLane Lightning GPU,1513.3594663335923,46.78343044377868,3.4793522109107546,synchronized full state
+tfim_trotter,24,Qiskit Aer statevector CPU,3614.342745666969,167.79282844298078,8.309705461844029,synchronized full state
+tfim_trotter,24,PennyLane Lightning CPU,14957.032972667852,453.64535146644965,34.387590588900785,synchronized full state
+tfim_trotter,26,MettleQ Metal,1899.5235416611347,5.5313022647089625,1.0,synchronized full state
+tfim_trotter,26,CUDA-Q NVIDIA GPU,463.70249867322855,3.5658480572265407,0.24411516283063298,synchronized full state
+tfim_trotter,26,PennyLane Lightning GPU,6300.580196000131,130.26754048225104,3.3169266175507723,synchronized full state
+tfim_trotter,26,Qiskit Aer statevector CPU,13031.389998666782,90.95866767724841,6.860346667391562,synchronized full state
+tfim_trotter,26,PennyLane Lightning CPU,62992.69760699948,117.3503709545634,33.16236741762743,synchronized full state
+tfim_trotter,28,MettleQ Metal,7645.694555336377,20.496354888454746,1.0,synchronized full state
+tfim_trotter,28,CUDA-Q NVIDIA GPU,1565.921237342991,11.374868311134497,0.20481085479016986,synchronized full state
+tfim_trotter,28,PennyLane Lightning GPU,27163.634006666445,839.3262914442462,3.5528013589958753,synchronized full state
+tfim_trotter,28,Qiskit Aer statevector CPU,54528.06483866577,515.808071150774,7.131865449765771,synchronized full state
+tfim_trotter,28,PennyLane Lightning CPU,276929.24243900174,2627.109810395304,36.22028586607827,synchronized full state

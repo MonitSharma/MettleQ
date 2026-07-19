@@ -1,0 +1,336 @@
+{
+  "status": "measured",
+  "backend": "mettleq_metal",
+  "result_contract": "synchronized_full_state_complex64",
+  "benchmarks": [
+    "tfim_trotter"
+  ],
+  "qubits": [
+    15,
+    20,
+    24,
+    26,
+    28
+  ],
+  "warmups": 1,
+  "repeats": 3,
+  "accuracy_atol": 5e-06,
+  "validated_through_qubits": 20,
+  "git": {
+    "commit": "3b445a1b3f2e60100d571c1da5387e340f7f125f",
+    "status_porcelain": ""
+  },
+  "python": "3.13.2 (main, Feb 12 2025, 14:59:08) [Clang 19.1.6 ]",
+  "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "packages": {
+    "mettleq": "0.2.0",
+    "mlx": "0.32.0",
+    "numpy": "2.4.6",
+    "qiskit": "2.5.0"
+  },
+  "environment": {
+    "captured_at_utc": "2026-07-19T03:47:56.904608+00:00",
+    "os": {
+      "system": "Darwin",
+      "release": "25.5.0",
+      "version": "26.5.2",
+      "machine": "arm64"
+    },
+    "hardware": {
+      "model": "Apple M3 Pro",
+      "model_identifier": "Mac15,7",
+      "physical_memory_bytes": 38654705664,
+      "logical_cpu_count": 12
+    },
+    "load": {
+      "load_average_1m": 2.43408203125,
+      "load_average_5m": 2.70849609375,
+      "load_average_15m": 2.83203125,
+      "process_count": 775
+    },
+    "thermal_state": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+    "power_mode": "Battery Power:\n Sleep On Power Button 1\n lowpowermode         1\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         10\n womp                 0\n networkoversleep     0\n sleep                1\n lessbright           1\n tcpkeepalive         1\n disksleep            10\nAC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         10\n womp                 1\n networkoversleep     0\n sleep                1\n tcpkeepalive         1\n disksleep            10",
+    "privacy": "No usernames, home paths, serial numbers, or process names are recorded."
+  },
+  "memory_gates": [
+    {
+      "benchmark": "tfim_trotter",
+      "qubits": 15,
+      "allowed": true,
+      "statevector_preflight": {
+        "schema_version": 1,
+        "allowed": true,
+        "decision": "allowed_within_reported_lower_bounds",
+        "reason": "statevector lower bounds fit within the reported device limits",
+        "overridden": false,
+        "override": {
+          "enabled": false,
+          "source": "default_disabled",
+          "environment_variable": "METTLEQ_ALLOW_UNSAFE_STATEVECTOR",
+          "environment_value": null
+        },
+        "failure_reasons": [],
+        "qubits": 15,
+        "dtype": "complex64",
+        "device": {
+          "name": "Apple M3 Pro",
+          "architecture": "applegpu_g15s",
+          "max_buffer_length": 22613000192,
+          "max_recommended_working_set_size": 30150672384
+        },
+        "checks": {
+          "single_state_within_max_buffer_length": true,
+          "two_state_lower_bound_within_recommended_working_set": true
+        },
+        "cost_model": {
+          "dtype": "complex64",
+          "amplitudes": 32768,
+          "bytes_per_amplitude": 8,
+          "state_bytes": 262144,
+          "state_mib": 0.25,
+          "temporary_memory_expectation_bytes": 262144,
+          "minimum_input_plus_output_bytes": 524288,
+          "expectation_basis": "out-of-place custom kernels require one input and one output state; lazy graphs and lookup tables can add intermediates",
+          "recommended_working_set_headroom_bytes": 30150148096,
+          "scope": "allocation preflight lower bound",
+          "not_included": [
+            "additional lazy-graph intermediates",
+            "lookup and index buffers",
+            "allocator cache",
+            "memory used by other processes"
+          ]
+        },
+        "passing_guarantee": "Passing does not guarantee that an arbitrary circuit fits; it only establishes that the reported single-buffer and two-state lower bounds do not already rule it out."
+      },
+      "available_memory_bytes": 30583832576,
+      "minimum_headroom_bytes": 6442450944,
+      "minimum_peak_bytes": 524288,
+      "required_available_bytes": 6442975232
+    },
+    {
+      "benchmark": "tfim_trotter",
+      "qubits": 20,
+      "allowed": true,
+      "statevector_preflight": {
+        "schema_version": 1,
+        "allowed": true,
+        "decision": "allowed_within_reported_lower_bounds",
+        "reason": "statevector lower bounds fit within the reported device limits",
+        "overridden": false,
+        "override": {
+          "enabled": false,
+          "source": "default_disabled",
+          "environment_variable": "METTLEQ_ALLOW_UNSAFE_STATEVECTOR",
+          "environment_value": null
+        },
+        "failure_reasons": [],
+        "qubits": 20,
+        "dtype": "complex64",
+        "device": {
+          "name": "Apple M3 Pro",
+          "architecture": "applegpu_g15s",
+          "max_buffer_length": 22613000192,
+          "max_recommended_working_set_size": 30150672384
+        },
+        "checks": {
+          "single_state_within_max_buffer_length": true,
+          "two_state_lower_bound_within_recommended_working_set": true
+        },
+        "cost_model": {
+          "dtype": "complex64",
+          "amplitudes": 1048576,
+          "bytes_per_amplitude": 8,
+          "state_bytes": 8388608,
+          "state_mib": 8.0,
+          "temporary_memory_expectation_bytes": 8388608,
+          "minimum_input_plus_output_bytes": 16777216,
+          "expectation_basis": "out-of-place custom kernels require one input and one output state; lazy graphs and lookup tables can add intermediates",
+          "recommended_working_set_headroom_bytes": 30133895168,
+          "scope": "allocation preflight lower bound",
+          "not_included": [
+            "additional lazy-graph intermediates",
+            "lookup and index buffers",
+            "allocator cache",
+            "memory used by other processes"
+          ]
+        },
+        "passing_guarantee": "Passing does not guarantee that an arbitrary circuit fits; it only establishes that the reported single-buffer and two-state lower bounds do not already rule it out."
+      },
+      "available_memory_bytes": 30464360448,
+      "minimum_headroom_bytes": 6442450944,
+      "minimum_peak_bytes": 16777216,
+      "required_available_bytes": 6459228160
+    },
+    {
+      "benchmark": "tfim_trotter",
+      "qubits": 24,
+      "allowed": true,
+      "statevector_preflight": {
+        "schema_version": 1,
+        "allowed": true,
+        "decision": "allowed_within_reported_lower_bounds",
+        "reason": "statevector lower bounds fit within the reported device limits",
+        "overridden": false,
+        "override": {
+          "enabled": false,
+          "source": "default_disabled",
+          "environment_variable": "METTLEQ_ALLOW_UNSAFE_STATEVECTOR",
+          "environment_value": null
+        },
+        "failure_reasons": [],
+        "qubits": 24,
+        "dtype": "complex64",
+        "device": {
+          "name": "Apple M3 Pro",
+          "architecture": "applegpu_g15s",
+          "max_buffer_length": 22613000192,
+          "max_recommended_working_set_size": 30150672384
+        },
+        "checks": {
+          "single_state_within_max_buffer_length": true,
+          "two_state_lower_bound_within_recommended_working_set": true
+        },
+        "cost_model": {
+          "dtype": "complex64",
+          "amplitudes": 16777216,
+          "bytes_per_amplitude": 8,
+          "state_bytes": 134217728,
+          "state_mib": 128.0,
+          "temporary_memory_expectation_bytes": 134217728,
+          "minimum_input_plus_output_bytes": 268435456,
+          "expectation_basis": "out-of-place custom kernels require one input and one output state; lazy graphs and lookup tables can add intermediates",
+          "recommended_working_set_headroom_bytes": 29882236928,
+          "scope": "allocation preflight lower bound",
+          "not_included": [
+            "additional lazy-graph intermediates",
+            "lookup and index buffers",
+            "allocator cache",
+            "memory used by other processes"
+          ]
+        },
+        "passing_guarantee": "Passing does not guarantee that an arbitrary circuit fits; it only establishes that the reported single-buffer and two-state lower bounds do not already rule it out."
+      },
+      "available_memory_bytes": 30521933824,
+      "minimum_headroom_bytes": 6442450944,
+      "minimum_peak_bytes": 268435456,
+      "required_available_bytes": 6710886400
+    },
+    {
+      "benchmark": "tfim_trotter",
+      "qubits": 26,
+      "allowed": true,
+      "statevector_preflight": {
+        "schema_version": 1,
+        "allowed": true,
+        "decision": "allowed_within_reported_lower_bounds",
+        "reason": "statevector lower bounds fit within the reported device limits",
+        "overridden": false,
+        "override": {
+          "enabled": false,
+          "source": "default_disabled",
+          "environment_variable": "METTLEQ_ALLOW_UNSAFE_STATEVECTOR",
+          "environment_value": null
+        },
+        "failure_reasons": [],
+        "qubits": 26,
+        "dtype": "complex64",
+        "device": {
+          "name": "Apple M3 Pro",
+          "architecture": "applegpu_g15s",
+          "max_buffer_length": 22613000192,
+          "max_recommended_working_set_size": 30150672384
+        },
+        "checks": {
+          "single_state_within_max_buffer_length": true,
+          "two_state_lower_bound_within_recommended_working_set": true
+        },
+        "cost_model": {
+          "dtype": "complex64",
+          "amplitudes": 67108864,
+          "bytes_per_amplitude": 8,
+          "state_bytes": 536870912,
+          "state_mib": 512.0,
+          "temporary_memory_expectation_bytes": 536870912,
+          "minimum_input_plus_output_bytes": 1073741824,
+          "expectation_basis": "out-of-place custom kernels require one input and one output state; lazy graphs and lookup tables can add intermediates",
+          "recommended_working_set_headroom_bytes": 29076930560,
+          "scope": "allocation preflight lower bound",
+          "not_included": [
+            "additional lazy-graph intermediates",
+            "lookup and index buffers",
+            "allocator cache",
+            "memory used by other processes"
+          ]
+        },
+        "passing_guarantee": "Passing does not guarantee that an arbitrary circuit fits; it only establishes that the reported single-buffer and two-state lower bounds do not already rule it out."
+      },
+      "available_memory_bytes": 29930029056,
+      "minimum_headroom_bytes": 6442450944,
+      "minimum_peak_bytes": 1073741824,
+      "required_available_bytes": 7516192768
+    },
+    {
+      "benchmark": "tfim_trotter",
+      "qubits": 28,
+      "allowed": true,
+      "statevector_preflight": {
+        "schema_version": 1,
+        "allowed": true,
+        "decision": "allowed_within_reported_lower_bounds",
+        "reason": "statevector lower bounds fit within the reported device limits",
+        "overridden": false,
+        "override": {
+          "enabled": false,
+          "source": "default_disabled",
+          "environment_variable": "METTLEQ_ALLOW_UNSAFE_STATEVECTOR",
+          "environment_value": null
+        },
+        "failure_reasons": [],
+        "qubits": 28,
+        "dtype": "complex64",
+        "device": {
+          "name": "Apple M3 Pro",
+          "architecture": "applegpu_g15s",
+          "max_buffer_length": 22613000192,
+          "max_recommended_working_set_size": 30150672384
+        },
+        "checks": {
+          "single_state_within_max_buffer_length": true,
+          "two_state_lower_bound_within_recommended_working_set": true
+        },
+        "cost_model": {
+          "dtype": "complex64",
+          "amplitudes": 268435456,
+          "bytes_per_amplitude": 8,
+          "state_bytes": 2147483648,
+          "state_mib": 2048.0,
+          "temporary_memory_expectation_bytes": 2147483648,
+          "minimum_input_plus_output_bytes": 4294967296,
+          "expectation_basis": "out-of-place custom kernels require one input and one output state; lazy graphs and lookup tables can add intermediates",
+          "recommended_working_set_headroom_bytes": 25855705088,
+          "scope": "allocation preflight lower bound",
+          "not_included": [
+            "additional lazy-graph intermediates",
+            "lookup and index buffers",
+            "allocator cache",
+            "memory used by other processes"
+          ]
+        },
+        "passing_guarantee": "Passing does not guarantee that an arbitrary circuit fits; it only establishes that the reported single-buffer and two-state lower bounds do not already rule it out."
+      },
+      "available_memory_bytes": 23675518976,
+      "minimum_headroom_bytes": 6442450944,
+      "minimum_peak_bytes": 4294967296,
+      "required_available_bytes": 10737418240
+    }
+  ],
+  "optimizations": {
+    "metal_kernels": true,
+    "rx_radix16": true,
+    "chain_phase_rx_fusion": true
+  },
+  "files": {
+    "raw_runs": "mettleq_metal_raw_runs.csv",
+    "summary": "mettleq_metal_summary.csv"
+  }
+}

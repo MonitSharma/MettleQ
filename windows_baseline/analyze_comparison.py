@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Build the honest adjacent-width Windows/WSL versus MettleQ comparison.
-
-The Windows campaign did not measure 25 qubits, while the frozen MettleQ
-workload campaign did.  This script therefore retains the measured 24q and
-26q Windows values instead of interpolating a fictional 25q result.
-"""
+"""Build the exact-width Windows/WSL versus MettleQ comparison artifacts."""
 
 from __future__ import annotations
 
@@ -15,23 +10,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WINDOWS_RESULTS = ROOT / "windows_baseline" / "results"
 METTLEQ_RESULTS = (
-    ROOT
-    / "assets"
-    / "benchmarks-frozen"
-    / "fork-m3pro-20260715"
-    / "shader_sweep_summary.csv"
+    ROOT / "assets" / "benchmarks-frozen"
+    / "fork-m3pro-20260719-windows-matched-metal"
 )
-OUTPUT = WINDOWS_RESULTS / "mettleq_windows_adjacent_widths.csv"
-PLOT = ROOT / "windows_baseline" / "plots" / "mettleq_vs_windows_adjacent_widths.png"
-
-WORKLOADS = {
-    "qft": "qft",
-    "qaoa_ring": "qaoa",
-    "ghz": "ghz",
-    "grover_proxy": "grover",
-    "phase_estimation": "phase_estimation",
-    "tfim_trotter": "tfim_trotter2",
-}
+OUTPUT = WINDOWS_RESULTS / "mettleq_windows_matched_widths.csv"
+PLOT = ROOT / "windows_baseline" / "plots" / "mettleq_vs_windows_matched_widths.png"
+WIDTHS = (15, 20, 24, 26, 28)
+WORKLOADS = (
+    "qft", "qaoa_ring", "ghz", "grover_proxy",
+    "phase_estimation", "tfim_trotter",
+)
 BACKENDS = {
     "CUDA-Q NVIDIA GPU": "cudaq_nvidia_summary.csv",
     "PennyLane Lightning GPU": "pennylane_lightning_gpu_summary.csv",
@@ -40,86 +28,100 @@ BACKENDS = {
 }
 
 
-def _read_mettleq() -> dict[str, float]:
-    with METTLEQ_RESULTS.open(newline="", encoding="utf-8") as handle:
-        rows = {row["benchmark"]: float(row["metal_mean_ms"]) for row in csv.DictReader(handle)}
-    return {workload: rows[source] for workload, source in WORKLOADS.items()}
-
-
-def _read_windows(path: Path) -> dict[tuple[str, int], float]:
+def _read(path: Path) -> dict[tuple[str, int], dict[str, str]]:
     with path.open(newline="", encoding="utf-8") as handle:
         return {
-            (row["benchmark"], int(row["qubits"])): float(row["mean_ms"])
+            (row["benchmark"], int(row["qubits"])): row
             for row in csv.DictReader(handle)
         }
 
 
+def _read_mettleq() -> dict[tuple[str, int], dict[str, str]]:
+    rows: dict[tuple[str, int], dict[str, str]] = {}
+    for workload in WORKLOADS:
+        rows.update(_read(METTLEQ_RESULTS / workload / "mettleq_metal_summary.csv"))
+    return rows
+
+
 def build_rows() -> list[dict[str, object]]:
-    mettleq = _read_mettleq()
-    windows = {
-        label: _read_windows(WINDOWS_RESULTS / filename)
+    sources = {"MettleQ Metal": _read_mettleq()}
+    sources.update({
+        label: _read(WINDOWS_RESULTS / filename)
         for label, filename in BACKENDS.items()
-    }
+    })
     rows: list[dict[str, object]] = []
-    for workload, mettleq_ms in mettleq.items():
-        row: dict[str, object] = {
-            "workload": workload,
-            "mettleq_m3_pro_metal_25q_ms": mettleq_ms,
-        }
-        for label, values in windows.items():
-            key = label.lower().replace(" ", "_").replace("-", "_")
-            for width in (24, 26):
-                value = values[(workload, width)]
-                row[f"{key}_{width}q_ms"] = value
-                row[f"{key}_{width}q_over_mettleq_25q"] = value / mettleq_ms
-        rows.append(row)
+    for workload in WORKLOADS:
+        for qubits in WIDTHS:
+            mettleq_ms = float(sources["MettleQ Metal"][(workload, qubits)]["mean_ms"])
+            for backend, values in sources.items():
+                source = values[(workload, qubits)]
+                mean_ms = float(source["mean_ms"])
+                rows.append({
+                    "workload": workload,
+                    "qubits": qubits,
+                    "backend": backend,
+                    "mean_ms": mean_ms,
+                    "ci95_ms": float(source["ci95_ms"]),
+                    "backend_over_mettleq": mean_ms / mettleq_ms,
+                    "result_contract": "synchronized full state",
+                })
     return rows
 
 
 def write_csv(rows: list[dict[str, object]]) -> None:
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     with OUTPUT.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(
-            handle,
-            fieldnames=list(rows[0]),
-            lineterminator="\n",
-        )
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0]), lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
 
 def write_plot(rows: list[dict[str, object]]) -> None:
     import matplotlib.pyplot as plt
-    import numpy as np
 
-    labels = [str(row["workload"]).replace("_", "\n") for row in rows]
-    x = np.arange(len(rows))
-    series = [
-        ("MettleQ Metal, M3 Pro, 25q", "mettleq_m3_pro_metal_25q_ms"),
-        ("CUDA-Q NVIDIA, RTX 3070, 24q", "cuda_q_nvidia_gpu_24q_ms"),
-        ("CUDA-Q NVIDIA, RTX 3070, 26q", "cuda_q_nvidia_gpu_26q_ms"),
-        ("Lightning GPU, RTX 3070, 24q", "pennylane_lightning_gpu_24q_ms"),
-        ("Lightning GPU, RTX 3070, 26q", "pennylane_lightning_gpu_26q_ms"),
-    ]
-    width = 0.16
-    fig, ax = plt.subplots(figsize=(13, 6.8))
-    for index, (label, key) in enumerate(series):
-        offset = (index - (len(series) - 1) / 2) * width
-        ax.bar(x + offset, [float(row[key]) for row in rows], width, label=label)
-    ax.set_yscale("log")
-    ax.set_ylabel("Mean full-state execution time (ms, log scale; lower is better)")
-    ax.set_title("MettleQ Apple Metal versus Windows/WSL NVIDIA baselines")
-    ax.set_xticks(x, labels)
-    ax.grid(axis="y", which="both", linestyle=":", alpha=0.45)
-    ax.legend(ncol=2, fontsize=9)
-    fig.text(
-        0.5,
-        0.01,
-        "Adjacent widths are shown because Windows did not record 25q. No interpolation or same-device claim is made.",
-        ha="center",
-        fontsize=9,
+    colors = {
+        "MettleQ Metal": "#167D8D",
+        "CUDA-Q NVIDIA GPU": "#76B900",
+        "PennyLane Lightning GPU": "#7B4AB5",
+        "Qiskit Aer statevector CPU": "#D87822",
+        "PennyLane Lightning CPU": "#61758A",
+    }
+    lookup = {
+        (str(row["workload"]), int(row["qubits"]), str(row["backend"])): row
+        for row in rows
+    }
+    fig, axes = plt.subplots(2, 3, figsize=(14.2, 8.4), sharex=True)
+    for ax, workload in zip(axes.flat, WORKLOADS):
+        for backend, color in colors.items():
+            values = [
+                float(lookup[(workload, width, backend)]["mean_ms"])
+                for width in WIDTHS
+            ]
+            ax.plot(WIDTHS, values, marker="o", linewidth=2, markersize=4,
+                    label=backend, color=color)
+        ax.set_yscale("log")
+        ax.set_title(workload.replace("_", " ").title())
+        ax.grid(which="both", linestyle=":", alpha=0.4)
+        ax.set_xticks(WIDTHS)
+    axes[0, 0].set_ylabel("Mean time (ms, log scale)")
+    axes[1, 0].set_ylabel("Mean time (ms, log scale)")
+    for ax in axes[1, :]:
+        ax.set_xlabel("Qubits")
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.legend(
+        handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.945),
+        ncol=3, frameon=False,
     )
-    fig.tight_layout(rect=(0, 0.04, 1, 1))
+    fig.suptitle(
+        "Matched-width full-state simulation: Apple M3 Pro Metal vs Windows/WSL",
+        y=0.995, fontsize=15,
+    )
+    fig.text(
+        0.5, 0.012,
+        "Same circuits, widths, warm-up/repeat count, and full-state contract; different host systems.",
+        ha="center", fontsize=9,
+    )
+    fig.tight_layout(rect=(0, 0.045, 1, 0.865))
     PLOT.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(PLOT, dpi=180)
     plt.close(fig)
