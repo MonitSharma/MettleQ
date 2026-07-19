@@ -89,6 +89,10 @@ def _reference_error(benchmark: str, n_qubits: int, candidate: np.ndarray) -> fl
 
 
 def run(args: argparse.Namespace) -> int:
+    git_snapshot = {
+        "commit": _git("rev-parse", "HEAD"),
+        "status_porcelain": _git("status", "--porcelain"),
+    }
     output = Path(args.output_dir)
     output.mkdir(parents=True, exist_ok=True)
     widths = [int(item) for item in args.qubits.split(",") if item.strip()]
@@ -203,10 +207,7 @@ def run(args: argparse.Namespace) -> int:
         "repeats": args.repeats,
         "accuracy_atol": args.accuracy_atol,
         "validated_through_qubits": args.validate_max_qubits,
-        "git": {
-            "commit": _git("rev-parse", "HEAD"),
-            "status_porcelain": _git("status", "--porcelain"),
-        },
+        "git": git_snapshot,
         "python": sys.version,
         "platform": platform.platform(),
         "packages": {
