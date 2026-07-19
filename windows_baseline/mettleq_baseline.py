@@ -65,12 +65,9 @@ def _sync(state) -> None:
 
 
 def _release_metal_cache() -> None:
-    """Release both lazy-graph and Metal allocator caches between cells."""
+    """Release lazy-graph and allocator caches between measured cells."""
     gc.collect()
     mx.clear_cache()
-    metal_clear_cache = getattr(getattr(mx, "metal", None), "clear_cache", None)
-    if callable(metal_clear_cache):
-        metal_clear_cache()
     gc.collect()
 
 
@@ -111,7 +108,11 @@ def _reference_error(benchmark: str, n_qubits: int, candidate: np.ndarray) -> fl
 def run(args: argparse.Namespace) -> int:
     git_snapshot = {
         "commit": _git("rev-parse", "HEAD"),
-        "status_porcelain": _git("status", "--porcelain"),
+        # Evidence directories are intentionally untracked until the campaign
+        # completes; report whether tracked source/configuration was modified.
+        "status_porcelain": _git(
+            "status", "--porcelain", "--untracked-files=no"
+        ),
     }
     output = Path(args.output_dir)
     output.mkdir(parents=True, exist_ok=True)
