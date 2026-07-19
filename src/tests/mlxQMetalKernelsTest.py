@@ -150,6 +150,48 @@ def test_radix8_and_radix16_single_qubit_layers_match(metal_env, monkeypatch):
     assert float(mx.max(mx.abs(radix8.sim.state - radix16.sim.state)).item()) < 5e-6
 
 
+@pytest.mark.parametrize("phase_name", ["CPHASE", "ZZPHASE"])
+def test_chain_phase_rx_launch_amortization_matches_unfused(
+    metal_env, monkeypatch, phase_name
+):
+    """Diagonal interaction plus RX shares the first radix-16 traversal."""
+    n = 8
+    bonds = [(q, q + 1) for q in range(n - 1)]
+    if phase_name == "CPHASE":
+        bonds.append((n - 1, 0))
+    operations = [
+        {
+            "name": phase_name,
+            "wires": list(bond),
+            "parameters": [0.23],
+        }
+        for bond in bonds
+    ] + [
+        {"name": "RX", "wires": [wire], "parameters": [-0.31]}
+        for wire in range(n)
+    ]
+
+    monkeypatch.setenv("METTLEQ_CHAINPHASE_RX_FUSION", "0")
+    reference = Device(n)
+    reference.execute(operations, report=True)
+    mx.eval(reference.sim.state)
+
+    monkeypatch.setenv("METTLEQ_CHAINPHASE_RX_FUSION", "1")
+    candidate = Device(n)
+    candidate.execute(operations, report=True)
+    mx.eval(candidate.sim.state)
+
+    error = float(mx.max(mx.abs(
+        reference.sim.state - candidate.sim.state
+    )).item())
+    assert error < 5e-6
+    assert reference.last_execution_plan["expected_custom_kernel_launches"] == 3
+    assert candidate.last_execution_plan["expected_custom_kernel_launches"] == 2
+    assert candidate.last_execution_plan["matched_structured_patterns"] == {
+        "chain_phase_rx_amortized_layer": 1
+    }
+
+
 def test_dependency_scheduler_recovers_layers_from_eager_two_qubit_order(
     metal_env,
 ):

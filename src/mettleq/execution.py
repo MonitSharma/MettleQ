@@ -611,6 +611,9 @@ _CACHE_COMPONENTS = {
     "mettleq_diag_chain_layer": ("mettleq.shaders.diag", "_diag_chain_kernel"),
     "mettleq_diag_pair_layer": ("mettleq.shaders.diag", "_diag_pair_kernel"),
     "mettleq_diag_weighted_layer": ("mettleq.shaders.diag", "_diag_weighted_kernel"),
+    "mettleq_chain_phase_u2_quad": (
+        "mettleq.shaders.chain_phase", "_chain_phase_u2_kernel"
+    ),
     "mettleq_xor_flip": ("mettleq.shaders.xor_affine", "_xor_flip_kernel"),
     "mettleq_xor_affine_gather": ("mettleq.shaders.xor_affine", "_xor_gather_kernel"),
 }
@@ -659,8 +662,32 @@ def _custom_dispatch_spec(op: Dict[str, Any], n: int) -> Optional[Dict[str, Any]
     elif name == "_QFTSTAGE":
         kernels, launches, family = ["mettleq_qft_stage_gen"], 1, "qft_stage"
     elif name == "_RXLAYER":
-        kernels = ["mettleq_rx_pair"] + (["mettleq_rx_single"] if n % 2 else [])
-        launches, family = n // 2 + n % 2, "uniform_rx_layer"
+        rx_radix16 = os.environ.get(
+            "METTLEQ_RX_RADIX16", "1"
+        ).strip().lower() not in _FALSE_VALUES
+        if rx_radix16:
+            tail = n % 4
+            kernels = ["mettleq_u2_list_quad"]
+            if tail >= 2:
+                kernels.append("mettleq_u2_pair")
+            if tail % 2:
+                kernels.append("mettleq_u2_single")
+            launches = n // 4 + tail // 2 + tail % 2
+            family = "uniform_rx_radix16_layer"
+        else:
+            kernels = ["mettleq_rx_pair"]
+            if n % 2:
+                kernels.append("mettleq_rx_single")
+            launches, family = n // 2 + n % 2, "uniform_rx_layer"
+    elif name == "_CHAINPHASE_RXLAYER":
+        tail = n % 4
+        kernels = ["mettleq_chain_phase_u2_quad", "mettleq_u2_list_quad"]
+        if tail >= 2:
+            kernels.append("mettleq_u2_pair")
+        if tail % 2:
+            kernels.append("mettleq_u2_single")
+        launches = n // 4 + tail // 2 + tail % 2
+        family = "chain_phase_rx_amortized_layer"
     elif name == "_U2LAYER":
         tail = n % 4
         kernels = ["mettleq_u2_list_quad"]
@@ -722,6 +749,7 @@ def _custom_dispatch_spec(op: Dict[str, Any], n: int) -> Optional[Dict[str, Any]
             launches > 1
             and name in {
                 "_RXLAYER",
+                "_CHAINPHASE_RXLAYER",
                 "_U2LAYER",
                 "_U2LISTLAYER",
                 "_CULISTLAYER",

@@ -1,0 +1,32 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "02:00"
+      timezone: Asia/Singapore
+    open-pull-requests-limit: 5
+    groups:
+      quantum-sdks:
+        patterns:
+          - qiskit*
+          - pennylane*
+      development-tools:
+        dependency-type: development
+        patterns:
+          - pytest*
+          - matplotlib
+          - nbclient
+          - nbformat
+          - ipykernel
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "02:30"
+      timezone: Asia/Singapore
+    open-pull-requests-limit: 5

@@ -424,6 +424,7 @@ def u2_layer_all(
     n: int,
     u2x2: mx.array,
     *,
+    start_shift: int | None = None,
     on_launch: _LaunchObserver = None,
 ) -> mx.array:
     """Apply the SAME 2x2 unitary to every qubit with radix-16 passes and a
@@ -447,7 +448,7 @@ def u2_layer_all(
         )
     n_hexads = 1 << (n - 4) if n >= 4 else 0
     n_octets = 1 << (n - 3) if n >= 3 else 0
-    shift = n - 1
+    shift = n - 1 if start_shift is None else int(start_shift)
     while radix == "16" and shift >= 3:
         (state,) = _u2l_quad_kernel(
             inputs=[state, mx.array(shift, dtype=mx.uint32),

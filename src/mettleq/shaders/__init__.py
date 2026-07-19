@@ -26,6 +26,7 @@ from .diag import diag_pair_layer, diag_weighted_layer
 from .xor_affine import compose_inverse_affine, xor_affine_gather
 from .pauli_pair import xx_layer, yy_layer
 from .controlled_single import controlled_u_groups
+from .chain_phase import chain_phase_u2_layer_all
 
 __all__ = [
     "metal_enabled",
@@ -46,6 +47,7 @@ __all__ = [
     "xx_layer",
     "yy_layer",
     "controlled_u_groups",
+    "chain_phase_u2_layer_all",
 ]
 
 

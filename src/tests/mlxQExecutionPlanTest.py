@@ -252,19 +252,21 @@ def test_checkpointing_occurs_between_fused_layers_and_preserves_state(monkeypat
 
 def test_oversized_fused_layer_streams_between_custom_launches(monkeypatch):
     monkeypatch.setenv("METTLEQ_METAL_KERNELS", "1")
-    capability = metal_runtime_status(4)
+    capability = metal_runtime_status(8)
     if not capability["enabled"]:
         pytest.skip(capability["reason"])
 
     ops = [
         {"name": "RX", "wires": [wire], "parameters": [0.2]}
-        for wire in range(4)
+        for wire in range(8)
     ]
-    dev = Device(4, metal_checkpoint_budget_bytes=256)
+    dev = Device(8, metal_checkpoint_budget_bytes=4096)
     dev.execute(ops, report=True)
     plan = dev.last_execution_plan
     checkpoints = plan["checkpointing"]["actual_checkpoints"]
-    assert plan["matched_structured_patterns"] == {"uniform_rx_layer": 1}
+    assert plan["matched_structured_patterns"] == {
+        "uniform_rx_radix16_layer": 1
+    }
     assert plan["expected_custom_kernel_launches"] == 2
     assert plan["schema_version"] == 4
     assert plan["checkpointing"][
@@ -280,11 +282,11 @@ def test_oversized_fused_layer_streams_between_custom_launches(monkeypatch):
     assert checkpoints[0]["reason"] == "multi_launch_layer_streaming_budget"
     assert plan["checkpointing"]["pending_custom_passes_after_graph_build"] == 1
 
-    unreported = Device(4, metal_checkpoint_budget_bytes=256)
+    unreported = Device(8, metal_checkpoint_budget_bytes=4096)
     unreported.execute(ops, report=False)
     assert unreported.last_execution_plan is None
     assert unreported._pending_custom_passes == 1
-    assert unreported._pending_custom_io_bytes == 256
+    assert unreported._pending_custom_io_bytes == 4096
 
 
 def _streaming_ops(kind, n):

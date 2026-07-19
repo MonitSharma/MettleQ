@@ -86,6 +86,7 @@ baselines = [
   "pennylane>=0.45,<0.46",
   "qiskit>=2.0,<3",
   "qiskit-aer>=0.17,<0.18",
+  "psutil>=5.9.0",
 ]
 tutorials = [
   "pennylane>=0.45,<0.46",
