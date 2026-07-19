@@ -121,6 +121,7 @@ def run(args: argparse.Namespace) -> int:
     os.environ["METTLEQ_METAL_KERNELS"] = "1"
     os.environ["METTLEQ_RX_RADIX16"] = "1"
     os.environ["METTLEQ_CHAINPHASE_RX_FUSION"] = "1"
+    os.environ["METTLEQ_FULL_QFT_RADIX4"] = "1"
 
     raw_rows: list[dict] = []
     summary_rows: list[dict] = []
@@ -239,6 +240,7 @@ def run(args: argparse.Namespace) -> int:
             "metal_kernels": True,
             "rx_radix16": True,
             "chain_phase_rx_fusion": True,
+            "full_qft_radix4": True,
         },
         "files": {"raw_runs": raw_path.name, "summary": summary_path.name},
     }

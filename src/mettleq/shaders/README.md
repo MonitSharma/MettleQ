@@ -38,6 +38,10 @@ a hard allocator ceiling.
 - One thread per quad executes TWO stages (Hadamard butterfly + full
   controlled-phase ladder, closed-form angle α=π·low/2^s) with one read and
   one write per amplitude; single-stage pair kernel finishes odd n.
+- The runtime now collapses a complete SDK-decomposed forward QFT into this
+  kernel rather than selecting one-stage subregister kernels. At 28q this
+  reduces passes 27→14 and matched mean time 1,936.71→877.90 ms (2.21×).
+  `METTLEQ_FULL_QFT_RADIX4=0` retains the one-stage path for A/B evidence.
 - 25q: per-gate 748 ms → MLX fused ladder 255 ms → **Metal 21.1 ms**
   (3.7× faster than `mx.fft` at 77 ms). Parity ≤5e-6 (float32 trig).
 - Codex: round-1 radix-4 body was algebraically wrong and retracted by codex

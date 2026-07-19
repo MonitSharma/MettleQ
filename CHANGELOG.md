@@ -14,6 +14,10 @@ versioning once the first public release is tagged.
   expected launches without reordering dependent gates.
 - Added a safe reproducible matched-width runner with independent Qiskit
   validation, allocator isolation, memory preflight, and environment manifests.
+- Added complete forward-QFT recognition so SDK-decomposed QFT circuits use
+  two-stage radix-4 Metal passes, improving the matched 28q QFT by 2.21×.
+- Added full 15–28q MettleQ/CUDA-Q crossover tables, a focused chart with
+  numbered qubit axes, and an evidence-backed competitiveness roadmap.
 - Made the recommended SDK extra install Qiskit Aer and PennyLane Lightning.
 - Added clean Qiskit and PennyLane quickstarts and wheel validation in CI.
 - Completed distribution metadata for repository and package-index rendering.

@@ -418,33 +418,47 @@ QFT ladder, six-layer ring QAOA, GHZ chain, Grover proxy, phase-estimation
 schedule, and 20-step TFIM schedule as MettleQ's workload campaign.
 
 MettleQ was rerun at the Windows campaign's exact 15, 20, 24, 26, and
-28-qubit widths after adding radix-16 RX and combined chain-phase/RX Metal
-passes. Both campaigns use one warm-up, three measured repeats, the same
-circuits, and a synchronized complete-state result. The 28-qubit endpoint is
-shown below; lower is better.
+28-qubit widths after adding radix-16 RX, combined chain-phase/RX passes, and
+full-QFT radix-4 selection. Both campaigns use one warm-up, three measured
+repeats, the same circuits, and a synchronized complete-state result.
+
+The table below is `CUDA-Q time / MettleQ time`: values above 1× mean MettleQ
+is faster; values below 1× mean CUDA-Q is faster. It shows every measured
+width rather than only the 28-qubit endpoint.
+
+| Workload | 15q | 20q | 24q | 26q | 28q |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| QFT | **24.06×** | **9.15×** | **1.61×** | 0.73× | 0.39× |
+| Ring QAOA | **15.67×** | **6.83×** | 0.53× | 0.26× | 0.19× |
+| GHZ | **47.70×** | **39.98×** | **2.95×** | **1.07×** | 0.51× |
+| Grover proxy | **17.89×** | **5.62×** | 0.99× | 0.34× | 0.17× |
+| Phase estimation | **16.49×** | **5.54×** | 0.56× | 0.25× | 0.15× |
+| TFIM Trotter | **16.15×** | **3.88×** | 0.46× | 0.24× | 0.20× |
+
+For absolute context, the updated 28-qubit endpoint is:
 
 | Workload | MettleQ Metal, M3 Pro | CUDA-Q NVIDIA, RTX 3070 | Lightning GPU, RTX 3070 | Aer CPU under WSL |
 | --- | ---: | ---: | ---: | ---: |
-| QFT | **1,916.77 ms** | 340.38 ms | 6,635.45 ms | 13,860.52 ms |
-| Ring QAOA, 6 layers | **2,405.73 ms** | 463.80 ms | 7,254.50 ms | 17,438.65 ms |
-| GHZ | **327.17 ms** | 173.24 ms | 1,141.82 ms | 3,332.40 ms |
-| Grover proxy | **969.01 ms** | 165.94 ms | 4,350.20 ms | 3,001.91 ms |
-| Phase estimation | **2,342.78 ms** | 363.80 ms | 6,881.60 ms | 16,894.65 ms |
-| TFIM Trotter, 20 steps | **7,645.69 ms** | 1,565.92 ms | 27,163.63 ms | 54,528.06 ms |
+| QFT | **877.90 ms** | 340.38 ms | 6,635.45 ms | 13,860.52 ms |
+| Ring QAOA, 6 layers | **2,428.86 ms** | 463.80 ms | 7,254.50 ms | 17,438.65 ms |
+| GHZ | **341.94 ms** | 173.24 ms | 1,141.82 ms | 3,332.40 ms |
+| Grover proxy | **982.80 ms** | 165.94 ms | 4,350.20 ms | 3,001.91 ms |
+| Phase estimation | **2,391.85 ms** | 363.80 ms | 6,881.60 ms | 16,894.65 ms |
+| TFIM Trotter, 20 steps | **7,695.88 ms** | 1,565.92 ms | 27,163.63 ms | 54,528.06 ms |
 
 <p align="center">
-  <img src="windows_baseline/plots/mettleq_vs_windows_matched_widths.png" alt="Matched-width MettleQ Apple M3 Pro Metal and Windows WSL RTX 3070 full-state scaling" width="1050"/>
+  <img src="windows_baseline/plots/mettleq_vs_cudaq_matched_widths.png" alt="Exact-width MettleQ Apple M3 Pro Metal and CUDA-Q RTX 3070 full-state scaling with numbered qubit axes" width="1050"/>
 </p>
 
 The result is mixed and informative:
 
-- At 28 qubits MettleQ is 3.10–10.19× faster than the Windows Aer CPU
-  statevector and 19.53–46.58× faster than Windows Lightning CPU.
+- At 28 qubits MettleQ is 3.05–15.79× faster than the Windows Aer CPU
+  statevector and 18.69–71.85× faster than Windows Lightning CPU.
 - MettleQ beats PennyLane `lightning.gpu` on every workload at every measured
-  width. At 28 qubits the advantage is 2.94–4.49×.
-- CUDA-Q's specialized NVIDIA backend is faster at 28 qubits by 1.89–6.44×.
-  MettleQ wins every CUDA-Q comparison at 15 and 20 qubits, remains 1.03×
-  faster on 24-qubit Grover proxy, and 1.09× faster on 26-qubit GHZ. The
+  width. At 28 qubits the advantage is 2.88–7.56×.
+- CUDA-Q's specialized NVIDIA backend is faster at 28 qubits by 1.97–6.57×.
+  MettleQ wins every CUDA-Q comparison at 15 and 20 qubits, plus 24-qubit QFT
+  and GHZ and 26-qubit GHZ. The
   crossover identifies launch amortization as an Apple strength and sustained
   high-width bandwidth as the remaining NVIDIA gap.
 
@@ -455,6 +469,8 @@ change, not a simulation breakthrough. The raw data remains available for
 audit, but those two regions must not be connected as one scaling curve.
 
 The plot connects only exact-width observations—there is no interpolation.
+The bandwidth floor, QFT improvement, and prioritized path toward CUDA-Q are
+worked through in [`docs/CUDAQ_COMPETITIVENESS.md`](docs/CUDAQ_COMPETITIVENESS.md).
 The detailed methodology, package versions, limitations, raw-run inventory,
 and reproducible analysis command are documented in
 [`windows_baseline/README.md`](windows_baseline/README.md). The Windows

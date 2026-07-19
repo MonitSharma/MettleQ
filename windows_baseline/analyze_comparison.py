@@ -11,10 +11,11 @@ ROOT = Path(__file__).resolve().parents[1]
 WINDOWS_RESULTS = ROOT / "windows_baseline" / "results"
 METTLEQ_RESULTS = (
     ROOT / "assets" / "benchmarks-frozen"
-    / "fork-m3pro-20260719-windows-matched-metal"
+    / "fork-m3pro-20260719-cudaq-competitive-metal"
 )
 OUTPUT = WINDOWS_RESULTS / "mettleq_windows_matched_widths.csv"
 PLOT = ROOT / "windows_baseline" / "plots" / "mettleq_vs_windows_matched_widths.png"
+CUDAQ_PLOT = ROOT / "windows_baseline" / "plots" / "mettleq_vs_cudaq_matched_widths.png"
 WIDTHS = (15, 20, 24, 26, 28)
 WORKLOADS = (
     "qft", "qaoa_ring", "ghz", "grover_proxy",
@@ -105,8 +106,9 @@ def write_plot(rows: list[dict[str, object]]) -> None:
         ax.set_xticks(WIDTHS)
     axes[0, 0].set_ylabel("Mean time (ms, log scale)")
     axes[1, 0].set_ylabel("Mean time (ms, log scale)")
-    for ax in axes[1, :]:
+    for ax in axes.flat:
         ax.set_xlabel("Qubits")
+        ax.tick_params(axis="x", labelbottom=True)
     handles, labels = axes[0, 0].get_legend_handles_labels()
     fig.legend(
         handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.945),
@@ -127,12 +129,65 @@ def write_plot(rows: list[dict[str, object]]) -> None:
     plt.close(fig)
 
 
+def write_cudaq_plot(rows: list[dict[str, object]]) -> None:
+    """Focused scaling figure for the Apple Metal versus CUDA-Q question."""
+    import matplotlib.pyplot as plt
+
+    lookup = {
+        (str(row["workload"]), int(row["qubits"]), str(row["backend"])): row
+        for row in rows
+    }
+    series = {
+        "MettleQ Metal · Apple M3 Pro": ("#167D8D", "o"),
+        "CUDA-Q NVIDIA GPU · RTX 3070": ("#76B900", "s"),
+    }
+    fig, axes = plt.subplots(2, 3, figsize=(14.2, 8.5), sharex=False)
+    for ax, workload in zip(axes.flat, WORKLOADS):
+        for backend, (color, marker) in series.items():
+            values = [
+                float(lookup[(workload, width, backend.split(" · ")[0])]["mean_ms"])
+                for width in WIDTHS
+            ]
+            ax.plot(WIDTHS, values, marker=marker, linewidth=2.4,
+                    markersize=5, label=backend, color=color)
+        mettleq_28 = float(lookup[(workload, 28, "MettleQ Metal")]["mean_ms"])
+        cudaq_28 = float(lookup[(workload, 28, "CUDA-Q NVIDIA GPU")]["mean_ms"])
+        ratio = mettleq_28 / cudaq_28
+        ax.annotate(
+            f"CUDA-Q {ratio:.1f}× faster at 28q",
+            xy=(28, cudaq_28), xytext=(-7, 9), textcoords="offset points",
+            ha="right", fontsize=8,
+        )
+        ax.set_yscale("log")
+        ax.set_title(workload.replace("_", " ").title())
+        ax.set_xlabel("Number of qubits")
+        ax.set_xticks(WIDTHS, [str(width) for width in WIDTHS])
+        ax.set_ylabel("Mean full-state time (ms, log scale)")
+        ax.grid(which="both", linestyle=":", alpha=0.4)
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.945),
+               ncol=2, frameon=False)
+    fig.suptitle("Exact-width Apple Metal versus CUDA-Q NVIDIA scaling",
+                 y=0.995, fontsize=15)
+    fig.text(
+        0.5, 0.012,
+        "Widths: 15, 20, 24, 26, 28 qubits · one warm-up + three measured full-state runs",
+        ha="center", fontsize=9,
+    )
+    fig.tight_layout(rect=(0, 0.045, 1, 0.88))
+    CUDAQ_PLOT.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(CUDAQ_PLOT, dpi=180)
+    plt.close(fig)
+
+
 def main() -> int:
     rows = build_rows()
     write_csv(rows)
     write_plot(rows)
+    write_cudaq_plot(rows)
     print(f"wrote {OUTPUT}")
     print(f"wrote {PLOT}")
+    print(f"wrote {CUDAQ_PLOT}")
     return 0
 
 
