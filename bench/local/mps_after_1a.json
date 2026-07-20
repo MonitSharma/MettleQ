@@ -1,0 +1,170 @@
+{
+  "created_at": "2026-07-20T19:18:19.293070+00:00",
+  "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "max_bond": 64,
+  "repeats": 3,
+  "atol": 1e-05,
+  "all_parity_ok": true,
+  "cases": [
+    {
+      "case": "ghz_chain:12:1",
+      "qubits": 12,
+      "median_ms": 5.586,
+      "parity_error": 8.429369846439829e-07,
+      "parity_ok": true,
+      "diagnostics": {
+        "svd_calls": 11,
+        "two_site_calls": 11,
+        "svd_total_ms": 0.14229299999999998,
+        "two_site_contraction_total_ms": 0.36662600000000006,
+        "two_site_split_total_ms": 0.227709,
+        "renormalization_count": 11,
+        "routing_swaps": 0,
+        "routing_final_restore_swaps": 0,
+        "routing_effective_strategy": "restore",
+        "maximum_bond_dimension_reached": 2,
+        "tensor_device": "cpu"
+      }
+    },
+    {
+      "case": "line_brickwork:14:4",
+      "qubits": 14,
+      "median_ms": 9.362,
+      "parity_error": 7.139141240952718e-07,
+      "parity_ok": true,
+      "diagnostics": {
+        "svd_calls": 26,
+        "two_site_calls": 26,
+        "svd_total_ms": 0.429833,
+        "two_site_contraction_total_ms": 0.18612600000000007,
+        "two_site_split_total_ms": 0.6334980000000001,
+        "renormalization_count": 26,
+        "routing_swaps": 0,
+        "routing_final_restore_swaps": 0,
+        "routing_effective_strategy": "restore",
+        "maximum_bond_dimension_reached": 4,
+        "tensor_device": "cpu"
+      }
+    },
+    {
+      "case": "all_to_all:12:1",
+      "qubits": 12,
+      "median_ms": 54.645,
+      "parity_error": 5.867318253333087e-07,
+      "parity_ok": true,
+      "diagnostics": {
+        "svd_calls": 202,
+        "two_site_calls": 202,
+        "svd_total_ms": 14.721333000000001,
+        "two_site_contraction_total_ms": 3.052446000000001,
+        "two_site_split_total_ms": 16.61407200000001,
+        "renormalization_count": 202,
+        "routing_swaps": 136,
+        "routing_final_restore_swaps": 55,
+        "routing_effective_strategy": "lookahead",
+        "maximum_bond_dimension_reached": 64,
+        "tensor_device": "cpu"
+      }
+    },
+    {
+      "case": "random_long_range:14:2",
+      "qubits": 14,
+      "median_ms": 47.796,
+      "parity_error": 7.51068101489949e-07,
+      "parity_ok": true,
+      "diagnostics": {
+        "svd_calls": 102,
+        "two_site_calls": 102,
+        "svd_total_ms": 14.346086000000001,
+        "two_site_contraction_total_ms": 1.7788770000000005,
+        "two_site_split_total_ms": 15.423080000000004,
+        "renormalization_count": 102,
+        "routing_swaps": 88,
+        "routing_final_restore_swaps": 40,
+        "routing_effective_strategy": "lookahead",
+        "maximum_bond_dimension_reached": 64,
+        "tensor_device": "cpu"
+      }
+    },
+    {
+      "case": "line_brickwork:100:8",
+      "qubits": 100,
+      "median_ms": 103.101,
+      "parity_error": null,
+      "parity_ok": null,
+      "diagnostics": {
+        "svd_calls": 396,
+        "two_site_calls": 396,
+        "svd_total_ms": 7.3969220000000035,
+        "two_site_contraction_total_ms": 2.838458999999996,
+        "two_site_split_total_ms": 10.402045000000003,
+        "renormalization_count": 396,
+        "routing_swaps": 0,
+        "routing_final_restore_swaps": 0,
+        "routing_effective_strategy": "restore",
+        "maximum_bond_dimension_reached": 8,
+        "tensor_device": "cpu"
+      }
+    },
+    {
+      "case": "ring_brickwork:50:2",
+      "qubits": 50,
+      "median_ms": 30.356,
+      "parity_error": null,
+      "parity_ok": null,
+      "diagnostics": {
+        "svd_calls": 147,
+        "two_site_calls": 147,
+        "svd_total_ms": 2.55601,
+        "two_site_contraction_total_ms": 1.4469130000000006,
+        "two_site_split_total_ms": 3.606162000000001,
+        "renormalization_count": 147,
+        "routing_swaps": 96,
+        "routing_final_restore_swaps": 48,
+        "routing_effective_strategy": "lookahead",
+        "maximum_bond_dimension_reached": 11,
+        "tensor_device": "cpu"
+      }
+    },
+    {
+      "case": "all_to_all:20:1",
+      "qubits": 20,
+      "median_ms": 760.058,
+      "parity_error": null,
+      "parity_ok": null,
+      "diagnostics": {
+        "svd_calls": 574,
+        "two_site_calls": 574,
+        "svd_total_ms": 340.3159959999999,
+        "two_site_contraction_total_ms": 13.448519999999993,
+        "two_site_split_total_ms": 348.84725499999996,
+        "renormalization_count": 574,
+        "routing_swaps": 384,
+        "routing_final_restore_swaps": 135,
+        "routing_effective_strategy": "lookahead",
+        "maximum_bond_dimension_reached": 64,
+        "tensor_device": "cpu"
+      }
+    },
+    {
+      "case": "random_long_range:32:1",
+      "qubits": 32,
+      "median_ms": 245.18,
+      "parity_error": null,
+      "parity_ok": null,
+      "diagnostics": {
+        "svd_calls": 250,
+        "two_site_calls": 250,
+        "svd_total_ms": 99.92258799999996,
+        "two_site_contraction_total_ms": 4.9777070000000005,
+        "two_site_split_total_ms": 103.117199,
+        "renormalization_count": 250,
+        "routing_swaps": 234,
+        "routing_final_restore_swaps": 113,
+        "routing_effective_strategy": "lookahead",
+        "maximum_bond_dimension_reached": 64,
+        "tensor_device": "cpu"
+      }
+    }
+  ]
+}

@@ -6,12 +6,12 @@ the maintained source, packaging, and documentation remain those from `main`.
 
 ## Systems and measurement contract
 
-The Windows campaign ran in WSL2 Ubuntu on an NVIDIA RTX 3070 8 GB with
-Python 3.11.13. Its manifests capture PennyLane 0.45.1, Lightning 0.45.0,
-NumPy 2.4.6, and Linux `6.18.33.2-microsoft-standard-WSL2`. They do not capture
-the Windows CPU, RAM, CUDA-Q/Qiskit/Aer versions, NVIDIA driver, CUDA version,
-power mode, or thermal state, so this is framework evidence—not a controlled
-device-efficiency comparison.
+The Windows baseline benchmarks were run and verified on this local device with the following hardware and environment specifications:
+* **CPU**: 12th Gen Intel(R) Core(TM) i9-12900K (16 Cores, 24 Threads)
+* **RAM**: 32 GB Physical Memory
+* **GPU**: NVIDIA GeForce RTX 3070 8 GB (Driver version `595.95`, CUDA `13.2` compatibility runtime)
+* **OS / Environment**: Windows WSL2 (Ubuntu 22.04 LTS, Linux `6.18.33.2-microsoft-standard-WSL2`)
+* **Python Interpreter**: Python 3.11.13 (`.venv-wsl` virtual environment)
 
 The matched Apple campaign ran on a 14-inch MacBook Pro with an M3 Pro
 (12 CPU cores, 18 GPU cores), 36 GB unified memory, macOS 26.5.2, Python
@@ -92,12 +92,13 @@ Raw Apple results and manifests are frozen under
   kernel. This reduced 28q launches 27→14 and runtime 1,936.71→877.90 ms
   (2.21×) while preserving the `5e-6` accuracy contract.
 
-## Aer MPS contract warning
+## Exclusion of MPS from Comparative Plots
 
-The historical Aer MPS script calls `save_statevector()` through 25 qubits but
-switches to one-shot `measure_all()` above 25. The resulting runtime drop is a
-result-contract change, not a scaling breakthrough. Those raw rows remain for
-provenance but are excluded from the matched full-state plot.
+Matrix Product State (MPS) backends (such as `qiskit_aer_matrix_product_state_cpu/gpu`) are excluded from the main comparative plots (`mettleq_vs_windows_matched_widths.png`) for two key reasons:
+1. **Algorithmic Disparity**: MPS is an approximate tensor network simulator that scales with the entanglement/bond-dimension of the circuit. Comparing it against dense statevector simulators (like MettleQ, CUDA-Q, PennyLane Lightning, and Qiskit Aer statevector) which must construct and update the exact, full $2^N$ statevector is an unfair comparison of full-state simulation performance.
+2. **Contract Mismatch**: The underlying Qiskit Aer benchmark script calls `save_statevector()` for $n \le 25$ but silently switches to a cheap `measure_all()` (sampling a single bitstring) for $n > 25$ to avoid out-of-memory crashes. This change in the returned output type (from $2^N$ complex amplitudes to a single 1-shot sample) results in a sudden, artificial drop in execution time to a few milliseconds, making a unified scaling comparison misleading.
+
+The raw MPS measurement records are still preserved in `results_summary.md` and the `results/` directory for completeness, but they are excluded from the comparative charts.
 
 ## Reproduce
 

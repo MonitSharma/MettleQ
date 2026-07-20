@@ -81,3 +81,8 @@ src.zip
 paper/
 QUANTICS_2026_14_CR.pdf
 *.pdf
+
+# Local WSL/Windows run wrappers and virtual environments
+.venv-wsl/
+powershell.bat
+.vscode/

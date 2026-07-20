@@ -1156,6 +1156,40 @@ The raw rows, exact commands, clean-engine manifests, summaries, and plotted
 source data are frozen in
 [`fork-m3pro-20260716-step8-mps-reliability/`](assets/benchmarks-frozen/fork-m3pro-20260716-step8-mps-reliability/).
 
+#### CPU MPS optimization: numpy-native tensors and faster canonicalization
+
+A later profiling pass removed two per-gate overheads on the routed CPU MPS
+path without changing any numerical result. Site tensors on the CPU path are
+now stored as NumPy end-to-end — the previous code round-tripped through MLX on
+every gate, and `apply_single` dispatched through MLX unconditionally — and the
+canonical-center QR moves use `scipy.linalg.qr(check_finite=False)`. Re-running
+the seven-family phase-8 set at `Dmax=64` on the same M3 Pro, with the Qiskit
+Aer points held fixed, every family improved by 29–62% (median ~31%). Parity
+against an exact statevector held to `atol=1e-5` and the MPS/parity test suite
+stayed green.
+
+| Family | MettleQ before | MettleQ after | Improvement | After / Aer |
+| --- | ---: | ---: | ---: | ---: |
+| GHZ 1,000q d1 | 562.6 ms | **210.7 ms** | -62.5% | 0.28x |
+| Line 100q d8 | 163.0 ms | **70.3 ms** | -56.9% | 0.41x |
+| Ring 50q d2 | 36.6 ms | **19.1 ms** | -48.0% | 0.29x |
+| Grid 36q d2 | 248.4 ms | **171.2 ms** | -31.1% | **2.47x** |
+| Rainbow 32q d1 | 712.6 ms | **500.0 ms** | -29.8% | 0.007x |
+| Random long range 32q d1 | 264.7 ms | **183.3 ms** | -30.8% | 0.018x |
+| All to all 20q d1 | 857.8 ms | **606.8 ms** | -29.3% | 0.042x |
+
+The `before` column is the frozen `cf4fa77` phase-8 baseline; `after` is the
+same machine and protocol with the two changes applied. Grid 36q now beats Aer
+by 2.47x, and the low-entanglement families close most of the gap. The highly
+entangled rainbow and random-long-range schedules remain far slower than Aer —
+an inherent matrix-product-state versus optimized-C++ limit at large bond
+growth, not a tuning gap that these changes can close.
+
+<div align="center">
+  <img src="assets/perf-charts/mps_optimization_comparison.png" alt="MettleQ CPU MPS before and after the NumPy-native tensor and scipy QR optimization, versus Qiskit Aer CPU MPS across seven entanglement families" width="920"/>
+  <br/><em>MettleQ CPU MPS before (frozen <code>cf4fa77</code>) versus after the optimization, against the unchanged Aer points. Lower is better; log scale.</em>
+</div>
+
 ### Published 56-qubit P9: midpoint MPO/TNO now recovers the peak
 
 Quantum Advantage Tracker issue
@@ -1226,6 +1260,54 @@ For contrast, the historical forward-MPS boundary run at `Dmax=64`,
 returned the published peak 0 times, saturated its bond cap, and accumulated
 190.68 relative local discarded-weight sum. Its shorter runtime is not a
 usable result and is not compared as an alternative P9 solution.
+
+#### Windows WSL i9-12900K Intel MKL Optimization Results
+
+To run the 56-qubit peaked circuit benchmark on a Windows host under WSL2, we implemented targeted optimizations using **Intel MKL 2025** and strict **P-Core CPU Affinity Pinning** (`taskset -c 0-15`). 
+
+Even with the tight reference cutoff of `0.0006` (preserving maximum precision), these optimizations reduced the total simulation time to **29.6 minutes (1,777 seconds)** and successfully matched the expected bitstring.
+
+##### Midpoint MPO Performance Breakdown & Mac Comparison
+
+| System / Optimization State | Max Bond | Cutoff | sabre_trials / post_sabre | Progress Limit | Algorithm Time | Bitstring Match | Peak Fraction |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **Apple M3 Pro CPU (Mac, Optimized)** | **512** | **0.0006** | **90 / 50** | **20** | **1,164.31 s** | **✅ Yes** | **10.0%** |
+| Apple M3 Pro CPU (Mac, Unoptimized) | 512 | 0.0006 | 90 / 50 | 20 | 1,246.51 s | ✅ Yes | 10.0% |
+| Apple M3 Pro CPU (Mac, default isolation + Accelerate threads) | 512 | 0.0006 | 90 / 50 | 20 | 1,314.26 s | ✅ Yes | 10.0% |
+| **MKL + P-cores (Optimized WSL)** | **512** | **0.0006** | **10,000 / 1,000** | **20** | **1,777.57 s** | **✅ Yes** | **5.6%** |
+| OpenBLAS + P-cores (WSL) | 512 | 0.003 | 10,000 / 10,000 | 20 | 1,942.35 s | ✅ Yes | 10.9% |
+| OpenBLAS (Reference config WSL) | 8192 | 0.0006 | 10,000 / 10,000 | 2 | *Aborted (Cycle 26)* | ❌ - | - |
+
+We re-ran the exact campaign config on the current tree to check whether the
+CPU MPS optimization above carries over to P9. It does not: the peaked solver
+is the separate vendored midpoint-MPO/quimb engine and never calls MettleQ's
+native `mps_state.py`, so the 29–62% MPS gains do not apply here. The run
+matched the peak (100/1000) but landed at 1,314.26 s — slower than the
+`131072`-isolation Optimized row — because it used the default SVD isolation
+threshold (`16384`) and `VECLIB_MAXIMUM_THREADS=6`, which added no benefit on
+this largely serial critical path. Forcing every large SVD fully in-process
+(`METTLEQ_MPO_SVD_ISOLATION_MIN_ELEMENTS` disabled) crashed the worker on a
+native LAPACK SVD, confirming the process isolation is load-bearing; the tuned
+`131072` threshold in the row above remains the safe way to trim runtime.
+
+##### Peaked MPO Terminology & Tuning Levers
+
+* **Cutoff (`--cutoff`)**: The threshold below which singular values in Singular Value Decomposition (SVD) are truncated during MPO compression. A tighter cutoff (`0.0006` vs. `0.003`) retains more state fidelity but increases matrix dimensions, directly scaling execution time.
+* **Progress Limit (`--no-progress-limit`)**: The maximum number of consecutive unswap cycles permitted to consume zero work gates before aborting. In the presence of layout dead-ends (`swap_thrash`), setting this limit higher (e.g. `20`) is critical so that the routing pass can escape and progress.
+* **Peak Fraction**: The fraction of total sampled shots (out of 1000) that exactly match the expected peaked bitstring. A high peak fraction (such as 10.0% on Mac / 5.6% on WSL) indicates a strong physical signal.
+* **Max Bond (`--max-bond`)**: The maximum allowed virtual bond dimension of the MPO. Setting a reasonable bond cap (e.g., `512` instead of `8192`) limits the SVD matrix sizes, preventing severe cubic $O(D^3)$ CPU complexity scaling while maintaining high approximation fidelity.
+* **Post-Unswap Sabre Trials (`--post-sabre-trials`)**: The number of routing trials executed after each unswap cycle. Reducing this from `10,000` to `1,000` dramatically speeds up the routing phase (saving ~550 seconds of CPU routing time) while maintaining layout quality.
+* **SVD Isolation Threshold (`METTLEQ_MPO_SVD_ISOLATION_MIN_ELEMENTS`)**: The minimum matrix size (number of elements) required to isolate SVD operations into a separate helper process. Raising this from the default `16384` to `131072` avoids IPC serialization overhead for the majority of medium-sized matrices, speeding up the Apple Silicon (M3 Pro) run by **6–8%** (reducing runtime to ~1,150 s) while safely retaining process-isolation protection for the largest matrices.
+
+##### Sample Distribution Plot
+
+The comparison of the top 10 most-sampled bitstrings between the Windows WSL run and the Apple M3 Pro CPU run is shown below:
+
+<div align="center">
+  <img src="windows_baseline/plots/p9_samples.png" alt="56-qubit P9 Bitstring Sample Distribution Comparison" width="1000"/>
+  <br/><em>56-qubit P9 peaked-circuit top 10 bitstring samples comparison. The predicted peak is highlighted in red.</em>
+</div>
+
 
 For CI and matched timing, MettleQ also includes a deterministic mirrored
 peaked family. A seeded `u`/`rzz`/permutation body and its inverse create
@@ -1320,6 +1402,40 @@ These failures motivated the Step 8 work above and remain immutable historical
 evidence.
 
 </details>
+
+### Cross-Platform GPU Comparison: Apple Silicon Metal vs Windows/WSL NVIDIA GPUs
+
+To evaluate peak hardware-accelerated quantum simulation performance, we ran comparative benchmarks between the custom Metal backend of **MettleQ (on an Apple M3 Pro)** and the GPU-accelerated backends of **CUDA-Q, PennyLane Lightning, and Qiskit Aer (on a Windows WSL host with an NVIDIA RTX 3070)**.
+
+To ensure a fair comparison, the benchmarks are restricted to **exact, dense statevector simulation** under a unified full-statevector contract. Matrix Product State (MPS) simulators are excluded because they use an approximate tensor network representation and their benchmark scripts switch from full-statevector extraction to cheap measurement sampling at $>25$ qubits to avoid memory issues.
+
+The scaling comparisons for the six circuit workloads (QFT, QAOA, GHZ, Grover Proxy, Phase Estimation, and TFIM Trotter) across 15 to 28 qubits are shown below:
+
+#### 1. GPU-Only Acceleration Scaling
+This plot compares the peak GPU-accelerated simulation timings between Apple Silicon Metal and NVIDIA CUDA-Q, PennyLane, and Qiskit Aer GPU backends:
+
+<div align="center">
+  <img src="windows_baseline/plots/gpu_comparison_matched_widths.png" alt="MettleQ Metal vs Windows WSL GPU Comparison" width="900"/>
+  <br/><em>GPU-only scaling curves. Lower is better.</em>
+</div>
+
+#### 2. All-Backend WSL Comparison
+This plot shows the scaling of all Windows/WSL CPU and GPU backends compared to MettleQ Metal:
+
+<div align="center">
+  <img src="windows_baseline/plots/mettleq_vs_windows_matched_widths.png" alt="MettleQ Metal vs WSL CPU and GPU comparison" width="900"/>
+  <br/><em>Comparison of all WSL CPU and GPU backends against MettleQ Metal. Lower is better.</em>
+</div>
+
+#### 3. MettleQ vs CUDA-Q GPU Scaling
+This focused comparison compares the direct scaling of Apple Metal against NVIDIA's CUDA-Q platform:
+
+<div align="center">
+  <img src="windows_baseline/plots/mettleq_vs_cudaq_matched_widths.png" alt="MettleQ Metal vs CUDA-Q GPU scaling comparison" width="900"/>
+  <br/><em>Focused CUDA-Q GPU vs MettleQ Metal comparison. Lower is better.</em>
+</div>
+
+For details on the Windows/WSL configuration and exact numerical results, see the [`windows_baseline/README.md`](windows_baseline/README.md) and [`windows_baseline/results_summary.md`](windows_baseline/results_summary.md).
 
 ## Trust, correctness, and observability
 

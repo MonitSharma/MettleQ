@@ -163,10 +163,10 @@ def run(args: argparse.Namespace) -> dict:
 
     qubits = [int(x) for x in args.qubits.split(",") if x.strip()]
     benchmarks = [x.strip() for x in args.benchmarks.split(",") if x.strip()]
-
+    
     backend_label = f"qiskit_aer_{args.method}_{args.device.lower()}"
     simulator = AerSimulator(method=args.method, device=args.device)
-
+    
     raw_rows: list[dict] = []
     summaries: list[dict] = []
     for benchmark in benchmarks:
@@ -224,17 +224,13 @@ def run(args: argparse.Namespace) -> dict:
 
     raw_csv = outdir / f"{backend_label}_raw_runs.csv"
     with raw_csv.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(
-            fh, fieldnames=list(raw_rows[0].keys()), lineterminator="\n"
-        )
+        writer = csv.DictWriter(fh, fieldnames=list(raw_rows[0].keys()))
         writer.writeheader()
         writer.writerows(raw_rows)
-
+        
     summary_csv = outdir / f"{backend_label}_summary.csv"
     with summary_csv.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(
-            fh, fieldnames=list(summaries[0].keys()), lineterminator="\n"
-        )
+        writer = csv.DictWriter(fh, fieldnames=list(summaries[0].keys()))
         writer.writeheader()
         writer.writerows(summaries)
 
@@ -253,7 +249,7 @@ def run(args: argparse.Namespace) -> dict:
     }
     manifest_json = outdir / f"{backend_label}_manifest.json"
     manifest_json.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-
+    
     print(f"Completed benchmark for {backend_label}")
     return manifest
 

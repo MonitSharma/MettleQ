@@ -275,6 +275,21 @@ def _isolated_scipy_gesvd(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Contain SciPy ``gesvd`` so a native failure cannot kill the worker."""
 
+    try:
+        isolation_min = int(os.environ.get("METTLEQ_MPO_SVD_ISOLATION_MIN_ELEMENTS", "16384"))
+    except ValueError:
+        isolation_min = 16384
+
+    if isolation_min >= 2147483647:
+        from scipy.linalg import svd
+        _QUIMB_SVD_TELEMETRY["isolated_scipy_gesvd_successes"] += 1
+        return svd(
+            matrix,
+            full_matrices=False,
+            lapack_driver="gesvd",
+            check_finite=False,
+        )
+
     context = multiprocessing.get_context("spawn")
     receiver, sender = context.Pipe(duplex=False)
     process = context.Process(

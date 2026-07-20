@@ -225,17 +225,13 @@ def run(args: argparse.Namespace) -> dict:
 
     raw_csv = outdir / f"{backend_label}_raw_runs.csv"
     with raw_csv.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(
-            fh, fieldnames=list(rows[0].keys()), lineterminator="\n"
-        )
+        writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
         writer.writeheader()
         writer.writerows(rows)
 
     summary_csv = outdir / f"{backend_label}_summary.csv"
     with summary_csv.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(
-            fh, fieldnames=list(summaries[0].keys()), lineterminator="\n"
-        )
+        writer = csv.DictWriter(fh, fieldnames=list(summaries[0].keys()))
         writer.writeheader()
         writer.writerows(summaries)
 
@@ -265,7 +261,7 @@ def run(args: argparse.Namespace) -> dict:
     }
     manifest_path = outdir / f"{backend_label}_manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-
+    
     print(f"Completed benchmark for {backend_label}")
     return manifest
 

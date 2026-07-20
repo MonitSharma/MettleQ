@@ -1,0 +1,40 @@
+{
+  "status": "measured",
+  "backend": "qiskit_aer_matrix_product_state_gpu",
+  "availability": {
+    "qiskit": {
+      "available": true,
+      "version": "2.5.0"
+    },
+    "qiskit-aer": {
+      "available": true,
+      "version": "0.17.2"
+    }
+  },
+  "python": "3.11.13 (main, Jun  4 2025, 08:57:29) [GCC 11.4.0]",
+  "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.35",
+  "benchmarks": [
+    "qft",
+    "qaoa_ring",
+    "ghz",
+    "grover_proxy",
+    "phase_estimation",
+    "tfim_trotter"
+  ],
+  "qubits": [
+    15,
+    20,
+    24,
+    26,
+    28,
+    30,
+    40
+  ],
+  "warmups": 1,
+  "repeats": 3,
+  "layers": 6,
+  "files": {
+    "raw_runs": "qiskit_aer_matrix_product_state_gpu_raw_runs.csv",
+    "summary": "qiskit_aer_matrix_product_state_gpu_summary.csv"
+  }
+}

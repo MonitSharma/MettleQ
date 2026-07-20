@@ -147,7 +147,7 @@ def run(args: argparse.Namespace) -> dict:
     target_name = args.backend
     if target_name == "qpp":
         target_name = "qpp-cpu"
-
+        
     cudaq.set_target(target_name)
     backend_label = f"cudaq_{args.backend}"
 
@@ -169,11 +169,11 @@ def run(args: argparse.Namespace) -> dict:
                 for run_index in range(args.warmups + args.repeats):
                     warmup = run_index < args.warmups
                     t0 = time.perf_counter()
-
+                    
                     # Force simulation by requesting the statevector
                     state = cudaq.get_state(kernel, *k_args)
                     checksum = len(state)
-
+                    
                     wall_ms = (time.perf_counter() - t0) * 1000.0
                     raw_rows.append({
                         "backend": backend_label,
@@ -187,7 +187,7 @@ def run(args: argparse.Namespace) -> dict:
                     })
                     if not warmup:
                         measured.append(wall_ms)
-
+                
                 summary = {
                     "backend": backend_label,
                     "benchmark": benchmark,
@@ -206,17 +206,13 @@ def run(args: argparse.Namespace) -> dict:
 
     raw_csv = outdir / f"{backend_label}_raw_runs.csv"
     with raw_csv.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(
-            fh, fieldnames=list(raw_rows[0].keys()), lineterminator="\n"
-        )
+        writer = csv.DictWriter(fh, fieldnames=list(raw_rows[0].keys()))
         writer.writeheader()
         writer.writerows(raw_rows)
-
+        
     summary_csv = outdir / f"{backend_label}_summary.csv"
     with summary_csv.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(
-            fh, fieldnames=list(summaries[0].keys()), lineterminator="\n"
-        )
+        writer = csv.DictWriter(fh, fieldnames=list(summaries[0].keys()))
         writer.writeheader()
         writer.writerows(summaries)
 
@@ -234,7 +230,7 @@ def run(args: argparse.Namespace) -> dict:
     }
     manifest_json = outdir / f"{backend_label}_manifest.json"
     manifest_json.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-
+    
     print(f"Completed benchmark for {backend_label}")
     return manifest
 
