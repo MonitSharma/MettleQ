@@ -897,6 +897,40 @@ The raw rows, exact commands, clean-engine manifests, summaries, and plotted
 source data are frozen in
 [`fork-m3pro-20260716-step8-mps-reliability/`](assets/benchmarks-frozen/fork-m3pro-20260716-step8-mps-reliability/).
 
+#### CPU MPS optimization: numpy-native tensors and faster canonicalization
+
+A later profiling pass removed two per-gate overheads on the routed CPU MPS
+path without changing any numerical result. Site tensors on the CPU path are
+now stored as NumPy end-to-end — the previous code round-tripped through MLX on
+every gate, and `apply_single` dispatched through MLX unconditionally — and the
+canonical-center QR moves use `scipy.linalg.qr(check_finite=False)`. Re-running
+the seven-family phase-8 set at `Dmax=64` on the same M3 Pro, with the Qiskit
+Aer points held fixed, every family improved by 29–62% (median ~31%). Parity
+against an exact statevector held to `atol=1e-5` and the MPS/parity test suite
+stayed green.
+
+| Family | MettleQ before | MettleQ after | Improvement | After / Aer |
+| --- | ---: | ---: | ---: | ---: |
+| GHZ 1,000q d1 | 562.6 ms | **210.7 ms** | -62.5% | 0.28x |
+| Line 100q d8 | 163.0 ms | **70.3 ms** | -56.9% | 0.41x |
+| Ring 50q d2 | 36.6 ms | **19.1 ms** | -48.0% | 0.29x |
+| Grid 36q d2 | 248.4 ms | **171.2 ms** | -31.1% | **2.47x** |
+| Rainbow 32q d1 | 712.6 ms | **500.0 ms** | -29.8% | 0.007x |
+| Random long range 32q d1 | 264.7 ms | **183.3 ms** | -30.8% | 0.018x |
+| All to all 20q d1 | 857.8 ms | **606.8 ms** | -29.3% | 0.042x |
+
+The `before` column is the frozen `cf4fa77` phase-8 baseline; `after` is the
+same machine and protocol with the two changes applied. Grid 36q now beats Aer
+by 2.47x, and the low-entanglement families close most of the gap. The highly
+entangled rainbow and random-long-range schedules remain far slower than Aer —
+an inherent matrix-product-state versus optimized-C++ limit at large bond
+growth, not a tuning gap that these changes can close.
+
+<div align="center">
+  <img src="assets/perf-charts/mps_optimization_comparison.png" alt="MettleQ CPU MPS before and after the NumPy-native tensor and scipy QR optimization, versus Qiskit Aer CPU MPS across seven entanglement families" width="920"/>
+  <br/><em>MettleQ CPU MPS before (frozen <code>cf4fa77</code>) versus after the optimization, against the unchanged Aer points. Lower is better; log scale.</em>
+</div>
+
 ### Published 56-qubit P9: midpoint MPO/TNO now recovers the peak
 
 Quantum Advantage Tracker issue
@@ -980,9 +1014,22 @@ Even with the tight reference cutoff of `0.0006` (preserving maximum precision),
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | **Apple M3 Pro CPU (Mac, Optimized)** | **512** | **0.0006** | **90 / 50** | **20** | **1,164.31 s** | **✅ Yes** | **10.0%** |
 | Apple M3 Pro CPU (Mac, Unoptimized) | 512 | 0.0006 | 90 / 50 | 20 | 1,246.51 s | ✅ Yes | 10.0% |
+| Apple M3 Pro CPU (Mac, default isolation + Accelerate threads) | 512 | 0.0006 | 90 / 50 | 20 | 1,314.26 s | ✅ Yes | 10.0% |
 | **MKL + P-cores (Optimized WSL)** | **512** | **0.0006** | **10,000 / 1,000** | **20** | **1,777.57 s** | **✅ Yes** | **5.6%** |
 | OpenBLAS + P-cores (WSL) | 512 | 0.003 | 10,000 / 10,000 | 20 | 1,942.35 s | ✅ Yes | 10.9% |
 | OpenBLAS (Reference config WSL) | 8192 | 0.0006 | 10,000 / 10,000 | 2 | *Aborted (Cycle 26)* | ❌ - | - |
+
+We re-ran the exact campaign config on the current tree to check whether the
+CPU MPS optimization above carries over to P9. It does not: the peaked solver
+is the separate vendored midpoint-MPO/quimb engine and never calls MettleQ's
+native `mps_state.py`, so the 29–62% MPS gains do not apply here. The run
+matched the peak (100/1000) but landed at 1,314.26 s — slower than the
+`131072`-isolation Optimized row — because it used the default SVD isolation
+threshold (`16384`) and `VECLIB_MAXIMUM_THREADS=6`, which added no benefit on
+this largely serial critical path. Forcing every large SVD fully in-process
+(`METTLEQ_MPO_SVD_ISOLATION_MIN_ELEMENTS` disabled) crashed the worker on a
+native LAPACK SVD, confirming the process isolation is load-bearing; the tuned
+`131072` threshold in the row above remains the safe way to trim runtime.
 
 ##### Peaked MPO Terminology & Tuning Levers
 
