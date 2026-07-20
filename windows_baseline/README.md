@@ -92,12 +92,13 @@ Raw Apple results and manifests are frozen under
   kernel. This reduced 28q launches 27→14 and runtime 1,936.71→877.90 ms
   (2.21×) while preserving the `5e-6` accuracy contract.
 
-## Aer MPS contract warning
+## Exclusion of MPS from Comparative Plots
 
-The historical Aer MPS script calls `save_statevector()` through 25 qubits but
-switches to one-shot `measure_all()` above 25. The resulting runtime drop is a
-result-contract change, not a scaling breakthrough. Those raw rows remain for
-provenance but are excluded from the matched full-state plot.
+Matrix Product State (MPS) backends (such as `qiskit_aer_matrix_product_state_cpu/gpu`) are excluded from the main comparative plots (`mettleq_vs_windows_matched_widths.png`) for two key reasons:
+1. **Algorithmic Disparity**: MPS is an approximate tensor network simulator that scales with the entanglement/bond-dimension of the circuit. Comparing it against dense statevector simulators (like MettleQ, CUDA-Q, PennyLane Lightning, and Qiskit Aer statevector) which must construct and update the exact, full $2^N$ statevector is an unfair comparison of full-state simulation performance.
+2. **Contract Mismatch**: The underlying Qiskit Aer benchmark script calls `save_statevector()` for $n \le 25$ but silently switches to a cheap `measure_all()` (sampling a single bitstring) for $n > 25$ to avoid out-of-memory crashes. This change in the returned output type (from $2^N$ complex amplitudes to a single 1-shot sample) results in a sudden, artificial drop in execution time to a few milliseconds, making a unified scaling comparison misleading.
+
+The raw MPS measurement records are still preserved in `results_summary.md` and the `results/` directory for completeness, but they are excluded from the comparative charts.
 
 ## Reproduce
 
