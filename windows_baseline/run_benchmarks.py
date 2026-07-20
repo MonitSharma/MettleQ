@@ -26,6 +26,7 @@ def main():
     parser.add_argument("--qubits-default-qubit", default="15,20,24")
     parser.add_argument("--qubits-mps", default="15,20,24,26,28,30,40")
     parser.add_argument("--qubits-cudaq", default="15,20,24,26,28")
+    parser.add_argument("--qubits-cudaq-cpu", default="15,20,24")
     parser.add_argument("--benchmarks", default="qft,qaoa_ring,ghz,grover_proxy,phase_estimation,tfim_trotter")
     parser.add_argument("--warmups", type=int, default=1)
     parser.add_argument("--repeats", type=int, default=3)
@@ -59,7 +60,7 @@ def main():
         [python_bin, str(base_dir / "pennylane_baseline.py"), "--outdir", str(out_dir), "--device", "lightning.gpu", "--qubits", args.qubits, "--benchmarks", args.benchmarks, "--warmups", str(args.warmups), "--repeats", str(args.repeats)],
         
         # CUDA Quantum qpp (CPU)
-        [python_bin, str(base_dir / "cudaq_baseline.py"), "--outdir", str(out_dir), "--backend", "qpp", "--qubits", args.qubits, "--benchmarks", args.benchmarks, "--warmups", str(args.warmups), "--repeats", str(args.repeats)],
+        [python_bin, str(base_dir / "cudaq_baseline.py"), "--outdir", str(out_dir), "--backend", "qpp", "--qubits", args.qubits_cudaq_cpu, "--benchmarks", args.benchmarks, "--warmups", str(args.warmups), "--repeats", str(args.repeats)],
         # CUDA Quantum nvidia (GPU)
         [python_bin, str(base_dir / "cudaq_baseline.py"), "--outdir", str(out_dir), "--backend", "nvidia", "--qubits", args.qubits_cudaq, "--benchmarks", args.benchmarks, "--warmups", str(args.warmups), "--repeats", str(args.repeats)],
     ]

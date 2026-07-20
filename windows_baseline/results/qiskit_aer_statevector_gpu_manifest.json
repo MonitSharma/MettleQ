@@ -1,6 +1,16 @@
 {
   "status": "measured",
-  "backend": "cudaq_qpp",
+  "backend": "qiskit_aer_statevector_gpu",
+  "availability": {
+    "qiskit": {
+      "available": true,
+      "version": "2.5.0"
+    },
+    "qiskit-aer": {
+      "available": true,
+      "version": "0.17.2"
+    }
+  },
   "python": "3.11.13 (main, Jun  4 2025, 08:57:29) [GCC 11.4.0]",
   "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.35",
   "benchmarks": [
@@ -14,13 +24,15 @@
   "qubits": [
     15,
     20,
-    24
+    24,
+    26,
+    28
   ],
   "warmups": 1,
   "repeats": 3,
   "layers": 6,
   "files": {
-    "raw_runs": "cudaq_qpp_raw_runs.csv",
-    "summary": "cudaq_qpp_summary.csv"
+    "raw_runs": "qiskit_aer_statevector_gpu_raw_runs.csv",
+    "summary": "qiskit_aer_statevector_gpu_summary.csv"
   }
 }
