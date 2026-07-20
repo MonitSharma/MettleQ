@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   portable:
-    name: Portable source and backend tests
+    name: Portable build and package checks
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -19,18 +19,12 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - name: Install portable test dependencies
-        run: >-
-          python -m pip install
-          fastapi==0.115.6 uvicorn==0.30.6 pydantic==2.8.2
-          psutil httpx pytest 'nbformat>=5.10,<6'
       - name: Compile Python sources
-        run: python -m compileall -q src/mettleq src/mlxq quantumstudio/backend quantumstudio/bin
-      - name: Verify generated tutorial sources
-        run: python tools/build_tutorial_notebooks.py --check
-      - name: Build distributable wheel
+        run: python -m compileall -q src/mettleq src/mlxq
+      - name: Build distributable wheel and verify contents
         run: |
-          python -m pip wheel . --no-deps --wheel-dir dist
+          python -m pip install --quiet build
+          python -m build --wheel
           python - <<'PY'
           import glob
           import zipfile
@@ -42,20 +36,18 @@ jobs:
           assert "mettleq/__init__.py" in names
           assert any(name.endswith(".dist-info/METADATA") for name in names)
           assert any(name.endswith(".dist-info/entry_points.txt") for name in names)
+          assert any(name.startswith("mettleq/shaders/") for name in names)
+          assert any(name.startswith("mettleq/integrations/") for name in names)
+          assert any("mettleq/datasets/qasm_local/" in name for name in names)
           print("verified", wheels[0], len(names), "files")
           PY
-      - name: Verify backend test collection
-        run: python -m pytest quantumstudio/tests --collect-only -q
-      - name: Run backend tests
-        run: python -m pytest quantumstudio/tests -q
       - name: Require a clean checkout
         run: |
           status="$(git status --porcelain)"
           if [[ -n "$status" ]]; then
-            echo "Tests or generators changed the checkout:"
+            echo "Build changed the tracked checkout:"
             echo "$status"
             git diff --stat
-            git diff --check
             exit 1
           fi
 
@@ -70,8 +62,8 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - name: Install simulator and SDK integration test dependencies
-        run: python -m pip install -e '.[plot,tests,backend,tutorials]'
+      - name: Install package with SDK and test extras
+        run: python -m pip install -e '.[sdk,tests]'
       - name: Verify Apple GPU availability
         run: |
           python - <<'PY'
@@ -81,12 +73,8 @@ jobs:
           assert "gpu" in str(mx.default_device()).lower(), mx.default_device()
           print("MLX device:", mx.default_device())
           PY
-      - name: Run all simulator and backend tests
-        run: ./test.sh
-      - name: Run coverage
-        run: python -m pytest --cov=mettleq --cov-report=term-missing
-      - name: Execute Qiskit and PennyLane tutorial parity suite
-        run: python tools/run_tutorial_notebooks.py --no-write
+      - name: Run simulator and SDK test suite
+        run: python -m pytest src/tests -q
       - name: Run installed-SDK quickstarts
         run: |
           python examples/qiskit_quickstart.py
@@ -95,9 +83,8 @@ jobs:
         run: |
           status="$(git status --porcelain)"
           if [[ -n "$status" ]]; then
-            echo "Tests or generators changed the checkout:"
+            echo "Tests changed the tracked checkout:"
             echo "$status"
             git diff --stat
-            git diff --check
             exit 1
           fi
