@@ -24,7 +24,10 @@ WORKLOADS = (
 BACKENDS = {
     "CUDA-Q NVIDIA GPU": "cudaq_nvidia_summary.csv",
     "PennyLane Lightning GPU": "pennylane_lightning_gpu_summary.csv",
+    "Qiskit Aer statevector GPU": "qiskit_aer_statevector_gpu_summary.csv",
+    "Qiskit Aer MPS GPU": "qiskit_aer_matrix_product_state_gpu_summary.csv",
     "Qiskit Aer statevector CPU": "qiskit_aer_statevector_cpu_summary.csv",
+    "Qiskit Aer MPS CPU": "qiskit_aer_matrix_product_state_cpu_summary.csv",
     "PennyLane Lightning CPU": "pennylane_lightning_qubit_summary.csv",
 }
 
@@ -84,7 +87,10 @@ def write_plot(rows: list[dict[str, object]]) -> None:
         "MettleQ Metal": "#167D8D",
         "CUDA-Q NVIDIA GPU": "#76B900",
         "PennyLane Lightning GPU": "#7B4AB5",
+        "Qiskit Aer statevector GPU": "#B53F4E",
+        "Qiskit Aer MPS GPU": "#D05A9E",
         "Qiskit Aer statevector CPU": "#D87822",
+        "Qiskit Aer MPS CPU": "#8B8D16",
         "PennyLane Lightning CPU": "#61758A",
     }
     lookup = {
@@ -112,7 +118,7 @@ def write_plot(rows: list[dict[str, object]]) -> None:
     handles, labels = axes[0, 0].get_legend_handles_labels()
     fig.legend(
         handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.945),
-        ncol=3, frameon=False,
+        ncol=4, frameon=False,
     )
     fig.suptitle(
         "Matched-width full-state simulation: Apple M3 Pro Metal vs Windows/WSL",
