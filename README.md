@@ -974,29 +974,32 @@ To run the 56-qubit peaked circuit benchmark on a Windows host under WSL2, we im
 
 Even with the tight reference cutoff of `0.0006` (preserving maximum precision), these optimizations reduced the total simulation time to **29.6 minutes (1,777 seconds)** and successfully matched the expected bitstring.
 
-##### Midpoint MPO WSL Performance Breakdown
+##### Midpoint MPO Performance Breakdown & Mac Comparison
 
-| Optimization State | Max Bond | Cutoff | sabre_trials / post_sabre | Progress Limit | Algorithm Time | Bitstring Match | Peak Fraction |
+| System / Optimization State | Max Bond | Cutoff | sabre_trials / post_sabre | Progress Limit | Algorithm Time | Bitstring Match | Peak Fraction |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| **MKL + P-cores (Optimized)** | **512** | **0.0006** | **10,000 / 1,000** | **20** | **1,777.57 s** | **✅ Yes** | **5.6%** |
-| OpenBLAS + P-cores | 512 | 0.003 | 10,000 / 10,000 | 20 | 1,942.35 s | ✅ Yes | 10.9% |
-| OpenBLAS (Reference config) | 8192 | 0.0006 | 10,000 / 10,000 | 2 | *Aborted (Cycle 26)* | ❌ - | - |
+| **Apple M3 Pro CPU (Mac, Optimized)** | **512** | **0.0006** | **90 / 50** | **20** | **1,164.31 s** | **✅ Yes** | **10.0%** |
+| Apple M3 Pro CPU (Mac, Unoptimized) | 512 | 0.0006 | 90 / 50 | 20 | 1,246.51 s | ✅ Yes | 10.0% |
+| **MKL + P-cores (Optimized WSL)** | **512** | **0.0006** | **10,000 / 1,000** | **20** | **1,777.57 s** | **✅ Yes** | **5.6%** |
+| OpenBLAS + P-cores (WSL) | 512 | 0.003 | 10,000 / 10,000 | 20 | 1,942.35 s | ✅ Yes | 10.9% |
+| OpenBLAS (Reference config WSL) | 8192 | 0.0006 | 10,000 / 10,000 | 2 | *Aborted (Cycle 26)* | ❌ - | - |
 
 ##### Peaked MPO Terminology & Tuning Levers
 
 * **Cutoff (`--cutoff`)**: The threshold below which singular values in Singular Value Decomposition (SVD) are truncated during MPO compression. A tighter cutoff (`0.0006` vs. `0.003`) retains more state fidelity but increases matrix dimensions, directly scaling execution time.
 * **Progress Limit (`--no-progress-limit`)**: The maximum number of consecutive unswap cycles permitted to consume zero work gates before aborting. In the presence of layout dead-ends (`swap_thrash`), setting this limit higher (e.g. `20`) is critical so that the routing pass can escape and progress.
-* **Peak Fraction**: The fraction of total sampled shots (out of 1000) that exactly match the expected peaked bitstring. A high peak fraction (such as 5.6%) indicates a strong physical signal.
+* **Peak Fraction**: The fraction of total sampled shots (out of 1000) that exactly match the expected peaked bitstring. A high peak fraction (such as 10.0% on Mac / 5.6% on WSL) indicates a strong physical signal.
 * **Max Bond (`--max-bond`)**: The maximum allowed virtual bond dimension of the MPO. Setting a reasonable bond cap (e.g., `512` instead of `8192`) limits the SVD matrix sizes, preventing severe cubic $O(D^3)$ CPU complexity scaling while maintaining high approximation fidelity.
 * **Post-Unswap Sabre Trials (`--post-sabre-trials`)**: The number of routing trials executed after each unswap cycle. Reducing this from `10,000` to `1,000` dramatically speeds up the routing phase (saving ~550 seconds of CPU routing time) while maintaining layout quality.
+* **SVD Isolation Threshold (`METTLEQ_MPO_SVD_ISOLATION_MIN_ELEMENTS`)**: The minimum matrix size (number of elements) required to isolate SVD operations into a separate helper process. Raising this from the default `16384` to `131072` avoids IPC serialization overhead for the majority of medium-sized matrices, speeding up the Apple Silicon (M3 Pro) run by **6–8%** (reducing runtime to ~1,150 s) while safely retaining process-isolation protection for the largest matrices.
 
 ##### Sample Distribution Plot
 
-The distribution of the top 10 most-sampled bitstrings from our optimized run is shown below:
+The comparison of the top 10 most-sampled bitstrings between the Windows WSL run and the Apple M3 Pro CPU run is shown below:
 
 <div align="center">
-  <img src="windows_baseline/plots/p9_samples.png" alt="56-qubit P9 Bitstring Sample Distribution" width="900"/>
-  <br/><em>56-qubit P9 peaked-circuit top 10 bitstring samples. The predicted peak is highlighted in red.</em>
+  <img src="windows_baseline/plots/p9_samples.png" alt="56-qubit P9 Bitstring Sample Distribution Comparison" width="1000"/>
+  <br/><em>56-qubit P9 peaked-circuit top 10 bitstring samples comparison. The predicted peak is highlighted in red.</em>
 </div>
 
 
