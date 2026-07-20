@@ -138,38 +138,55 @@ def main():
         import matplotlib.pyplot as plt
         print("--- Generating Comparative Plots ---")
         
+        # Professional color palette and markers for each backend (matching exact CSV names)
+        backend_styles = {
+            "cudaq_nvidia": ("CUDA-Q GPU (RTX 3070)", "#5E9E00", "s", "-"),
+            "qiskit_aer_statevector_gpu": ("Qiskit Aer GPU (RTX 3070)", "#E31A1C", "d", "-"),
+            "qiskit_aer_statevector_cpu": ("Qiskit Aer CPU", "#FC9A99", "d", "--"),
+            "lightning.gpu": ("PennyLane Lightning GPU (RTX 3070)", "#6A3D9A", "^", "-"),
+            "lightning.qubit": ("PennyLane Lightning CPU", "#CAB2D6", "^", "--"),
+            "default.qubit": ("PennyLane default.qubit (CPU)", "#FF7F00", "o", ":")
+        }
+        
         for bench in data.keys():
-            plt.figure(figsize=(10, 6))
+            fig, ax = plt.subplots(figsize=(9, 5.5))
             
             for backend in sorted(data[bench].keys()):
+                # Exclude approximate matrix product state simulations
+                if "matrix_product_state" in backend or "mps" in backend:
+                    continue
+                # Exclude slow CUDA-Q CPU simulation
+                if "cudaq_qpp" in backend or "qpp" in backend:
+                    continue
+                
                 points = sorted(data[bench][backend].items())
                 xs = [p[0] for p in points]
                 ys = [p[1] for p in points]
                 
-                # Choose styling
-                marker = "o"
-                if "cudaq" in backend:
-                    linestyle = "-"
-                    marker = "s"
-                elif "lightning" in backend or "default" in backend:
-                    linestyle = "--"
-                    marker = "^"
-                else:
-                    linestyle = "-."
-                    marker = "d"
-                    
-                plt.semilogy(xs, ys, label=backend, marker=marker, linestyle=linestyle, linewidth=1.5)
+                # Fetch professional styles, fallback to default if not configured
+                label, color, marker, linestyle = backend_styles.get(
+                    backend, (backend, "#333333", "o", "-")
+                )
                 
-            plt.xlabel("Number of Qubits")
-            plt.ylabel("Execution Time (ms, log scale)")
-            plt.title(f"Scaling Comparison for {bench.upper()}")
-            plt.grid(True, which="both", linestyle=":", alpha=0.5)
-            plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+                ax.semilogy(xs, ys, label=label, marker=marker, color=color, 
+                            linestyle=linestyle, linewidth=2.0, markersize=5)
+                
+            ax.set_xlabel("Number of Qubits", fontsize=11, labelpad=8)
+            ax.set_ylabel("Execution Time (ms, log scale)", fontsize=11, labelpad=8)
+            ax.set_title(f"Scaling Comparison: {bench.replace('_', ' ').title()} Workload", 
+                         fontsize=13, pad=15, fontweight="bold")
+            
+            ax.grid(True, which="both", linestyle="--", alpha=0.3)
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+            
+            # Position legend neatly on the right
+            ax.legend(bbox_to_anchor=(1.02, 1), loc="upper left", frameon=False, fontsize=9.5)
             plt.tight_layout()
             
             plot_file = plots_dir / f"{bench}_comparison.png"
-            plt.savefig(plot_file, dpi=150, bbox_inches="tight")
-            plt.close()
+            fig.savefig(plot_file, dpi=180, bbox_inches="tight")
+            plt.close(fig)
             print(f"Saved plot: {plot_file}")
             
     except Exception as e:

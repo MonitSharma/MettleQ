@@ -1062,6 +1062,40 @@ evidence.
 
 </details>
 
+### Cross-Platform GPU Comparison: Apple Silicon Metal vs Windows/WSL NVIDIA GPUs
+
+To evaluate peak hardware-accelerated quantum simulation performance, we ran comparative benchmarks between the custom Metal backend of **MettleQ (on an Apple M3 Pro)** and the GPU-accelerated backends of **CUDA-Q, PennyLane Lightning, and Qiskit Aer (on a Windows WSL host with an NVIDIA RTX 3070)**.
+
+To ensure a fair comparison, the benchmarks are restricted to **exact, dense statevector simulation** under a unified full-statevector contract. Matrix Product State (MPS) simulators are excluded because they use an approximate tensor network representation and their benchmark scripts switch from full-statevector extraction to cheap measurement sampling at $>25$ qubits to avoid memory issues.
+
+The scaling comparisons for the six circuit workloads (QFT, QAOA, GHZ, Grover Proxy, Phase Estimation, and TFIM Trotter) across 15 to 28 qubits are shown below:
+
+#### 1. GPU-Only Acceleration Scaling
+This plot compares the peak GPU-accelerated simulation timings between Apple Silicon Metal and NVIDIA CUDA-Q, PennyLane, and Qiskit Aer GPU backends:
+
+<div align="center">
+  <img src="windows_baseline/plots/gpu_comparison_matched_widths.png" alt="MettleQ Metal vs Windows WSL GPU Comparison" width="900"/>
+  <br/><em>GPU-only scaling curves. Lower is better.</em>
+</div>
+
+#### 2. All-Backend WSL Comparison
+This plot shows the scaling of all Windows/WSL CPU and GPU backends compared to MettleQ Metal:
+
+<div align="center">
+  <img src="windows_baseline/plots/mettleq_vs_windows_matched_widths.png" alt="MettleQ Metal vs WSL CPU and GPU comparison" width="900"/>
+  <br/><em>Comparison of all WSL CPU and GPU backends against MettleQ Metal. Lower is better.</em>
+</div>
+
+#### 3. MettleQ vs CUDA-Q GPU Scaling
+This focused comparison compares the direct scaling of Apple Metal against NVIDIA's CUDA-Q platform:
+
+<div align="center">
+  <img src="windows_baseline/plots/mettleq_vs_cudaq_matched_widths.png" alt="MettleQ Metal vs CUDA-Q GPU scaling comparison" width="900"/>
+  <br/><em>Focused CUDA-Q GPU vs MettleQ Metal comparison. Lower is better.</em>
+</div>
+
+For details on the Windows/WSL configuration and exact numerical results, see the [`windows_baseline/README.md`](windows_baseline/README.md) and [`windows_baseline/results_summary.md`](windows_baseline/results_summary.md).
+
 ## Trust, correctness, and observability
 
 Fast simulation is useful only when dispatch, semantics, and measurements are
