@@ -16,6 +16,7 @@ METTLEQ_RESULTS = (
 OUTPUT = WINDOWS_RESULTS / "mettleq_windows_matched_widths.csv"
 PLOT = ROOT / "windows_baseline" / "plots" / "mettleq_vs_windows_matched_widths.png"
 CUDAQ_PLOT = ROOT / "windows_baseline" / "plots" / "mettleq_vs_cudaq_matched_widths.png"
+GPU_PLOT = ROOT / "windows_baseline" / "plots" / "gpu_comparison_matched_widths.png"
 WIDTHS = (15, 20, 24, 26, 28)
 WORKLOADS = (
     "qft", "qaoa_ring", "ghz", "grover_proxy",
@@ -25,9 +26,7 @@ BACKENDS = {
     "CUDA-Q NVIDIA GPU": "cudaq_nvidia_summary.csv",
     "PennyLane Lightning GPU": "pennylane_lightning_gpu_summary.csv",
     "Qiskit Aer statevector GPU": "qiskit_aer_statevector_gpu_summary.csv",
-    "Qiskit Aer MPS GPU": "qiskit_aer_matrix_product_state_gpu_summary.csv",
     "Qiskit Aer statevector CPU": "qiskit_aer_statevector_cpu_summary.csv",
-    "Qiskit Aer MPS CPU": "qiskit_aer_matrix_product_state_cpu_summary.csv",
     "PennyLane Lightning CPU": "pennylane_lightning_qubit_summary.csv",
 }
 
@@ -88,9 +87,7 @@ def write_plot(rows: list[dict[str, object]]) -> None:
         "CUDA-Q NVIDIA GPU": "#76B900",
         "PennyLane Lightning GPU": "#7B4AB5",
         "Qiskit Aer statevector GPU": "#B53F4E",
-        "Qiskit Aer MPS GPU": "#D05A9E",
         "Qiskit Aer statevector CPU": "#D87822",
-        "Qiskit Aer MPS CPU": "#8B8D16",
         "PennyLane Lightning CPU": "#61758A",
     }
     lookup = {
@@ -118,7 +115,7 @@ def write_plot(rows: list[dict[str, object]]) -> None:
     handles, labels = axes[0, 0].get_legend_handles_labels()
     fig.legend(
         handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.945),
-        ncol=4, frameon=False,
+        ncol=3, frameon=False,
     )
     fig.suptitle(
         "Matched-width full-state simulation: Apple M3 Pro Metal vs Windows/WSL",
@@ -186,14 +183,61 @@ def write_cudaq_plot(rows: list[dict[str, object]]) -> None:
     plt.close(fig)
 
 
+def write_gpu_plot(rows: list[dict[str, object]]) -> None:
+    """Focused scaling figure comparing all GPU backends: MettleQ Metal, CUDA-Q, PennyLane GPU, and Qiskit GPU."""
+    import matplotlib.pyplot as plt
+
+    lookup = {
+        (str(row["workload"]), int(row["qubits"]), str(row["backend"])): row
+        for row in rows
+    }
+    series = {
+        "MettleQ Metal (Apple M3 Pro)": ("#167D8D", "o", "MettleQ Metal"),
+        "CUDA-Q NVIDIA GPU (RTX 3070)": ("#76B900", "s", "CUDA-Q NVIDIA GPU"),
+        "PennyLane Lightning GPU (RTX 3070)": ("#7B4AB5", "^", "PennyLane Lightning GPU"),
+        "Qiskit Aer statevector GPU (RTX 3070)": ("#B53F4E", "d", "Qiskit Aer statevector GPU"),
+    }
+    fig, axes = plt.subplots(2, 3, figsize=(14.2, 8.5), sharex=False)
+    for ax, workload in zip(axes.flat, WORKLOADS):
+        for label, (color, marker, backend_key) in series.items():
+            values = [
+                float(lookup[(workload, width, backend_key)]["mean_ms"])
+                for width in WIDTHS
+            ]
+            ax.plot(WIDTHS, values, marker=marker, linewidth=2.4,
+                    markersize=5, label=label, color=color)
+        ax.set_yscale("log")
+        ax.set_title(workload.replace("_", " ").title())
+        ax.set_xlabel("Number of qubits")
+        ax.set_xticks(WIDTHS, [str(width) for width in WIDTHS])
+        ax.set_ylabel("Mean time (ms, log scale)")
+        ax.grid(which="both", linestyle=":", alpha=0.4)
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.945),
+               ncol=4, frameon=False)
+    fig.suptitle("Exact-width GPU Acceleration Scaling: MettleQ Metal vs Windows/WSL GPUs",
+                 y=0.995, fontsize=15)
+    fig.text(
+        0.5, 0.012,
+        "Widths: 15, 20, 24, 26, 28 qubits · one warm-up + three measured runs · full-state contract",
+        ha="center", fontsize=9,
+    )
+    fig.tight_layout(rect=(0, 0.045, 1, 0.88))
+    GPU_PLOT.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(GPU_PLOT, dpi=180)
+    plt.close(fig)
+
+
 def main() -> int:
     rows = build_rows()
     write_csv(rows)
     write_plot(rows)
     write_cudaq_plot(rows)
+    write_gpu_plot(rows)
     print(f"wrote {OUTPUT}")
     print(f"wrote {PLOT}")
     print(f"wrote {CUDAQ_PLOT}")
+    print(f"wrote {GPU_PLOT}")
     return 0
 
 
