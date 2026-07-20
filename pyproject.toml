@@ -121,5 +121,5 @@ include = ["mettleq*", "mlxq*"]
 
 [tool.setuptools.package-data]
 "mettleq.integrations" = ["pennylane_capabilities.toml"]
-"mettleq" = ["datasets/*.qasm", "datasets/*.md", "datasets/*.txt"]
+"mettleq" = ["datasets/*.qasm", "datasets/*.md", "datasets/*.txt", "datasets/qasm_local/*.qasm"]
 "mettleq._vendor.peaked_mpo" = ["*.md", "*.txt"]

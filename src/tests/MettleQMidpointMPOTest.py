@@ -288,6 +288,10 @@ def test_native_svd_service_reconstructs_matrix():
 
 
 def test_priority_campaign_schedules_balance_pairwise_order():
+    pytest.importorskip(
+        "tools.benchmark_midpoint_mpo_priority_phase",
+        reason="benchmark harness lives on the development branch",
+    )
     from tools.benchmark_midpoint_mpo_priority_phase import (
         MAIN_ARMS,
         _cutoff_schedule,
@@ -315,6 +319,10 @@ def test_priority_campaign_schedules_balance_pairwise_order():
 
 
 def test_priority_campaign_classifies_attempted_cutoff_failures():
+    pytest.importorskip(
+        "tools.benchmark_midpoint_mpo_priority_phase",
+        reason="benchmark harness lives on the development branch",
+    )
     from tools.benchmark_midpoint_mpo_priority_phase import (
         _arm_contract,
         _cutoff_schedule,

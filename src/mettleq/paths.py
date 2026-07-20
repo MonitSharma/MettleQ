@@ -4,24 +4,22 @@ import os
 from pathlib import Path
 
 
-def _repo_root() -> Path:
-    here = Path(__file__).resolve()
-    # src/mettleq/paths.py → repo root is parents[2]
-    # parents[0]=paths.py, [1]=mettleq, [2]=src, [3]=repo-root
-    # Be defensive in case layout differs
-    for up in here.parents:
-        if (up / 'src').is_dir() and (up / 'paper').exists():
-            return up
-    # Fallback: two levels up from src/mettleq
-    return here.parents[2]
+def _package_data_dir() -> Path:
+    """The ``datasets`` directory bundled inside the installed package."""
+    return Path(__file__).resolve().parent / 'datasets'
 
 
 def qasm_local_dir() -> Path:
+    """Directory of bundled local QASM fixtures.
+
+    Resolves to package data so it works from an installed wheel, not only a
+    source checkout. Override with ``METTLEQ_QASM_LOCAL`` to point at a larger
+    external circuit set (e.g. the full collection on the development branch).
+    """
     env = os.environ.get('METTLEQ_QASM_LOCAL')
     if env:
-        p = Path(env)
-        return p
-    return _repo_root() / 'datasets' / 'qasm' / 'local'
+        return Path(env)
+    return _package_data_dir() / 'qasm_local'
 
 
 def qasm_local_path(name: str) -> str:
@@ -32,7 +30,7 @@ def mqtbench_dir() -> Path:
     env = os.environ.get('METTLEQ_MQTBENCH')
     if env:
         return Path(env)
-    return _repo_root() / 'benchmarks' / 'mqtbench'
+    return _package_data_dir() / 'mqtbench'
 
 
 __all__ = ['qasm_local_dir', 'qasm_local_path', 'mqtbench_dir']
