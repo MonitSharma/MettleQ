@@ -29,10 +29,6 @@ DEVICE_ALIASES = {
 # qubits. The calibration benchmark can override this per backend/device
 # instance without changing circuit code.
 DEFAULT_STATEVECTOR_GPU_MIN_QUBITS = 16
-# MLX 0.32 performs MPS SVD on CPU. On the reference M3 Pro, the explicit GPU
-# tensor path did not beat the all-CPU path through 32 qubits, so automatic
-# MPS remains on CPU unless a caller supplies a measured crossover.
-DEFAULT_MPS_GPU_MIN_QUBITS: Optional[int] = None
 DEFAULT_AUTOMATIC_MPS_MIN_QUBITS = 24
 
 
@@ -118,7 +114,6 @@ def select_execution(
     allow_approximation: bool = False,
     allow_unsafe_statevector: Optional[bool] = None,
     statevector_gpu_min_qubits: int = DEFAULT_STATEVECTOR_GPU_MIN_QUBITS,
-    mps_gpu_min_qubits: Optional[int] = DEFAULT_MPS_GPU_MIN_QUBITS,
     automatic_mps_min_qubits: int = DEFAULT_AUTOMATIC_MPS_MIN_QUBITS,
 ) -> ExecutionSelection:
     """Select one method and one numerical device with an auditable reason."""
@@ -127,10 +122,8 @@ def select_execution(
     requested_device = normalize_device(device)
     if not isinstance(allow_approximation, bool):
         raise TypeError("allow_approximation must be a boolean")
-    if statevector_gpu_min_qubits < 1 or (
-        mps_gpu_min_qubits is not None and mps_gpu_min_qubits < 1
-    ):
-        raise ValueError("GPU crossover thresholds must be positive")
+    if statevector_gpu_min_qubits < 1:
+        raise ValueError("statevector GPU crossover threshold must be positive")
 
     mps_compatible, mps_reasons, _ = _mps_compatibility(
         n_qubits, operations
@@ -167,6 +160,11 @@ def select_execution(
         reason = "automatic_exact_request_has_no_allowed_approximate_fallback"
 
     if requested_device != "auto":
+        if (
+            selected_method == "matrix_product_state"
+            and requested_device == "gpu"
+        ):
+            raise ValueError("MPS is CPU-only; use device='cpu' or 'auto'")
         if requested_device == "gpu" and not _gpu_available():
             raise RuntimeError("Apple GPU execution was requested but Metal is unavailable")
         selected_device = requested_device
@@ -174,18 +172,11 @@ def select_execution(
     elif not _gpu_available():
         selected_device = "cpu"
         device_reason = "automatic_gpu_unavailable"
-    elif (
-        selected_method == "matrix_product_state"
-        and mps_gpu_min_qubits is None
-    ):
+    elif selected_method == "matrix_product_state":
         selected_device = "cpu"
-        device_reason = "automatic_mps_gpu_crossover_not_observed"
+        device_reason = "automatic_mps_cpu_native"
     else:
-        crossover = (
-            statevector_gpu_min_qubits
-            if selected_method == "statevector"
-            else mps_gpu_min_qubits
-        )
+        crossover = statevector_gpu_min_qubits
         if n_qubits < int(crossover):
             selected_device = "cpu"
             device_reason = (

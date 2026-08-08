@@ -53,7 +53,6 @@ from ._common import (
 from ..mps_accuracy import build_convergence_report
 from ..planning import (
     DEFAULT_AUTOMATIC_MPS_MIN_QUBITS,
-    DEFAULT_MPS_GPU_MIN_QUBITS,
     DEFAULT_STATEVECTOR_GPU_MIN_QUBITS,
     normalize_device,
     normalize_method,
@@ -122,7 +121,6 @@ class MettleQDevice(PennyLaneDevice):
         mps_convergence_bond_dimensions=None,
         mps_convergence_atol: float = 5e-5,
         statevector_gpu_min_qubits: int = DEFAULT_STATEVECTOR_GPU_MIN_QUBITS,
-        mps_gpu_min_qubits: Optional[int] = DEFAULT_MPS_GPU_MIN_QUBITS,
         automatic_mps_min_qubits: int = DEFAULT_AUTOMATIC_MPS_MIN_QUBITS,
         execution_report: bool = False,
         metal_checkpoint_budget_bytes: Optional[int] = None,
@@ -172,11 +170,6 @@ class MettleQDevice(PennyLaneDevice):
             raise DeviceError("MPS convergence tolerance must be positive")
         self._mps_convergence_atol = float(mps_convergence_atol)
         self._statevector_gpu_min_qubits = int(statevector_gpu_min_qubits)
-        self._mps_gpu_min_qubits = (
-            None
-            if mps_gpu_min_qubits is None
-            else int(mps_gpu_min_qubits)
-        )
         self._automatic_mps_min_qubits = int(automatic_mps_min_qubits)
         self._execution_report = bool(execution_report)
         self._metal_checkpoint_budget_bytes = metal_checkpoint_budget_bytes
@@ -217,7 +210,6 @@ class MettleQDevice(PennyLaneDevice):
             ),
             "mps_convergence_atol": self._mps_convergence_atol,
             "statevector_gpu_min_qubits": self._statevector_gpu_min_qubits,
-            "mps_gpu_min_qubits": self._mps_gpu_min_qubits,
             "automatic_mps_min_qubits": self._automatic_mps_min_qubits,
             **config.device_options,
         }
@@ -467,11 +459,6 @@ class MettleQDevice(PennyLaneDevice):
             ),
             statevector_gpu_min_qubits=int(
                 execution_options["statevector_gpu_min_qubits"]
-            ),
-            mps_gpu_min_qubits=(
-                None
-                if execution_options["mps_gpu_min_qubits"] is None
-                else int(execution_options["mps_gpu_min_qubits"])
             ),
             automatic_mps_min_qubits=int(
                 execution_options["automatic_mps_min_qubits"]

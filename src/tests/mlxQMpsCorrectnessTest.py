@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import mlx.core as mx
 
-from mettleq.gates import CNOT, CRY, H, RX, RY, RZ
+from mettleq.gates import CNOT, CRY, CZ, H, RX, RY, RZ
 from mettleq.device import Device, _pauli_pair_phase
 from mettleq.mps_state import MPSOptions, MPSState
 from mettleq.sim import StateVectorSimulator
@@ -17,12 +17,7 @@ def _statevector(sim: StateVectorSimulator) -> np.ndarray:
 
 
 def _mps_statevector(sim: MPSState) -> np.ndarray:
-    psi = sim.A[0]
-    for tensor in sim.A[1:]:
-        psi = mx.tensordot(psi, tensor, axes=([psi.ndim - 1], [0]))
-    psi = mx.reshape(psi, (1 << sim.n,))
-    mx.eval(psi)
-    return np.asarray(psi.tolist(), dtype=np.complex128)
+    return np.asarray(sim.to_statevector(), dtype=np.complex128)
 
 
 def _assert_same_state(reference: np.ndarray, actual: np.ndarray, atol: float = 5e-5):
@@ -154,6 +149,9 @@ def test_truncation_reports_local_discarded_weight():
 def test_recoverable_svd_ladder_falls_back_without_losing_process(monkeypatch):
     import mettleq.mps_state as mps_state
 
+    # Exercise the portable recovery ladder even when the optional native
+    # Accelerate extension is installed in the test environment.
+    monkeypatch.setattr(mps_state, "_native_two_site_update", None)
     monkeypatch.setattr(
         mps_state,
         "_scipy_lapack_svd",
@@ -227,11 +225,35 @@ def test_specialized_routed_zz_matches_dense_statevector(routing_strategy):
         ),
     )
     device.execute(operations)
-    device.sim.restore_logical_order()
 
     _assert_same_state(_statevector(sv), _mps_statevector(device.sim), atol=8e-5)
     diagnostics = device.sim.truncation_diagnostics()
     assert diagnostics["routing_logical_two_qubit_gates"] == 4
+
+
+def test_mapping_aware_routed_cnot_and_diagonal_readout():
+    operations = [
+        {"name": "H", "wires": [0], "parameters": []},
+        {"name": "RY", "wires": [4], "parameters": [0.27]},
+        {"name": "CNOT", "wires": [0, 4], "parameters": []},
+        {"name": "CZ", "wires": [1, 3], "parameters": []},
+    ]
+    reference = StateVectorSimulator(5)
+    reference.apply_single(H(), 0)
+    reference.apply_single(RY(0.27), 4)
+    reference.apply_two(CNOT(), 0, 4)
+    reference.apply_two(CZ(), 1, 3)
+
+    device = Device(
+        5,
+        backend="mps",
+        mps_opts=MPSOptions(dmax=64, eps=0.0),
+    )
+    device.execute(operations)
+    _assert_same_state(
+        _statevector(reference), _mps_statevector(device.sim), atol=8e-5
+    )
+    assert device.sim.routing_final_restore_swaps == 0
 
 
 def test_batched_mps_sampling_matches_bell_distribution_and_wire_subset():

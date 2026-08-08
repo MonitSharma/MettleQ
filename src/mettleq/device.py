@@ -75,7 +75,14 @@ class Device:
         self.wires = int(wires)
         self.shots = int(shots)
         self._allow_unsafe_statevector = allow_unsafe_statevector
-        if execution_device is None:
+        if backend is None:
+            backend = _os.environ.get('METTLEQ_BACKEND', 'sv').lower()
+        backend = str(backend).strip().lower()
+        if backend == "mps":
+            if execution_device is not None and str(execution_device).strip().lower() == "gpu":
+                raise ValueError("MPS is CPU-only; use execution_device='cpu' or None")
+            self._mx_device = mx.cpu
+        elif execution_device is None:
             self._mx_device = mx.default_device()
         else:
             normalized_device = str(execution_device).strip().lower()
@@ -86,11 +93,7 @@ class Device:
                     "Apple GPU execution was requested but Metal is unavailable"
                 )
             self._mx_device = mx.cpu if normalized_device == "cpu" else mx.gpu
-        self.execution_device = (
-            "cpu" if self._mx_device == mx.cpu else "gpu"
-        )
-        if backend is None:
-            backend = _os.environ.get('METTLEQ_BACKEND', 'sv').lower()
+        self.execution_device = "cpu" if self._mx_device == mx.cpu else "gpu"
         with mx.stream(self._mx_device):
             if backend == 'mps':
                 self.backend = 'mps'
@@ -158,7 +161,10 @@ class Device:
                 [
                     tuple(operation.get("wires", []))
                     for operation in optimized_operations
-                    if len(operation.get("wires", [])) == 2
+                    if (
+                        len(operation.get("wires", [])) == 2
+                        and str(operation.get("name", "")).upper() != "SWAP"
+                    )
                 ]
             )
         if report is None:
@@ -393,10 +399,6 @@ class Device:
                         reason=reason,
                         adjacent_dispatch=dispatch,
                     )
-        if self.backend == "mps" and hasattr(
-            self.sim, "restore_logical_order"
-        ):
-            self.sim.restore_logical_order()
         if self.last_execution_plan is not None:
             mark_graph_built(
                 self.last_execution_plan,
@@ -1185,6 +1187,9 @@ class Device:
                 if d is not None:
                     self.sim.apply_diagonal(d, [c, t])
                     return
+            if name == "CNOT" and hasattr(self.sim, "apply_logical_cnot"):
+                self.sim.apply_logical_cnot(c, t)
+                return
             # Structured two-qubit fast paths (SV backend)
             if hasattr(self.sim, "apply_controlled_single"):
                 if name == "CNOT":
