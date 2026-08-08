@@ -46,34 +46,6 @@ def test_mps_sv_parity_small_random():
         assert _close_vec(p_sv, p_mps, tol=2e-2)
 
 
-def test_experimental_gpu_jacobi_svd_mps_parity_and_residency():
-    """The opt-in SVD keeps factors on GPU and validates its own residual."""
-    ops = [
-        {"name": "H", "wires": [q]} for q in range(6)
-    ] + [
-        {"name": "CNOT", "wires": [q, q + 1]} for q in range(5)
-    ] + [
-        {"name": "RY", "wires": [q], "parameters": [0.11 * (q + 1)]}
-        for q in range(6)
-    ]
-    reference = Device(6, backend="sv")
-    reference.execute(ops)
-    candidate = Device(
-        6,
-        backend="mps",
-        mps_opts=MPSOptions(dmax=64, eps=1e-8, svd_driver="gpu_jacobi"),
-    )
-    candidate.execute(ops)
-    actual = candidate.sim.to_statevector()
-    expected = np.asarray(reference.sim.state)
-    assert np.max(np.abs(actual - expected)) < 2e-4
-    diagnostics = candidate.sim.truncation_diagnostics()
-    assert diagnostics["svd_device"] == "gpu"
-    assert diagnostics["svd_drivers_used"] == {
-        "mlx_gpu_jacobi_experimental": diagnostics["svd_calls"]
-    }
-
-
 def test_mps_tebd_tfim_single_step():
     """TEBD helper: one TFIM Trotter step parity (sequential ZZ then RX)."""
     info("MPS TEBD vs SV for one TFIM Trotter step")

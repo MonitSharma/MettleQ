@@ -49,7 +49,6 @@ from ..mps_accuracy import build_convergence_report
 from .. import __version__
 from ..planning import (
     DEFAULT_AUTOMATIC_MPS_MIN_QUBITS,
-    DEFAULT_MPS_GPU_MIN_QUBITS,
     DEFAULT_STATEVECTOR_GPU_MIN_QUBITS,
     normalize_device,
     normalize_method,
@@ -346,7 +345,6 @@ class MettleQBackend(BackendV2):
         mps_convergence_bond_dimensions: Optional[Sequence[int]] = None,
         mps_convergence_atol: float = 5e-5,
         statevector_gpu_min_qubits: int = DEFAULT_STATEVECTOR_GPU_MIN_QUBITS,
-        mps_gpu_min_qubits: Optional[int] = DEFAULT_MPS_GPU_MIN_QUBITS,
         automatic_mps_min_qubits: int = DEFAULT_AUTOMATIC_MPS_MIN_QUBITS,
         metal_checkpoint_budget_bytes: Optional[int] = None,
         allow_unsafe_statevector: Optional[bool] = None,
@@ -405,11 +403,6 @@ class MettleQBackend(BackendV2):
             mps_convergence_bond_dimensions=convergence_dimensions,
             mps_convergence_atol=float(mps_convergence_atol),
             statevector_gpu_min_qubits=int(statevector_gpu_min_qubits),
-            mps_gpu_min_qubits=(
-                None
-                if mps_gpu_min_qubits is None
-                else int(mps_gpu_min_qubits)
-            ),
             automatic_mps_min_qubits=int(automatic_mps_min_qubits),
         )
         self._metal_checkpoint_budget_bytes = metal_checkpoint_budget_bytes
@@ -443,7 +436,6 @@ class MettleQBackend(BackendV2):
             mps_convergence_bond_dimensions=(),
             mps_convergence_atol=5e-5,
             statevector_gpu_min_qubits=DEFAULT_STATEVECTOR_GPU_MIN_QUBITS,
-            mps_gpu_min_qubits=DEFAULT_MPS_GPU_MIN_QUBITS,
             automatic_mps_min_qubits=DEFAULT_AUTOMATIC_MPS_MIN_QUBITS,
         )
 
@@ -650,11 +642,6 @@ class MettleQBackend(BackendV2):
             ),
             statevector_gpu_min_qubits=int(
                 options["statevector_gpu_min_qubits"]
-            ),
-            mps_gpu_min_qubits=(
-                None
-                if options["mps_gpu_min_qubits"] is None
-                else int(options["mps_gpu_min_qubits"])
             ),
             automatic_mps_min_qubits=int(
                 options["automatic_mps_min_qubits"]

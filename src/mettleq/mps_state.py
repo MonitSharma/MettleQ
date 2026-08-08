@@ -8,7 +8,28 @@ import time
 import numpy as np
 from scipy.linalg import qr as _scipy_qr
 
+# pyrefly: ignore [missing-import]
 from ._mlx_compat import mx
+from .mps_routing import plan_routing as _plan_routing
+
+try:  # pragma: no cover - depends on the optional compiled extension
+    from ._mps_native import (
+        expectation_product as _native_expectation_product,
+        probabilities as _native_probabilities,
+        qr_move_left as _native_qr_move_left,
+        qr_move_right as _native_qr_move_right,
+        sample as _native_sample,
+        statevector as _native_statevector,
+        two_site_update as _native_two_site_update,
+    )
+except ImportError:  # pragma: no cover - portable source fallback
+    _native_expectation_product = None
+    _native_probabilities = None
+    _native_qr_move_left = None
+    _native_qr_move_right = None
+    _native_sample = None
+    _native_statevector = None
+    _native_two_site_update = None
 
 
 def _reduced_qr(matrix: np.ndarray):
@@ -43,12 +64,21 @@ class MPSNumericalError(RuntimeError):
     """A recoverable numerical failure in compact MPS execution."""
 
 
-_SVD_DRIVERS = {"auto", "gesdd", "gesvd", "numpy", "gpu_jacobi"}
+_SVD_DRIVERS = {"auto", "gesdd", "gesvd", "numpy"}
 _ROUTING_STRATEGIES = {"lookahead", "restore"}
+# Persistent routing avoids end-of-circuit restoration, but it can increase
+# the entanglement carried across many MPS cuts. Require a meaningful swap
+# reduction before accepting it; this keeps grid-like workloads on the stable
+# restore-per-gate path while allowing large wins for rainbow/long-range work.
+_PERSISTENT_ROUTE_MIN_REDUCTION = 0.25
 # Direct row updates beat general contraction once the two bond dimensions
 # create a sufficiently wide batch. Keep this explicit so CPU benchmark runs
 # can tune it for different Apple CPU generations without changing semantics.
 _SINGLE_GATE_DIRECT_PRODUCT_THRESHOLD = 2048
+# Repeated routing SWAPs are exact, but complex64 SVDs can leave tiny
+# roundoff-only Schmidt values behind. Apply this floor only when approximation
+# is already enabled (eps > 0); eps=0 remains an exact/no-extra-truncation mode.
+_SWAP_NUMERICAL_TRUNCATION_FLOOR = 1e-6
 
 
 @lru_cache(maxsize=4)
@@ -170,17 +200,20 @@ def _svd_truncate_numpy(
         np.asarray(matrix, dtype=np.complex64), driver
     )
     elapsed_ms = (time.perf_counter_ns() - start) / 1e6
-    s_list = [float(value) for value in np.asarray(S_np).reshape(-1)]
-    r = len(s_list)
+    singular_values = np.asarray(S_np, dtype=np.float64).reshape(-1)
+    r = int(singular_values.size)
     # eps-based cutoff
     r_eps = r
     if r > 0:
-        thresh = eps * s_list[0]
-        r_eps = sum(1 for v in s_list if v >= thresh)
+        thresh = eps * singular_values[0]
+        r_eps = int(np.count_nonzero(singular_values >= thresh))
     r_keep = min(r, max(1, min(dmax, r_eps)))
-    total_weight = sum(value * value for value in s_list)
-    discarded_weight = sum(value * value for value in s_list[r_keep:])
-    kept_weight = sum(value * value for value in s_list[:r_keep])
+    squared_values = singular_values * singular_values
+    total_weight = float(np.sum(squared_values, dtype=np.float64))
+    discarded_weight = float(
+        np.sum(squared_values[r_keep:], dtype=np.float64)
+    )
+    kept_weight = float(np.sum(squared_values[:r_keep], dtype=np.float64))
     if not np.isfinite(kept_weight) or kept_weight <= np.finfo(float).tiny:
         raise MPSNumericalError(
             "MPS truncation retained a zero or non-finite singular spectrum"
@@ -209,187 +242,6 @@ def _svd_truncate_numpy(
     )
     Vh_out = Vh_np[:r_keep, :].astype(np.complex64, copy=False)
     return U_out, S_out, Vh_out, metadata
-
-
-def _round_robin_pairs(columns: int):
-    """Return disjoint pair rounds covering every column pair once."""
-    players = list(range(columns))
-    dummy = None
-    if len(players) % 2:
-        dummy = len(players)
-        players.append(dummy)
-    rounds = []
-    for _ in range(max(0, len(players) - 1)):
-        pairs = []
-        for index in range(len(players) // 2):
-            a, b = players[index], players[-1 - index]
-            if a != dummy and b != dummy:
-                pairs.append((a, b))
-        rounds.append(pairs)
-        players = [players[0], players[-1], *players[1:-1]]
-    return rounds
-
-
-def _gpu_jacobi_svd(matrix: mx.array, *, sweeps: int = 4):
-    """Experimental complex64 one-sided Jacobi SVD resident on Metal.
-
-    Only the final singular-value vector crosses to the host for deterministic
-    truncation. Matrix factors and all Jacobi rotations remain MLX GPU arrays.
-    This deliberately does not replace the recoverable LAPACK default yet.
-    """
-    if mx.default_device() != mx.Device(mx.gpu):
-        raise MPSNumericalError("gpu_jacobi requires the MLX GPU device")
-    rows, columns = map(int, matrix.shape)
-    transposed = rows < columns
-    work = mx.transpose(mx.conjugate(matrix)) if transposed else matrix
-    rows, columns = map(int, work.shape)
-    # MLX 0.32 constructs complex eye through a GPU scatter it cannot execute;
-    # build the real identity first and cast without leaving the device.
-    vectors = mx.eye(columns, dtype=mx.float32).astype(mx.complex64)
-    tiny = mx.array(1e-20, dtype=mx.float32)
-    rounds = _round_robin_pairs(columns)
-    for _ in range(max(1, int(sweeps))):
-        for pairs in rounds:
-            if not pairs:
-                continue
-            order = np.asarray([item for pair in pairs for item in pair], dtype=np.int32)
-            remaining = np.asarray(
-                [item for item in range(columns) if item not in set(order.tolist())],
-                dtype=np.int32,
-            )
-            order_index = mx.array(order, dtype=mx.uint32)
-            remaining_index = mx.array(remaining, dtype=mx.uint32)
-            inverse_index = mx.array(np.argsort(np.concatenate((order, remaining))),
-                                     dtype=mx.uint32)
-            pair_columns = work[:, order_index]
-            p, q = pair_columns[:, 0::2], pair_columns[:, 1::2]
-            alpha = mx.sum(mx.abs(p) ** 2, axis=0)
-            beta = mx.sum(mx.abs(q) ** 2, axis=0)
-            gamma = mx.sum(mx.conjugate(p) * q, axis=0)
-            magnitude = mx.abs(gamma)
-            active = magnitude > (1e-6 * mx.maximum(alpha + beta, tiny))
-            denominator = mx.where(active, 2.0 * magnitude, 1.0)
-            zeta = mx.where(active, (beta - alpha) / denominator, 0.0)
-            sign = mx.where(zeta >= 0.0, 1.0, -1.0)
-            tangent = sign / (mx.abs(zeta) + mx.sqrt(1.0 + zeta * zeta))
-            tangent = mx.where(active, tangent, 0.0)
-            cosine = 1.0 / mx.sqrt(1.0 + tangent * tangent)
-            phase = mx.where(
-                active,
-                mx.conjugate(gamma) / mx.maximum(magnitude, tiny),
-                mx.zeros_like(gamma),
-            )
-            sine = cosine * tangent * phase
-            p_new = p * cosine - q * sine
-            q_new = p * mx.conjugate(sine) + q * cosine
-            paired = mx.reshape(mx.stack((p_new, q_new), axis=2), (rows, len(order)))
-            combined = (mx.concatenate((paired, work[:, remaining_index]), axis=1)
-                        if remaining.size else paired)
-            work = combined[:, inverse_index]
-
-            vp, vq = (vectors[:, order_index][:, 0::2],
-                      vectors[:, order_index][:, 1::2])
-            vp_new = vp * cosine - vq * sine
-            vq_new = vp * mx.conjugate(sine) + vq * cosine
-            vpaired = mx.reshape(
-                mx.stack((vp_new, vq_new), axis=2), (columns, len(order)))
-            vcombined = (mx.concatenate((vpaired, vectors[:, remaining_index]), axis=1)
-                         if remaining.size else vpaired)
-            vectors = vcombined[:, inverse_index]
-    singular = mx.sqrt(mx.sum(mx.abs(work) ** 2, axis=0))
-    order = mx.argsort(-singular)
-    singular = singular[order]
-    work = work[:, order]
-    vectors = vectors[:, order]
-    safe = mx.where(
-        singular > (1e-7 * mx.maximum(mx.max(singular), tiny)),
-        singular,
-        mx.ones_like(singular),
-    )
-    left = work / safe
-    right_h = mx.transpose(mx.conjugate(vectors))
-    if transposed:
-        return mx.transpose(mx.conjugate(right_h)), singular, mx.transpose(mx.conjugate(left))
-    return left, singular, right_h
-
-
-def _svd_truncate_gpu_jacobi(
-    matrix: mx.array,
-    dmax: int,
-    eps: float,
-    *,
-    renormalize: bool,
-):
-    started = time.perf_counter_ns()
-    U, S, Vh = _gpu_jacobi_svd(matrix)
-    reconstructed = (U * mx.reshape(S, (1, -1))) @ Vh
-    residual_value = mx.linalg.norm(reconstructed - matrix) / mx.maximum(
-        mx.linalg.norm(matrix), mx.array(1e-20, dtype=mx.float32)
-    )
-    mx.eval(S, residual_value)
-    residual = float(residual_value.item())
-    if not np.isfinite(residual) or residual > 5e-4:
-        raise MPSNumericalError(
-            f"GPU Jacobi SVD residual {residual:.3e} exceeds 5e-4"
-        )
-    spectrum = np.asarray(S, dtype=np.float32)
-    rank = len(spectrum)
-    rank_eps = rank
-    if rank:
-        rank_eps = int(np.count_nonzero(spectrum >= eps * spectrum[0]))
-    keep = min(rank, max(1, min(dmax, rank_eps)))
-    total = float(np.dot(spectrum, spectrum))
-    discarded = float(np.dot(spectrum[keep:], spectrum[keep:]))
-    kept = float(np.dot(spectrum[:keep], spectrum[:keep]))
-    if not np.isfinite(kept) or kept <= np.finfo(np.float32).tiny:
-        raise MPSNumericalError("GPU Jacobi SVD retained an invalid spectrum")
-    norm = kept ** 0.5 if renormalize else 1.0
-    metadata = {
-        "matrix_shape": [int(matrix.shape[0]), int(matrix.shape[1])],
-        "matrix_elements": int(matrix.size),
-        "rank_before": rank,
-        "rank_kept": keep,
-        "local_discarded_weight": discarded,
-        "relative_discarded_weight": discarded / total if total else 0.0,
-        "limited_by_dmax": dmax < rank,
-        "limited_by_eps": rank_eps < rank,
-        "svd_driver": "mlx_gpu_jacobi_experimental",
-        "svd_failed_attempts": [],
-        "svd_elapsed_ms": (time.perf_counter_ns() - started) / 1e6,
-        "pre_normalization_norm": kept ** 0.5,
-        "renormalized": bool(renormalize),
-        "svd_relative_residual": residual,
-    }
-    return U[:, :keep], S[:keep] / norm, Vh[:keep, :], metadata
-
-
-def _svd_truncate(
-    M: mx.array,
-    dmax: int,
-    eps: float,
-    *,
-    driver: str = "auto",
-    renormalize: bool = True,
-):
-    # M shape: (a*2, 2*b) for two-site tensor; perform SVD and truncate.
-    if driver == "gpu_jacobi":
-        return _svd_truncate_gpu_jacobi(
-            M, dmax, eps, renormalize=renormalize
-        )
-    mx.eval(M)
-    U_np, S_np, Vh_np, metadata = _svd_truncate_numpy(
-        np.asarray(M, dtype=np.complex64),
-        dmax,
-        eps,
-        driver=driver,
-        renormalize=renormalize,
-    )
-    return (
-        mx.array(U_np, mx.complex64),
-        mx.array(S_np),
-        mx.array(Vh_np, mx.complex64),
-        metadata,
-    )
 
 
 class MPSState:
@@ -423,26 +275,22 @@ class MPSState:
         # Truncation diagnostics
         self.truncated_any: bool = False
         self.trunc_events: int = 0
-        self.tensor_device = (
-            "cpu" if mx.default_device() == mx.Device(mx.cpu) else "gpu"
-        )
-        self.svd_device = "gpu" if self.opts.svd_driver == "gpu_jacobi" else "cpu"
+        # MPS is intentionally CPU-native. Its small, sequential SVD/QR
+        # workload benefits from CPU LAPACK and avoids GPU launch/transfer
+        # overhead; statevector simulation remains the GPU path.
+        self.tensor_device = "cpu"
+        self.svd_device = "cpu"
         self.reset()
 
     def reset(self):
         # |0..0> in right-canonical form: A[i] = [ [1,0] ] up to dimensions.
-        # On the CPU path site tensors are stored as numpy arrays end-to-end so
-        # no MLX<->numpy round-trip happens per gate; MLX storage is reserved
-        # for the (currently disabled) GPU tensor path.
+        # Site tensors stay as NumPy arrays end-to-end. This avoids a device
+        # round-trip for every gate and keeps the CPU MPS execution explicit.
         self.A: List = []
         for i in range(self.n):
-            if self.tensor_device == "cpu":
-                self.A.append(
-                    np.array([1, 0], dtype=np.complex64).reshape(1, 2, 1)
-                )
-            else:
-                v = mx.array([1+0j, 0+0j], mx.complex64)
-                self.A.append(mx.reshape(v, (1, 2, 1)))  # (1,2,1)
+            self.A.append(
+                np.array([1, 0], dtype=np.complex64).reshape(1, 2, 1)
+            )
         # Reset bond diagnostics
         self.bonds = [1] * max(0, self.n - 1)
         self.max_bond_ever = 1
@@ -463,6 +311,7 @@ class MPSState:
         self.two_site_calls = 0
         self.two_site_contraction_total_ms = 0.0
         self.two_site_split_total_ms = 0.0
+        self.swap_fast_path_calls = 0
         self.two_site_matrix_shape_calls: dict[str, int] = {}
         self.two_site_max_matrix_elements = 0
         self.site_to_logical = list(range(self.n))
@@ -475,18 +324,13 @@ class MPSState:
         self.routing_selection_reason = "configured_strategy"
         self.routing_planned_lookahead_swaps = None
         self.routing_planned_restore_swaps = None
+        self.routing_plan = None
+        self.routing_plan_index = 0
+        self.routing_planner = "python"
 
     def _as_stored(self, value):
-        """Coerce a site tensor to the storage type for the active device.
-
-        CPU path keeps numpy (no MLX round-trip); GPU path keeps mx.array,
-        preserving an existing mx.array without a redundant copy.
-        """
-        if self.tensor_device == "cpu":
-            return np.asarray(value, dtype=np.complex64)
-        if isinstance(value, mx.array):
-            return value
-        return mx.array(np.asarray(value, dtype=np.complex64), mx.complex64)
+        """Coerce a site tensor to the CPU-native storage type."""
+        return np.asarray(value, dtype=np.complex64)
 
     def _replace_tensor(self, index: int, value: np.ndarray) -> None:
         self.A[index] = self._as_stored(value)
@@ -499,9 +343,20 @@ class MPSState:
 
     def _move_center_right(self, site: int) -> None:
         tensor = np.asarray(self.A[site], dtype=np.complex64)
+        next_tensor = np.asarray(self.A[site + 1], dtype=np.complex64)
+        if _native_qr_move_right is not None:
+            try:
+                q_tensor, absorbed = _native_qr_move_right(
+                    tensor, next_tensor
+                )
+                self._replace_tensor(site, q_tensor)
+                self._replace_tensor(site + 1, absorbed)
+                self.canonical_center = site + 1
+                return
+            except (RuntimeError, ValueError, np.linalg.LinAlgError):
+                pass
         dl, physical, dr = tensor.shape
         q, r = _reduced_qr(tensor.reshape(dl * physical, dr))
-        next_tensor = np.asarray(self.A[site + 1], dtype=np.complex64)
         absorbed = (r @ next_tensor.reshape(next_tensor.shape[0], -1)).reshape(
             r.shape[0], next_tensor.shape[1], next_tensor.shape[2]
         )
@@ -511,9 +366,18 @@ class MPSState:
 
     def _move_center_left(self, site: int) -> None:
         tensor = np.asarray(self.A[site], dtype=np.complex64)
+        previous = np.asarray(self.A[site - 1], dtype=np.complex64)
+        if _native_qr_move_left is not None:
+            try:
+                absorbed, q_tensor = _native_qr_move_left(previous, tensor)
+                self._replace_tensor(site - 1, absorbed)
+                self._replace_tensor(site, q_tensor)
+                self.canonical_center = site - 1
+                return
+            except (RuntimeError, ValueError, np.linalg.LinAlgError):
+                pass
         dl, physical, dr = tensor.shape
         q, r = _reduced_qr(tensor.reshape(dl, physical * dr).T)
-        previous = np.asarray(self.A[site - 1], dtype=np.complex64)
         absorbed = (previous.reshape(-1, previous.shape[2]) @ r.T).reshape(
             previous.shape[0], previous.shape[1], r.shape[0]
         )
@@ -554,35 +418,6 @@ class MPSState:
         return self.renormalize() if normalize else self.norm()
 
     # -------------- internal helpers --------------
-    def _two_site_tensor(self, i: int) -> mx.array:
-        left = self.A[i]      # (Dl,2,Dr)
-        right = self.A[i+1]   # (Dr,2,Dr2)
-        Dl, _, Dr = left.shape
-        Dr_, _, Dr2 = right.shape
-        if Dr_ != Dr:
-            # reshape to match bond
-            raise ValueError("MPS bond mismatch")
-        T = mx.tensordot(left, right, axes=([2],[0]))  # (Dl,2,2,Dr2)
-        return T
-
-    def _split_two_site(self, T: mx.array, bond: int) -> tuple[mx.array, mx.array]:
-        Dl, d1, d2, Dr2 = T.shape
-        M = mx.reshape(mx.transpose(T, (0,1,2,3)), (Dl*d1, d2*Dr2))
-        U, S, Vh, metadata = _svd_truncate(
-            M,
-            self.opts.dmax,
-            self.opts.eps,
-            driver=self.opts.svd_driver,
-            renormalize=self.opts.renormalize_splits,
-        )
-        self._record_split(bond, metadata)
-        r = int(U.shape[1])
-        # reshape back
-        Aleft = mx.reshape(U, (Dl, d1, r))
-        SVh = mx.reshape(S, (r,1)) * Vh  # (r, d2*Dr2)
-        Aright = mx.reshape(SVh, (r, d2, Dr2))
-        return Aleft, Aright
-
     def _record_split(self, bond: int, metadata: dict) -> None:
         self.svd_calls += 1
         self.svd_total_ms += float(metadata["svd_elapsed_ms"])
@@ -620,7 +455,7 @@ class MPSState:
             self.last_truncation = {"bond": int(bond), **metadata}
 
     def _split_two_site_numpy(
-        self, T: np.ndarray, bond: int
+        self, T: np.ndarray, bond: int, *, eps_override: Optional[float] = None
     ) -> tuple[np.ndarray, np.ndarray]:
         Dl, d1, d2, Dr2 = T.shape
         matrix = T.reshape(Dl * d1, d2 * Dr2)
@@ -628,7 +463,7 @@ class MPSState:
         U, S, Vh, metadata = _svd_truncate_numpy(
             matrix,
             self.opts.dmax,
-            self.opts.eps,
+            self.opts.eps if eps_override is None else float(eps_override),
             driver=self.opts.svd_driver,
             renormalize=self.opts.renormalize_splits,
         )
@@ -640,6 +475,60 @@ class MPSState:
         left = U.reshape(Dl, d1, rank)
         right = (S.reshape(rank, 1) * Vh).reshape(rank, d2, Dr2)
         return left, right
+
+    def _native_two_site(
+        self,
+        bond: int,
+        kind: str,
+        payload: Optional[np.ndarray] = None,
+        *,
+        eps_override: Optional[float] = None,
+    ) -> bool:
+        """Run one merge/update/SVD/split entirely in the native CPU core."""
+        if _native_two_site_update is None:
+            return False
+        left = np.asarray(self.A[bond], dtype=np.complex64)
+        right = np.asarray(self.A[bond + 1], dtype=np.complex64)
+        if payload is None:
+            payload = np.empty((0,), dtype=np.complex64)
+        started = time.perf_counter_ns()
+        try:
+            left_out, right_out, metadata = _native_two_site_update(
+                left,
+                right,
+                np.asarray(payload, dtype=np.complex64),
+                str(kind),
+                int(self.opts.dmax),
+                float(
+                    self.opts.eps
+                    if eps_override is None
+                    else eps_override
+                ),
+                bool(self.opts.renormalize_splits),
+            )
+        except (RuntimeError, ValueError, np.linalg.LinAlgError):
+            # The native extension is an optimization boundary, not a new
+            # numerical failure mode. Fall back to the recoverable SciPy/NumPy
+            # path if Accelerate reports a singular or unsupported case.
+            return False
+        elapsed_ms = (time.perf_counter_ns() - started) / 1e6
+        matrix_shape = [int(left.shape[0] * 2), int(right.shape[2] * 2)]
+        rank_before = int(metadata["rank_before"])
+        metadata = {
+            **dict(metadata),
+            "matrix_shape": matrix_shape,
+            "matrix_elements": int(np.prod(matrix_shape)),
+            "limited_by_dmax": int(self.opts.dmax) < rank_before,
+            "limited_by_eps": float(
+                self.opts.eps if eps_override is None else eps_override
+            ) > 0.0 and int(metadata["rank_kept"]) < rank_before,
+            "svd_elapsed_ms": elapsed_ms,
+            "renormalized": bool(self.opts.renormalize_splits),
+        }
+        self._record_split(bond, metadata)
+        self.two_site_split_total_ms += elapsed_ms
+        self._install_two_site(left_out, right_out, bond)
+        return True
 
     def _install_two_site(self, left, right, bond: int) -> None:
         self.A[bond] = self._as_stored(left)
@@ -656,114 +545,198 @@ class MPSState:
             raise ValueError("Qubit index out of range")
         if U.shape != (2, 2):
             raise ValueError("Gate dimension does not match target qubit")
-        # Contract U's input with the physical leg of A. Bond axes are batches,
-        # not part of the 2-vector acted on by the gate.
-        if self.tensor_device == "cpu":
-            A = np.asarray(self.A[q], dtype=np.complex64)
-            Um = np.asarray(U, dtype=np.complex64)
-            if (
-                A.shape[0] * A.shape[2]
-                >= _SINGLE_GATE_DIRECT_PRODUCT_THRESHOLD
-            ):
-                B = np.empty_like(A)
-                B[:, 0, :] = Um[0, 0] * A[:, 0, :] + Um[0, 1] * A[:, 1, :]
-                B[:, 1, :] = Um[1, 0] * A[:, 0, :] + Um[1, 1] * A[:, 1, :]
-                self.A[q] = B
-            else:
-                B = np.tensordot(Um, A, axes=([1], [1]))
-                self.A[q] = np.transpose(B, (1, 0, 2))
+        # MPS is CPU-native. For larger bond products, direct 2x2 row updates
+        # avoid a general tensordot dispatch while retaining the faster BLAS
+        # path for the tiny product-state tensors.
+        A = np.asarray(self.A[q], dtype=np.complex64)
+        Um = np.asarray(U, dtype=np.complex64)
+        if (
+            A.shape[0] * A.shape[2]
+            >= _SINGLE_GATE_DIRECT_PRODUCT_THRESHOLD
+        ):
+            B = np.empty_like(A)
+            B[:, 0, :] = Um[0, 0] * A[:, 0, :] + Um[0, 1] * A[:, 1, :]
+            B[:, 1, :] = Um[1, 0] * A[:, 0, :] + Um[1, 1] * A[:, 1, :]
+            self.A[q] = B
+        else:
+            B = np.tensordot(Um, A, axes=([1], [1]))
+            self.A[q] = np.transpose(B, (1, 0, 2))
+
+    def apply_diagonal(self, diagonal: mx.array, wires: List[int]) -> None:
+        """Apply a one- or two-qubit diagonal gate without dense matmul."""
+        wires = [int(wire) for wire in wires]
+        if len(wires) == 1:
+            q = self.logical_to_site[wires[0]]
+            values = np.asarray(diagonal, dtype=np.complex64).reshape(-1)
+            if values.size != 2:
+                raise ValueError("one-qubit diagonal gates need two entries")
+            tensor = np.asarray(self.A[q], dtype=np.complex64).copy()
+            tensor[:, 0, :] *= values[0]
+            tensor[:, 1, :] *= values[1]
+            self.A[q] = tensor
             return
-        A = self.A[q]
-        B = mx.tensordot(U, A, axes=([1], [1]))  # (2, Dl, Dr)
-        self.A[q] = mx.transpose(B, (1, 0, 2))   # (Dl, 2, Dr)
+        if len(wires) != 2:
+            raise ValueError("MPS diagonal gates support one or two qubits")
+        values = np.asarray(diagonal, dtype=np.complex64).reshape(-1)
+        if values.size != 4:
+            raise ValueError("two-qubit diagonal gates need four entries")
+        self._apply_logical_diagonal(values, wires[0], wires[1])
+
+    def _apply_two_adjacent_diagonal(
+        self, diagonal: np.ndarray, bond: int
+    ) -> None:
+        self._move_center(bond)
+        self.two_site_calls += 1
+        if self._native_two_site(
+            bond, "diagonal", np.asarray(diagonal, dtype=np.complex64).reshape(4)
+        ):
+            return
+        contraction_started = time.perf_counter_ns()
+        left = np.asarray(self.A[bond], dtype=np.complex64)
+        right = np.asarray(self.A[bond + 1], dtype=np.complex64)
+        if int(left.shape[2]) != int(right.shape[0]):
+            raise ValueError("MPS bond mismatch")
+        dl, _, bond_dim = left.shape
+        dr2 = int(right.shape[2])
+        tensor = (left.reshape(dl * 2, bond_dim)
+                  @ right.reshape(bond_dim, 2 * dr2)).reshape(
+                      dl, 2, 2, dr2
+                  )
+        tensor *= np.asarray(diagonal, dtype=np.complex64).reshape(1, 2, 2, 1)
+        self.two_site_contraction_total_ms += (
+            time.perf_counter_ns() - contraction_started
+        ) / 1e6
+        left_out, right_out = self._split_two_site_numpy(tensor, bond)
+        self._install_two_site(left_out, right_out, bond)
+
+    def _apply_two_adjacent_cnot(
+        self, bond: int, *, control_on_right: bool = False
+    ) -> None:
+        """Apply CNOT by permuting physical legs before one SVD split."""
+        self._move_center(bond)
+        self.two_site_calls += 1
+        if self._native_two_site(
+            bond, "cnot_reverse" if control_on_right else "cnot"
+        ):
+            return
+        contraction_started = time.perf_counter_ns()
+        left = np.asarray(self.A[bond], dtype=np.complex64)
+        right = np.asarray(self.A[bond + 1], dtype=np.complex64)
+        if int(left.shape[2]) != int(right.shape[0]):
+            raise ValueError("MPS bond mismatch")
+        dl, _, bond_dim = left.shape
+        dr2 = int(right.shape[2])
+        tensor = (left.reshape(dl * 2, bond_dim)
+                  @ right.reshape(bond_dim, 2 * dr2)).reshape(
+                      dl, 2, 2, dr2
+                  )
+        transformed = np.empty_like(tensor)
+        for first in (0, 1):
+            for second in (0, 1):
+                if control_on_right:
+                    output = (first ^ second, second)
+                else:
+                    output = (first, second ^ first)
+                transformed[:, output[0], output[1], :] = (
+                    tensor[:, first, second, :]
+                )
+        self.two_site_contraction_total_ms += (
+            time.perf_counter_ns() - contraction_started
+        ) / 1e6
+        left_out, right_out = self._split_two_site_numpy(transformed, bond)
+        self._install_two_site(left_out, right_out, bond)
 
     def _apply_two_adjacent(self, U4: mx.array, i: int):
         self._move_center(i)
         self.two_site_calls += 1
-        if self.tensor_device == "cpu":
-            contraction_started = time.perf_counter_ns()
-            left = np.asarray(self.A[i], dtype=np.complex64)
-            right = np.asarray(self.A[i + 1], dtype=np.complex64)
-            gate = np.asarray(U4, dtype=np.complex64).reshape(4, 4)
-            Dl, _, bond = left.shape
-            if int(right.shape[0]) != int(bond):
-                raise ValueError("MPS bond mismatch")
-            Dr2 = int(right.shape[2])
-            tensor = (left.reshape(Dl * 2, bond)
-                      @ right.reshape(bond, 2 * Dr2)).reshape(Dl, 2, 2, Dr2)
-            merged = tensor.reshape(Dl, 4, Dr2)
-            transformed = np.tensordot(
-                gate, merged, axes=([1], [1])
-            ).transpose(1, 0, 2)
-            tensor = transformed.reshape(Dl, 2, 2, Dr2)
-            self.two_site_contraction_total_ms += (
-                time.perf_counter_ns() - contraction_started
-            ) / 1e6
-            left_out, right_out = self._split_two_site_numpy(tensor, i)
-            self._install_two_site(left_out, right_out, i)
+        if self._native_two_site(
+            i, "generic", np.asarray(U4, dtype=np.complex64).reshape(4, 4)
+        ):
             return
-        T = self._two_site_tensor(i)  # (Dl,2,2,Dr2)
-        Dl, _, _, Dr2 = T.shape
-        # merge physical legs (2,2)->4 and apply U
-        Tm = mx.reshape(T, (Dl, 4, Dr2))
-        Um = mx.reshape(U4, (4,4))
-        # Apply Um along the merged physical leg (left-multiply on that axis)
-        # Tm has axes (Dl, ab, Dr2); we compute over 'ab' using tensordot
-        # Result shape: (4, Dl, Dr2) → transpose to (Dl, 4, Dr2)
-        Tm2 = mx.tensordot(Um, Tm, axes=([1],[1]))  # (4, Dl, Dr2)
-        Tm2 = mx.transpose(Tm2, (1, 0, 2))          # (Dl, 4, Dr2)
-        T2 = mx.reshape(Tm2, (Dl, 2, 2, Dr2))
-        split_started = time.perf_counter_ns()
-        Aleft, Aright = self._split_two_site(T2, i)
-        self.two_site_split_total_ms += (
-            time.perf_counter_ns() - split_started
+        contraction_started = time.perf_counter_ns()
+        left = np.asarray(self.A[i], dtype=np.complex64)
+        right = np.asarray(self.A[i + 1], dtype=np.complex64)
+        gate = np.asarray(U4, dtype=np.complex64).reshape(4, 4)
+        Dl, _, bond = left.shape
+        if int(right.shape[0]) != int(bond):
+            raise ValueError("MPS bond mismatch")
+        Dr2 = int(right.shape[2])
+        tensor = (left.reshape(Dl * 2, bond)
+                  @ right.reshape(bond, 2 * Dr2)).reshape(Dl, 2, 2, Dr2)
+        merged = tensor.reshape(Dl, 4, Dr2)
+        transformed = np.tensordot(
+            gate, merged, axes=([1], [1])
+        ).transpose(1, 0, 2)
+        tensor = transformed.reshape(Dl, 2, 2, Dr2)
+        self.two_site_contraction_total_ms += (
+            time.perf_counter_ns() - contraction_started
         ) / 1e6
-        self._install_two_site(Aleft, Aright, i)
+        left_out, right_out = self._split_two_site_numpy(tensor, i)
+        self._install_two_site(left_out, right_out, i)
 
     def _apply_two_adjacent_zz(self, theta: float, i: int):
         """Apply ``exp(-i theta Z⊗Z)`` by broadcasting four phases."""
         self._move_center(i)
         self.two_site_calls += 1
-        if self.tensor_device == "cpu":
-            contraction_started = time.perf_counter_ns()
-            left = np.asarray(self.A[i], dtype=np.complex64)
-            right = np.asarray(self.A[i + 1], dtype=np.complex64)
-            if int(left.shape[2]) != int(right.shape[0]):
-                raise ValueError("MPS bond mismatch")
-            dl, _, bond = left.shape
-            dr2 = int(right.shape[2])
-            tensor = (left.reshape(dl * 2, bond)
-                      @ right.reshape(bond, 2 * dr2)).reshape(dl, 2, 2, dr2)
-            even = complex(math.cos(theta), -math.sin(theta))
-            odd = complex(math.cos(theta), math.sin(theta))
-            phases = np.array(
-                [even, odd, odd, even], dtype=np.complex64
-            ).reshape(1, 2, 2, 1)
-            tensor *= phases
-            self.two_site_contraction_total_ms += (
-                time.perf_counter_ns() - contraction_started
-            ) / 1e6
-            left_out, right_out = self._split_two_site_numpy(tensor, i)
-            self._install_two_site(left_out, right_out, i)
-            return
-        T = self._two_site_tensor(i)
         even = complex(math.cos(theta), -math.sin(theta))
         odd = complex(math.cos(theta), math.sin(theta))
-        phases = mx.reshape(
-            mx.array([even, odd, odd, even], mx.complex64),
-            (1, 2, 2, 1),
+        if self._native_two_site(
+            i,
+            "zz",
+            np.asarray([even, odd, odd, even], dtype=np.complex64),
+        ):
+            return
+        contraction_started = time.perf_counter_ns()
+        left = np.asarray(self.A[i], dtype=np.complex64)
+        right = np.asarray(self.A[i + 1], dtype=np.complex64)
+        if int(left.shape[2]) != int(right.shape[0]):
+            raise ValueError("MPS bond mismatch")
+        dl, _, bond = left.shape
+        dr2 = int(right.shape[2])
+        T = (left.reshape(dl * 2, bond)
+             @ right.reshape(bond, 2 * dr2)).reshape(dl, 2, 2, dr2)
+        phases = np.array([even, odd, odd, even], dtype=np.complex64).reshape(
+            1, 2, 2, 1
         )
-        T2 = T * phases
-        split_started = time.perf_counter_ns()
-        Aleft, Aright = self._split_two_site(T2, i)
-        self.two_site_split_total_ms += (
-            time.perf_counter_ns() - split_started
+        T *= phases
+        self.two_site_contraction_total_ms += (
+            time.perf_counter_ns() - contraction_started
         ) / 1e6
-        self._install_two_site(Aleft, Aright, i)
+        left_out, right_out = self._split_two_site_numpy(T, i)
+        self._install_two_site(left_out, right_out, i)
 
     def _swap_adjacent(self, i: int):
-        # Swap sites i and i+1 by applying SWAP gate U_swap to two-site tensor
-        self._apply_two_adjacent(_SWAP_GATE, i)
+        """Swap adjacent physical legs without a dense 4x4 gate multiply."""
+        self._move_center(i)
+        self.two_site_calls += 1
+        swap_eps = (
+            max(self.opts.eps, _SWAP_NUMERICAL_TRUNCATION_FLOOR)
+            if self.opts.eps > 0.0
+            else self.opts.eps
+        )
+        if self._native_two_site(i, "swap", eps_override=swap_eps):
+            self.swap_fast_path_calls += 1
+            return
+        contraction_started = time.perf_counter_ns()
+        left = np.asarray(self.A[i], dtype=np.complex64)
+        right = np.asarray(self.A[i + 1], dtype=np.complex64)
+        if int(left.shape[2]) != int(right.shape[0]):
+            raise ValueError("MPS bond mismatch")
+        dl, _, bond = left.shape
+        dr2 = int(right.shape[2])
+        tensor = (left.reshape(dl * 2, bond)
+                  @ right.reshape(bond, 2 * dr2)).reshape(dl, 2, 2, dr2)
+        # SWAP only exchanges the two physical legs. The explicit contiguous
+        # copy keeps the subsequent reshape predictable for LAPACK.
+        tensor = np.ascontiguousarray(np.transpose(tensor, (0, 2, 1, 3)))
+        self.two_site_contraction_total_ms += (
+            time.perf_counter_ns() - contraction_started
+        ) / 1e6
+        self.swap_fast_path_calls += 1
+        left_out, right_out = self._split_two_site_numpy(
+            tensor, i, eps_override=swap_eps
+        )
+        self._install_two_site(left_out, right_out, i)
 
     def apply_two(self, U4: mx.array, c: int, t: int):
         if c == t:
@@ -814,38 +787,86 @@ class MPSState:
             raise ValueError("Qubit index out of range")
         self.apply_single(U, self.logical_to_site[logical_wire])
 
-    @staticmethod
-    def _candidate_route_swaps(
-        first_site: int, second_site: int, move_first: bool
-    ) -> list[int]:
-        if first_site < second_site:
-            if move_first:
-                return list(range(first_site, second_site - 1))
-            return list(range(second_site - 1, first_site, -1))
-        if move_first:
-            return list(range(first_site - 1, second_site, -1))
-        return list(range(second_site, first_site - 1))
-
-    @staticmethod
-    def _simulate_layout_swaps(order: list[int], swaps: list[int]) -> list[int]:
-        candidate = list(order)
-        for site in swaps:
-            candidate[site], candidate[site + 1] = (
-                candidate[site + 1],
-                candidate[site],
+    def _apply_logical_diagonal(
+        self, diagonal: np.ndarray, first: int, second: int
+    ) -> None:
+        first, second = int(first), int(second)
+        first_site = self.logical_to_site[first]
+        second_site = self.logical_to_site[second]
+        self.routing_logical_gates += 1
+        if self.routing_effective_strategy == "restore":
+            left, right = sorted((first_site, second_site))
+            selected_swaps = list(range(left, right - 1))
+            restore_swaps = list(range(right - 2, left - 1, -1))
+        else:
+            selected_swaps = self._route_swaps_for_gate(
+                first_site, second_site, None
             )
-        return candidate
+            restore_swaps = []
+        for site in selected_swaps:
+            self._routing_swap(site)
+        first_site = self.logical_to_site[first]
+        second_site = self.logical_to_site[second]
+        left_site = min(first_site, second_site)
+        ordered = np.asarray(diagonal, dtype=np.complex64).reshape(2, 2)
+        if self.site_to_logical[left_site] != first:
+            ordered = ordered.T
+        self._apply_two_adjacent_diagonal(ordered.reshape(-1), left_site)
+        if restore_swaps:
+            for site in restore_swaps:
+                self._routing_swap(site, final_restore=True)
 
-    @staticmethod
-    def _lookahead_layout_cost(
-        order: list[int], lookahead: list[tuple[int, int]]
-    ) -> float:
-        positions = {logical: site for site, logical in enumerate(order)}
-        cost = 0.0
-        for index, (first, second) in enumerate(lookahead):
-            distance = abs(positions[int(first)] - positions[int(second)])
-            cost += max(0, distance - 1) / float(index + 1)
-        return cost
+    def apply_logical_cnot(self, first: int, second: int) -> None:
+        """Apply CNOT using a physical-leg permutation and one SVD."""
+        first, second = int(first), int(second)
+        first_site = self.logical_to_site[first]
+        second_site = self.logical_to_site[second]
+        self.routing_logical_gates += 1
+        if self.routing_effective_strategy == "restore":
+            left, right = sorted((first_site, second_site))
+            selected_swaps = list(range(left, right - 1))
+            restore_swaps = list(range(right - 2, left - 1, -1))
+        else:
+            selected_swaps = self._route_swaps_for_gate(
+                first_site, second_site, None
+            )
+            restore_swaps = []
+        for site in selected_swaps:
+            self._routing_swap(site)
+        first_site = self.logical_to_site[first]
+        second_site = self.logical_to_site[second]
+        left_site = min(first_site, second_site)
+        self._apply_two_adjacent_cnot(
+            left_site,
+            control_on_right=self.site_to_logical[left_site] != first,
+        )
+        if restore_swaps:
+            for site in restore_swaps:
+                self._routing_swap(site, final_restore=True)
+
+    def apply_swap_wires(self, first: int, second: int) -> None:
+        """Apply a logical SWAP by exchanging the wire-to-site mapping."""
+        first, second = int(first), int(second)
+        if first == second:
+            raise ValueError("SWAP wires must differ")
+        if not (0 <= first < self.n and 0 <= second < self.n):
+            raise ValueError("Qubit index out of range")
+        first_site = self.logical_to_site[first]
+        second_site = self.logical_to_site[second]
+        self.logical_to_site[first], self.logical_to_site[second] = (
+            second_site,
+            first_site,
+        )
+        self.site_to_logical[first_site], self.site_to_logical[second_site] = (
+            second,
+            first,
+        )
+        # A circuit-level SWAP changes the future logical layout. Discard the
+        # old precomputed plan rather than risking a stale route; subsequent
+        # direct calls use the safe local fallback planner.
+        self.routing_plan = None
+        self.routing_effective_strategy = "restore"
+        self.routing_selection_reason = "circuit_swap_invalidated_route_plan"
 
     def _routing_swap(self, site: int, *, final_restore: bool = False) -> None:
         self._swap_adjacent(site)
@@ -862,12 +883,19 @@ class MPSState:
             self.routing_final_restore_swaps += 1
 
     def prepare_routing(self, pairs: List[tuple[int, int]]) -> dict:
-        """Select persistent routing only when whole-circuit swaps do not grow."""
+        """Precompute a persistent route without planning a final restore.
+
+        The MPS tensors are now allowed to remain in their routed order. Readout
+        maps logical wires through ``logical_to_site``, so a final SWAP network
+        would only add numerical work and bond growth.
+        """
         pairs = [(int(first), int(second)) for first, second in pairs]
         naive = sum(
             2 * max(0, abs(first - second) - 1)
             for first, second in pairs
         )
+        self.routing_plan_index = 0
+        self.routing_plan = None
         if naive == 0:
             self.routing_planned_lookahead_swaps = 0
             self.routing_planned_restore_swaps = 0
@@ -880,50 +908,32 @@ class MPSState:
                 "planned_lookahead_swaps": 0,
                 "planned_restore_swaps": 0,
             }
-        order = list(range(self.n))
-        routed_swaps = 0
-        for index, (first, second) in enumerate(pairs):
-            positions = {
-                logical: site for site, logical in enumerate(order)
-            }
-            first_site = positions[first]
-            second_site = positions[second]
-            first_swaps = self._candidate_route_swaps(
-                first_site, second_site, True
-            )
-            second_swaps = self._candidate_route_swaps(
-                first_site, second_site, False
-            )
-            first_order = self._simulate_layout_swaps(order, first_swaps)
-            second_order = self._simulate_layout_swaps(order, second_swaps)
-            lookahead = pairs[
-                index + 1:index + 1 + self.opts.routing_lookahead
-            ]
-            if self._lookahead_layout_cost(
-                first_order, lookahead
-            ) <= self._lookahead_layout_cost(second_order, lookahead):
-                selected_swaps = first_swaps
-                order = first_order
-            else:
-                selected_swaps = second_swaps
-                order = second_order
-            routed_swaps += len(selected_swaps)
-        final_restore = sum(
-            1
-            for first in range(self.n)
-            for second in range(first + 1, self.n)
-            if order[first] > order[second]
+        plan, _order, routed_swaps, planner = _plan_routing(
+            self.n, pairs, self.opts.routing_lookahead
         )
-        routed_swaps += final_restore
+        self.routing_plan = plan
+        self.routing_planner = planner
         self.routing_planned_lookahead_swaps = routed_swaps
         self.routing_planned_restore_swaps = naive
         if self.opts.routing_strategy == "restore":
             self.routing_effective_strategy = "restore"
             self.routing_selection_reason = "explicit_restore_request"
-        elif routed_swaps <= naive:
+        elif (
+            routed_swaps <= naive
+            and (
+                naive == 0
+                or routed_swaps / float(naive)
+                < 1.0 - _PERSISTENT_ROUTE_MIN_REDUCTION
+            )
+        ):
             self.routing_effective_strategy = "lookahead"
             self.routing_selection_reason = (
                 "whole_circuit_lookahead_not_more_swaps_than_restore"
+            )
+        elif routed_swaps <= naive:
+            self.routing_effective_strategy = "restore"
+            self.routing_selection_reason = (
+                "persistent_route_swap_reduction_too_small_for_bond_stability"
             )
         else:
             self.routing_effective_strategy = "restore"
@@ -936,7 +946,45 @@ class MPSState:
             "selection_reason": self.routing_selection_reason,
             "planned_lookahead_swaps": routed_swaps,
             "planned_restore_swaps": naive,
+            "planner": planner,
+            "planned_final_restore_swaps": 0,
         }
+
+    def _route_swaps_for_gate(
+        self,
+        first_site: int,
+        second_site: int,
+        lookahead: Optional[List[tuple[int, int]]],
+    ) -> list[int]:
+        """Return the next precomputed route, with a direct-call fallback."""
+        if self.routing_effective_strategy == "lookahead" and self.routing_plan:
+            index = self.routing_plan_index
+            self.routing_plan_index += 1
+            if index < len(self.routing_plan):
+                return list(self.routing_plan[index])
+        # Direct MPSState callers may not run prepare_routing first. Preserve
+        # the old local planner for that API while normal Device execution uses
+        # the native/portable whole-circuit plan above.
+        if first_site > second_site:
+            first_site, second_site = second_site, first_site
+        move_second = list(range(second_site - 1, first_site, -1))
+        move_first = list(range(first_site, second_site - 1))
+        if lookahead:
+            first_order = list(self.site_to_logical)
+            for site in move_first:
+                first_order[site], first_order[site + 1] = first_order[site + 1], first_order[site]
+            second_order = list(self.site_to_logical)
+            for site in move_second:
+                second_order[site], second_order[site + 1] = second_order[site + 1], second_order[site]
+            def cost(order):
+                positions = {logical: site for site, logical in enumerate(order)}
+                return sum(
+                    max(0, abs(positions[first] - positions[second]) - 1)
+                    / float(index + 1)
+                    for index, (first, second) in enumerate(lookahead)
+                )
+            return move_first if cost(first_order) <= cost(second_order) else move_second
+        return move_first
 
     def apply_logical_two(
         self,
@@ -963,23 +1011,8 @@ class MPSState:
             self.routing_swaps += naive_swaps
             return
 
-        lookahead = list(lookahead or [])[: self.opts.routing_lookahead]
-        first_swaps = self._candidate_route_swaps(
-            first_site, second_site, True
-        )
-        second_swaps = self._candidate_route_swaps(
-            first_site, second_site, False
-        )
-        first_order = self._simulate_layout_swaps(
-            self.site_to_logical, first_swaps
-        )
-        second_order = self._simulate_layout_swaps(
-            self.site_to_logical, second_swaps
-        )
-        first_score = self._lookahead_layout_cost(first_order, lookahead)
-        second_score = self._lookahead_layout_cost(second_order, lookahead)
-        selected_swaps = (
-            first_swaps if first_score <= second_score else second_swaps
+        selected_swaps = self._route_swaps_for_gate(
+            first_site, second_site, list(lookahead or [])[: self.opts.routing_lookahead]
         )
         for site in selected_swaps:
             self._routing_swap(site)
@@ -1020,24 +1053,8 @@ class MPSState:
             self.routing_swaps += naive_swaps
             return
 
-        lookahead = list(lookahead or [])[: self.opts.routing_lookahead]
-        first_swaps = self._candidate_route_swaps(
-            first_site, second_site, True
-        )
-        second_swaps = self._candidate_route_swaps(
-            first_site, second_site, False
-        )
-        first_order = self._simulate_layout_swaps(
-            self.site_to_logical, first_swaps
-        )
-        second_order = self._simulate_layout_swaps(
-            self.site_to_logical, second_swaps
-        )
-        selected_swaps = (
-            first_swaps
-            if self._lookahead_layout_cost(first_order, lookahead)
-            <= self._lookahead_layout_cost(second_order, lookahead)
-            else second_swaps
+        selected_swaps = self._route_swaps_for_gate(
+            first_site, second_site, list(lookahead or [])[: self.opts.routing_lookahead]
         )
         for site in selected_swaps:
             self._routing_swap(site)
@@ -1138,12 +1155,23 @@ class MPSState:
             ),
             "tensor_device": self.tensor_device,
             "svd_device": self.svd_device,
+            "native_two_site_core": _native_two_site_update is not None,
+            "native_qr_core": (
+                _native_qr_move_left is not None
+                and _native_qr_move_right is not None
+            ),
+            "native_readout_core": (
+                _native_expectation_product is not None
+                and _native_probabilities is not None
+                and _native_statevector is not None
+            ),
             "svd_requested_driver": self.opts.svd_driver,
             "svd_drivers_used": dict(self.svd_drivers_used),
             "svd_calls": int(self.svd_calls),
             "svd_total_ms": float(self.svd_total_ms),
             "svd_fallback_count": int(self.svd_fallback_count),
             "two_site_calls": int(self.two_site_calls),
+            "swap_fast_path_calls": int(self.swap_fast_path_calls),
             "two_site_contraction_total_ms": float(
                 self.two_site_contraction_total_ms
             ),
@@ -1167,6 +1195,8 @@ class MPSState:
             "routing_strategy": self.opts.routing_strategy,
             "routing_effective_strategy": self.routing_effective_strategy,
             "routing_selection_reason": self.routing_selection_reason,
+            "routing_planner": self.routing_planner,
+            "logical_to_site": list(self.logical_to_site),
             "routing_planned_lookahead_swaps": (
                 self.routing_planned_lookahead_swaps
             ),
@@ -1229,7 +1259,6 @@ class MPSState:
         return self.A
 
     def _numpy_tensors(self) -> List[np.ndarray]:
-        mx.eval(*self.A)
         return [np.asarray(tensor, dtype=np.complex128) for tensor in self.A]
 
     @staticmethod
@@ -1257,14 +1286,37 @@ class MPSState:
     def normalize(self) -> float:
         return self.renormalize()
 
+    def _physical_wires(self, wires: List[int]) -> list[int]:
+        logical = [int(wire) for wire in wires]
+        if len(set(logical)) != len(logical):
+            raise ValueError("Duplicate qubit indices")
+        if any(wire < 0 or wire >= self.n for wire in logical):
+            raise ValueError("Qubit index out of range")
+        return [self.logical_to_site[wire] for wire in logical]
+
     def expectation_product(self, operators: dict[int, np.ndarray]) -> complex:
         """Expectation of a tensor product of local 2x2 operators."""
+        if _native_expectation_product is not None:
+            wires = [int(wire) for wire in operators]
+            values = np.asarray(
+                [operators[wire] for wire in wires], dtype=np.complex128
+            )
+            return complex(
+                _native_expectation_product(
+                    self.A, wires, values, self.logical_to_site, self.norm()
+                )
+            )
+        physical_keys = self._physical_wires(list(operators))
+        physical_operators = {
+            physical_wire: operator
+            for physical_wire, operator in zip(physical_keys, operators.values())
+        }
         tensors = self._numpy_tensors()
         environment = np.ones((1, 1), dtype=np.complex128)
         identity = np.eye(2, dtype=np.complex128)
         for wire, tensor in enumerate(tensors):
             operator = np.asarray(
-                operators.get(wire, identity), dtype=np.complex128
+                physical_operators.get(wire, identity), dtype=np.complex128
             )
             if operator.shape != (2, 2):
                 raise ValueError("MPS product operators must be 2x2")
@@ -1280,6 +1332,7 @@ class MPSState:
     ) -> complex:
         """Expectation of a small dense observable via product expansion."""
         wires = list(wires)
+        self._physical_wires(wires)
         if len(wires) > 4:
             raise ValueError(
                 "Dense MPS observables are limited to 4 wires; use Pauli sums "
@@ -1328,10 +1381,15 @@ class MPSState:
         self, wires: Optional[List[int]] = None
     ) -> np.ndarray:
         selected = list(range(self.n)) if wires is None else list(wires)
-        if len(set(selected)) != len(selected):
-            raise ValueError("Duplicate qubit indices")
-        if any(wire < 0 or wire >= self.n for wire in selected):
-            raise ValueError("Qubit index out of range")
+        if _native_probabilities is not None:
+            self._physical_wires(selected)
+            return np.asarray(
+                _native_probabilities(
+                    self.A, selected, self.logical_to_site, self.norm()
+                ),
+                dtype=np.float64,
+            )
+        physical_selected = self._physical_wires(selected)
         tensors = self._numpy_tensors()
         norm = self.norm()
         norm_squared = norm * norm
@@ -1339,7 +1397,7 @@ class MPSState:
         for outcome in range(len(result)):
             fixed = {
                 wire: (outcome >> (len(selected) - 1 - index)) & 1
-                for index, wire in enumerate(selected)
+                for index, wire in enumerate(physical_selected)
             }
             result[outcome] = self._projected_probability(
                 tensors, fixed, norm_squared
@@ -1354,23 +1412,22 @@ class MPSState:
 
     def to_statevector(self) -> np.ndarray:
         """Materialize a dense state only when the caller explicitly asks."""
-        if self.tensor_device == "cpu":
-            psi = np.asarray(self.A[0], dtype=np.complex64)
-            for index in range(1, self.n):
-                psi = np.tensordot(
-                    psi, np.asarray(self.A[index], dtype=np.complex64),
-                    axes=([psi.ndim - 1], [0]),
-                )
-            result = psi.reshape(1 << self.n).astype(np.complex64)
-        else:
-            psi = self.A[0]
-            for index in range(1, self.n):
-                psi = mx.tensordot(
-                    psi, self.A[index], axes=([psi.ndim - 1], [0])
-                )
-            psi = mx.reshape(psi, (1 << self.n,))
-            mx.eval(psi)
-            result = np.asarray(psi, dtype=np.complex64)
+        if _native_statevector is not None:
+            return np.asarray(
+                _native_statevector(self.A, self.logical_to_site),
+                dtype=np.complex64,
+            )
+        psi = np.asarray(self.A[0], dtype=np.complex64)
+        for index in range(1, self.n):
+            psi = np.tensordot(
+                psi, np.asarray(self.A[index], dtype=np.complex64),
+                axes=([psi.ndim - 1], [0]),
+            )
+        tensor = psi.reshape([2] * self.n)
+        logical_axes = [self.logical_to_site[wire] for wire in range(self.n)]
+        if logical_axes != list(range(self.n)):
+            tensor = np.transpose(tensor, logical_axes)
+        result = tensor.reshape(1 << self.n).astype(np.complex64)
         norm = np.sqrt(
             np.sum(np.abs(result.astype(np.complex128)) ** 2, dtype=np.float64)
         )
@@ -1390,10 +1447,20 @@ class MPSState:
         if shots < 0:
             raise ValueError("shots must be non-negative")
         selected = list(range(self.n)) if wires is None else list(wires)
-        if len(set(selected)) != len(selected):
-            raise ValueError("Duplicate qubit indices")
-        if any(wire < 0 or wire >= self.n for wire in selected):
-            raise ValueError("Qubit index out of range")
+        if _native_sample is not None:
+            self._physical_wires(selected)
+            rng = np.random.default_rng() if rng is None else rng
+            random_values = rng.random((shots, self.n), dtype=np.float64)
+            return np.asarray(
+                _native_sample(
+                    self.A,
+                    selected,
+                    self.logical_to_site,
+                    random_values,
+                ),
+                dtype=np.int64,
+            )
+        physical_selected = self._physical_wires(selected)
         rng = np.random.default_rng() if rng is None else rng
         tensors = self._numpy_tensors()
 
@@ -1411,7 +1478,7 @@ class MPSState:
 
         all_samples = np.empty((shots, self.n), dtype=np.int64)
         if shots == 0:
-            return all_samples[:, selected]
+            return all_samples[:, physical_selected]
 
         # Each shot carries one density-like left environment. Vectorizing the
         # contractions removes the Python shots×wires loop, while an adaptive
@@ -1465,7 +1532,7 @@ class MPSState:
                 left = chosen_updates / np.maximum(
                     chosen_weights[:, None, None], tiny
                 )
-        return all_samples[:, selected]
+        return all_samples[:, physical_selected]
 
     def sample(self, shots: int, wires: Optional[List[int]] = None):
         return self.sample_array(shots, wires).tolist()
