@@ -23,6 +23,7 @@ import argparse
 import json
 import platform
 import statistics
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,8 +31,13 @@ from pathlib import Path
 import numpy as np
 from qiskit.quantum_info import Statevector, SparsePauliOp
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from tools.benchmark_mps_limits import build_circuit
 from mettleq.integrations.qiskit import MettleQEstimatorV2
+import mettleq.mps_state as mps_state
 
 PARITY_MAX_QUBITS = 14
 
@@ -73,9 +79,11 @@ def _exact_expectations(circ, obs_list) -> list[float]:
     return [float(np.real(sv.expectation_value(o))) for o in obs_list]
 
 
-def _mps_run(circ, obs_list):
+def _mps_run(circ, obs_list, *, max_bond: int):
     est = MettleQEstimatorV2(
-        method="mps", allow_approximation=True, mps_max_bond_dimension=MAX_BOND
+        method="mps",
+        allow_approximation=True,
+        mps_max_bond_dimension=max_bond,
     )
     res = est.run([(circ, obs_list)]).result()[0]
     vals = [float(v) for v in np.atleast_1d(res.data.evs)]
@@ -83,7 +91,20 @@ def _mps_run(circ, obs_list):
     return vals, diag
 
 
-def run(cases, atol: float) -> dict:
+def run(
+    cases,
+    atol: float,
+    *,
+    max_bond: int = MAX_BOND,
+    repeats: int = REPEATS,
+    single_gate_direct_product_threshold: int | None = None,
+) -> dict:
+    if single_gate_direct_product_threshold is not None:
+        if single_gate_direct_product_threshold < 0:
+            raise ValueError("single-gate threshold must be non-negative")
+        mps_state._SINGLE_GATE_DIRECT_PRODUCT_THRESHOLD = int(
+            single_gate_direct_product_threshold
+        )
     rows = []
     all_parity_ok = True
     for family, n, depth in cases:
@@ -91,12 +112,12 @@ def run(cases, atol: float) -> dict:
         obs_list = _observables(n)
 
         # timing (median of REPEATS), with one warmup
-        _mps_run(circ, obs_list)
+        _mps_run(circ, obs_list, max_bond=max_bond)
         times = []
         vals = diag = None
-        for _ in range(REPEATS):
+        for _ in range(repeats):
             t0 = time.perf_counter()
-            vals, diag = _mps_run(circ, obs_list)
+            vals, diag = _mps_run(circ, obs_list, max_bond=max_bond)
             times.append((time.perf_counter() - t0) * 1000.0)
         median_ms = statistics.median(times)
 
@@ -114,6 +135,7 @@ def run(cases, atol: float) -> dict:
                 "svd_calls", "two_site_calls", "svd_total_ms",
                 "two_site_contraction_total_ms", "two_site_split_total_ms",
                 "renormalization_count", "routing_swaps",
+                "swap_fast_path_calls",
                 "routing_final_restore_swaps", "routing_effective_strategy",
                 "maximum_bond_dimension_reached", "tensor_device",
             )
@@ -135,8 +157,11 @@ def run(cases, atol: float) -> dict:
     return {
         "created_at": datetime.now(timezone.utc).isoformat(),
         "platform": platform.platform(),
-        "max_bond": MAX_BOND,
-        "repeats": REPEATS,
+        "max_bond": max_bond,
+        "single_gate_direct_product_threshold": (
+            mps_state._SINGLE_GATE_DIRECT_PRODUCT_THRESHOLD
+        ),
+        "repeats": repeats,
         "atol": atol,
         "all_parity_ok": all_parity_ok,
         "cases": rows,
@@ -149,11 +174,27 @@ def main() -> int:
     # 1e-5 reflects complex64 (float32) accumulation over hundreds of SVDs +
     # renormalizations; tight enough to catch real correctness regressions.
     ap.add_argument("--atol", type=float, default=1e-5)
+    ap.add_argument("--max-bond", type=int, default=MAX_BOND)
+    ap.add_argument("--repeats", type=int, default=REPEATS)
+    ap.add_argument(
+        "--single-gate-threshold",
+        type=int,
+        default=None,
+        help="override the CPU direct-update crossover for this process",
+    )
     ap.add_argument("--quick", action="store_true", help="skip the slow large cases")
     args = ap.parse_args()
 
+    if args.max_bond < 1 or args.repeats < 1:
+        ap.error("--max-bond and --repeats must be positive")
     cases = QUICK_CASES if args.quick else FULL_CASES
-    report = run(cases, args.atol)
+    report = run(
+        cases,
+        args.atol,
+        max_bond=args.max_bond,
+        repeats=args.repeats,
+        single_gate_direct_product_threshold=args.single_gate_threshold,
+    )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2))
     print(f"\nWrote {args.out}")

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import Iterable, Optional, Sequence
 
-import mlx.core as mx
+from .._mlx_compat import mx
 import numpy as np
 
 from ..device import Device
@@ -15,7 +15,6 @@ from ..mps_state import MPSOptions
 from ..planning import select_execution
 from ..planning import (
     DEFAULT_AUTOMATIC_MPS_MIN_QUBITS,
-    DEFAULT_MPS_GPU_MIN_QUBITS,
     DEFAULT_STATEVECTOR_GPU_MIN_QUBITS,
 )
 
@@ -136,7 +135,6 @@ def execute_operations(
     mps_max_relative_discarded_weight: Optional[float] = 1e-6,
     mps_max_norm_error: Optional[float] = 1e-5,
     statevector_gpu_min_qubits: int = DEFAULT_STATEVECTOR_GPU_MIN_QUBITS,
-    mps_gpu_min_qubits: Optional[int] = DEFAULT_MPS_GPU_MIN_QUBITS,
     automatic_mps_min_qubits: int = DEFAULT_AUTOMATIC_MPS_MIN_QUBITS,
     execution_cache: Optional[dict] = None,
 ) -> Device:
@@ -149,7 +147,6 @@ def execute_operations(
         allow_approximation=allow_approximation,
         allow_unsafe_statevector=allow_unsafe_statevector,
         statevector_gpu_min_qubits=statevector_gpu_min_qubits,
-        mps_gpu_min_qubits=mps_gpu_min_qubits,
         automatic_mps_min_qubits=automatic_mps_min_qubits,
     )
     backend = (

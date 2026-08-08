@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Matched MPS routing, CPU/GPU, and Qiskit Aer comparison campaign."""
+"""Matched CPU-native MPS routing and Qiskit Aer comparison campaign."""
 
 from __future__ import annotations
 
@@ -7,7 +7,9 @@ import argparse
 import csv
 import importlib.metadata
 import json
+import os
 import platform
+import resource
 import statistics
 import subprocess
 import sys
@@ -32,7 +34,6 @@ from tools.benchmark_mps_limits import build_circuit, parse_case
 IMPLEMENTATIONS = (
     "mettleq_cpu_routed",
     "mettleq_cpu_restore",
-    "mettleq_gpu_routed",
     "qiskit_aer_cpu_mps",
 )
 STANDARD_CASES = (
@@ -60,6 +61,29 @@ def _git_value(*arguments: str) -> str | None:
         return None
 
 
+def _package_version(name: str) -> str | None:
+    try:
+        return importlib.metadata.version(name)
+    except importlib.metadata.PackageNotFoundError:
+        return None
+
+
+def _peak_rss_bytes() -> int:
+    value = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+    return value if sys.platform == "darwin" else value * 1024
+
+
+def _thread_environment() -> dict[str, str | None]:
+    names = (
+        "OMP_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "VECLIB_MAXIMUM_THREADS",
+        "MKL_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+    )
+    return {name: os.environ.get(name) for name in names}
+
+
 def _observable(n_qubits: int) -> SparsePauliOp:
     return SparsePauliOp("I" * (n_qubits - 1) + "Z")
 
@@ -80,11 +104,10 @@ def _make_estimator(implementation: str, args):
                 },
             }
         )
-    device = "gpu" if "gpu" in implementation else "cpu"
     routing = "restore" if implementation.endswith("restore") else "lookahead"
     return MettleQEstimatorV2(
         method="matrix_product_state",
-        device=device,
+        device="cpu",
         mps_max_bond_dimension=args.dmax,
         mps_truncation_threshold=args.eps,
         mps_svd_driver=args.svd_driver,
@@ -130,6 +153,7 @@ def _worker(args) -> int:
                 "order_index": order_index,
                 "status": "completed",
                 "execution_ms": None,
+                "peak_rss_bytes": None,
                 "expectation_z0": None,
                 "exact_expectation_z0": None,
                 "exact_absolute_error": None,
@@ -140,6 +164,7 @@ def _worker(args) -> int:
                 "svd_calls": None,
                 "svd_total_ms": None,
                 "routing_swaps": None,
+                "swap_fast_path_calls": None,
                 "routing_naive_restore_swaps": None,
                 "accuracy_classification": None,
                 "error": None,
@@ -156,6 +181,7 @@ def _worker(args) -> int:
                 row["execution_ms"] = (
                     time.perf_counter_ns() - start
                 ) / 1e6
+                row["peak_rss_bytes"] = _peak_rss_bytes()
                 row["expectation_z0"] = float(np.asarray(result.data.evs))
                 if implementation.startswith("mettleq"):
                     diagnostics = estimator.last_mps_diagnostics[0]
@@ -168,6 +194,7 @@ def _worker(args) -> int:
                         "svd_calls",
                         "svd_total_ms",
                         "routing_swaps",
+                        "swap_fast_path_calls",
                         "routing_naive_restore_swaps",
                     ):
                         target = (
@@ -221,7 +248,6 @@ def _summaries(rows: list[dict], cases) -> list[dict]:
         }
         routed = medians["mettleq_cpu_routed"]
         restore = medians["mettleq_cpu_restore"]
-        gpu = medians["mettleq_gpu_routed"]
         aer = medians["qiskit_aer_cpu_mps"]
         routed_rows = [
             row
@@ -239,7 +265,6 @@ def _summaries(rows: list[dict], cases) -> list[dict]:
                 "routing_speedup": (
                     restore / routed if routed and restore else None
                 ),
-                "cpu_over_gpu_speedup": gpu / routed if routed and gpu else None,
                 "mettleq_over_aer_speedup": aer / routed if routed and aer else None,
                 "maximum_mettleq_exact_error": max(
                     (
@@ -270,15 +295,14 @@ def _summaries(rows: list[dict], cases) -> list[dict]:
 def _plot(summaries: list[dict], output: Path) -> None:
     import matplotlib.pyplot as plt
 
-    # Frozen pre-rename summaries retain their original schema. Plot them with
-    # the canonical MettleQ labels without rewriting the measured source data.
+    # Frozen pre-rename summaries retain their original CPU-only schema. Plot
+    # them with canonical MettleQ labels without rewriting source data.
     normalized = []
     for source in summaries:
         row = dict(source)
         for old, new in (
             ("qupertino_cpu_routed_median_ms", "mettleq_cpu_routed_median_ms"),
             ("qupertino_cpu_restore_median_ms", "mettleq_cpu_restore_median_ms"),
-            ("qupertino_gpu_routed_median_ms", "mettleq_gpu_routed_median_ms"),
             ("qupertino_over_aer_speedup", "mettleq_over_aer_speedup"),
             ("maximum_qupertino_exact_error", "maximum_mettleq_exact_error"),
         ):
@@ -296,13 +320,12 @@ def _plot(summaries: list[dict], output: Path) -> None:
     styles = (
         ("mettleq_cpu_routed_median_ms", "MettleQ CPU routed", "#2563eb"),
         ("mettleq_cpu_restore_median_ms", "MettleQ CPU restore", "#60a5fa"),
-        ("mettleq_gpu_routed_median_ms", "MettleQ GPU tensors", "#7c3aed"),
         ("qiskit_aer_cpu_mps_median_ms", "Qiskit Aer CPU MPS", "#ea580c"),
     )
-    width = 0.19
+    width = 0.24
     for offset, (field, label, color) in enumerate(styles):
         values = [row[field] if row[field] is not None else np.nan for row in summaries]
-        axes[0].bar(x + (offset - 1.5) * width, values, width, label=label, color=color)
+        axes[0].bar(x + (offset - 1) * width, values, width, label=label, color=color)
     axes[0].set_yscale("log")
     axes[0].set_ylabel("Median Qiskit Estimator execution (ms, log scale)")
     axes[0].set_xticks(x, labels, rotation=20, ha="right")
@@ -311,7 +334,6 @@ def _plot(summaries: list[dict], output: Path) -> None:
 
     comparisons = (
         ("routing_speedup", "routing vs restore", "#2563eb"),
-        ("cpu_over_gpu_speedup", "CPU vs GPU tensors", "#7c3aed"),
         ("mettleq_over_aer_speedup", "MettleQ vs Aer", "#ea580c"),
     )
     for field, label, color in comparisons:
@@ -327,7 +349,7 @@ def _plot(summaries: list[dict], output: Path) -> None:
     axes[1].set_xticks(x, labels, rotation=20, ha="right")
     axes[1].grid(True, alpha=0.22)
     axes[1].legend(fontsize=8)
-    figure.suptitle("Matched MPS paths through Qiskit EstimatorV2")
+    figure.suptitle("Matched CPU-native MPS paths through Qiskit EstimatorV2")
     figure.tight_layout()
     figure.savefig(output, dpi=190, bbox_inches="tight")
     plt.close(figure)
@@ -425,9 +447,16 @@ def _campaign(args) -> int:
         "platform": platform.platform(),
         "machine": platform.machine(),
         "python": platform.python_version(),
-        "mlx": importlib.metadata.version("mlx"),
-        "qiskit": importlib.metadata.version("qiskit"),
-        "qiskit_aer": importlib.metadata.version("qiskit-aer"),
+        "processor": platform.processor(),
+        "python_implementation": platform.python_implementation(),
+        "numpy": _package_version("numpy"),
+        "scipy": _package_version("scipy"),
+        "mlx": _package_version("mlx"),
+        "qiskit": _package_version("qiskit"),
+        "qiskit_aer": _package_version("qiskit-aer"),
+        "thread_environment": _thread_environment(),
+        "machine_note": args.machine_note,
+        "thermal_state": args.thermal_state,
         "cases": cases,
         "implementations": args.implementations,
         "dmax": args.dmax,
@@ -439,7 +468,8 @@ def _campaign(args) -> int:
         "timeout_seconds_per_case": args.timeout_seconds,
         "protocol": (
             "same Qiskit circuit and analytic Z0 EstimatorV2 contract; "
-            "implementation order rotates each repeat; fresh process per case"
+            "implementation order rotates each repeat; fresh process per case; "
+            "report medians over post-warmup repeats"
         ),
     }
     (outdir / "mps_phase8_manifest.json").write_text(
@@ -459,8 +489,18 @@ def main() -> int:
     parser.add_argument("--eps", type=float, default=1e-10)
     parser.add_argument("--svd-driver", choices=("auto", "gesdd", "gesvd", "numpy"), default="auto")
     parser.add_argument("--routing-lookahead", type=int, default=8)
-    parser.add_argument("--warmups", type=int, default=1)
-    parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument("--warmups", type=int, default=2)
+    parser.add_argument("--repeats", type=int, default=5)
+    parser.add_argument(
+        "--machine-note",
+        default="",
+        help="operator note, e.g. idle/AC power/other foreground work",
+    )
+    parser.add_argument(
+        "--thermal-state",
+        default="unspecified",
+        help="operator-described thermal state during the run",
+    )
     parser.add_argument("--exact-max-qubits", type=int, default=20)
     parser.add_argument("--timeout-seconds", type=float, default=240.0)
     parser.add_argument(

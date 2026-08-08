@@ -51,15 +51,14 @@ small-reference rows, the worst errors were `4.619e-5`, `1.890e-6`, and
 The MettleQ-versus-Qiskit Aer comparison was run only after reliability,
 routing, and CPU-path work completed. It used the same Qiskit circuit and
 analytic `Z0` EstimatorV2 contract, one warmup, three rotating repeats, a fresh
-process per case, and four implementations: MettleQ CPU routed, CPU restore,
-GPU tensors, and Aer CPU MPS.
+process per case, and three implementations: MettleQ CPU routed, CPU restore,
+and Aer CPU MPS.
 
 Lookahead routing improved ring by 1.70x, rainbow by 1.25x, random long range by
 1.42x, and all to all by 5.52x; all-to-all swaps fell from 2,280 to 384. Aer was
 faster on six of seven schedules. MettleQ was 1.69x faster on the tested
-36-qubit grid. CPU beat GPU tensors on all seven cases, so automatic MPS remains
-on CPU. Native GPU MPS should be revisited only after new batched contraction or
-decomposition kernels can amortize the current transfer/orchestration overhead.
+36-qubit grid. MPS is explicitly CPU-native, so this comparison now covers
+CPU-native MPS implementations only.
 
 The full raw evidence, summaries, commands, clean-engine manifests, and plots
 are frozen under
@@ -103,9 +102,8 @@ count alone—define the current boundary.
    and result metadata that never equates completion with exactness.
 3. Add topology-aware nonlocal routing and a bond-growth forecast before
    execution, minimizing swap-induced entanglement where semantics allow.
-4. Optimize two-site contractions and the CPU SVD path, then investigate
-   batched/Metal MPS primitives and remeasure CPU/GPU crossover before changing
-   the CPU automatic default.
+   4. Optimize two-site contractions, canonicalization, CPU SVD dispatch, and
+   routing heuristics while keeping MPS CPU-native.
 5. After reliability is fixed, run a paired, matched-contract comparison with
    Qiskit Aer MPS across the same topology/depth schedule and multiple Apple
    Silicon generations.
@@ -128,9 +126,7 @@ MPS-compatibility findings.
 Every circuit uses one numerical execution device. Automatic statevector uses
 CPU below a measured crossover and Apple GPU above it. CPU and GPU benchmark
 times are independent and are never summed into an acceleration claim.
-Automatic MPS remains on CPU over the current measured range because MLX 0.32
-SVD is CPU-only; callers can explicitly select GPU tensor operations, and the
-result reports both tensor and SVD devices.
+Automatic MPS is CPU-native and does not expose a GPU tensor path.
 
 ### Statevector and MPS SDK behavior
 
@@ -149,7 +145,7 @@ device declares operations, observables, measurements, and unsupported dynamic
 features in a capability TOML and uses the official tracking and single-tape
 modifiers.
 
-Thirteen new tests cover planner decisions, CPU/GPU parity, 24-qubit compact
+Thirteen new tests cover planner decisions, statevector CPU/GPU parity, 24-qubit compact
 MPS measurement, approximation telemetry, dense-state preflight, Qiskit V2
 primitives, Qiskit batch reuse, and PennyLane MPS gradients/tracking. The full
 suite passes 329 tests. `tools/benchmark_execution_policy.py` calibrates CPU/GPU
@@ -165,9 +161,8 @@ and seven rotating repeats.
 The pure-MLX statevector GPU crossover was 14 qubits; compatible custom Metal
 reduced the workload-specific crossover to 6. At 20 qubits, the pure-MLX GPU
 was 5.53× faster than CPU (41.67 versus 230.50 ms), while the compatible Metal
-GPU was 18.64× faster (12.42 versus 231.56 ms). MPS showed no GPU crossover
-through 32 qubits: CPU took 10.69 ms there versus 28.41 ms for GPU tensors with
-CPU SVD.
+GPU was 18.64× faster (12.42 versus 231.56 ms). MPS remains on its CPU-native
+path.
 
 The shared 20-qubit analytic `Z₀` SDK contract produced:
 

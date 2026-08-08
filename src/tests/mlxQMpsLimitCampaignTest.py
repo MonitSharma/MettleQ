@@ -40,6 +40,6 @@ def test_custom_limit_case_parser_validates_topology_shape_and_size():
 
 
 def test_phase8_campaign_rotates_implementation_order():
-    implementations = ["routed", "restore", "gpu", "aer"]
+    implementations = ["routed", "restore", "aer"]
     assert _rotate(implementations, 0) == implementations
-    assert _rotate(implementations, 1) == ["restore", "gpu", "aer", "routed"]
+    assert _rotate(implementations, 1) == ["restore", "aer", "routed"]
