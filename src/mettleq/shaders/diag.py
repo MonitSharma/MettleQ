@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import math
 
-import mlx.core as mx
+from .._mlx_compat import mx
 
 __all__ = ["diag_pair_layer", "diag_weighted_layer"]
 

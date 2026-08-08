@@ -1,0 +1,4 @@
+include LICENSE
+include PYPI_README.md
+include CITATION.cff
+recursive-include src/mettleq py.typed *.qasm *.md *.txt *.toml

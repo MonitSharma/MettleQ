@@ -30,8 +30,13 @@ def mqtbench_dir() -> Path:
     env = os.environ.get('METTLEQ_MQTBENCH')
     if env:
         return Path(env)
-    return _package_data_dir() / 'mqtbench'
+    candidate = _package_data_dir() / 'mqtbench'
+    if candidate.is_dir():
+        return candidate
+    raise FileNotFoundError(
+        "The optional MQTBench dataset is not bundled with this installation. "
+        "Set METTLEQ_MQTBENCH to a checked-out MQTBench directory."
+    )
 
 
 __all__ = ['qasm_local_dir', 'qasm_local_path', 'mqtbench_dir']
-

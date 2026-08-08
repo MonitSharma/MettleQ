@@ -81,6 +81,9 @@ src.zip
 paper/
 QUANTICS_2026_14_CR.pdf
 *.pdf
+!output/
+!output/pdf/
+!output/pdf/MettleQ_technical_report.pdf
 
 # Local WSL/Windows run wrappers and virtual environments
 .venv-wsl/

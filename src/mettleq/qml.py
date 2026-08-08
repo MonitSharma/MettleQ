@@ -15,7 +15,7 @@ import random
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, List, Optional, Sequence, Tuple, Union
 
-import mlx.core as mx
+from ._mlx_compat import mx
 
 from .sim import StateVectorSimulator, qft as qft_transform, iqft as iqft_transform
 from .gates import H as G_H, X as G_X, Y as G_Y, Z as G_Z, RX as G_RX, RY as G_RY, RZ as G_RZ, CNOT as G_CNOT, SWAP as G_SWAP, S as G_S, SDG as G_SDG

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Callable, Optional
 
-import mlx.core as mx
+from .._mlx_compat import mx
 
 from .single_qubit import hadamard_layer_all, s_phase_layer
 from .zz import zz_chain_layer

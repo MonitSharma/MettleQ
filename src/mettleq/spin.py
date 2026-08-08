@@ -1,6 +1,6 @@
 from __future__ import annotations
 import math
-import mlx.core as mx
+from ._mlx_compat import mx
 from .gates import X, Y, Z, I
 
 

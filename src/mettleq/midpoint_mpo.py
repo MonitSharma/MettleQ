@@ -863,8 +863,16 @@ class IsolatedMidpointMPOSimulator:
         self.options = options or MidpointMPOOptions()
         configured_python = worker_python or os.environ.get("METTLEQ_MPO_PYTHON")
         if configured_python is None:
-            candidate = Path(__file__).resolve().parents[2] / ".venv-mpo/bin/python"
-            configured_python = candidate if candidate.exists() else None
+            # The repository's pinned worker is a development convenience, not
+            # a package resource. Never infer a sibling interpreter from an
+            # installed wheel's site-packages path.
+            here = Path(__file__).resolve()
+            for source_root in here.parents:
+                if (source_root / "pyproject.toml").is_file() and (source_root / ".venv-mpo").is_dir():
+                    candidate = source_root / ".venv-mpo/bin/python"
+                    if candidate.exists():
+                        configured_python = candidate
+                    break
         if configured_python is None:
             raise MidpointMPODependencyError(
                 "No isolated midpoint-MPO interpreter was configured. Create "

@@ -10,8 +10,9 @@ except Exception:
 
 
 if _HAS_RICH:
-    # Force color for consistent output (like C++ fmt with colors)
-    console = Console(highlight=False, force_terminal=True, color_system="truecolor")
+    # Let Rich inspect the actual terminal. Library calls must not inject ANSI
+    # escapes into redirected logs, notebooks, or test output.
+    console = Console(highlight=False)
 
     def info(msg: str):
         console.print(f"[bold cyan]{msg}[/bold cyan]")

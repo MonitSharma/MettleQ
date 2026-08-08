@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import List, Tuple
 import math
 import numpy as np
-import mlx.core as mx
+from ._mlx_compat import mx
 
 
 def proj(state: mx.array) -> mx.array:

@@ -1,7 +1,7 @@
 from typing import List
 import math
 import random
-import mlx.core as mx
+from ._mlx_compat import mx
 
 
 def zero_state(n_qubits: int) -> mx.array:

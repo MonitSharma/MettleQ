@@ -1,6 +1,6 @@
 from typing import List
 import math
-import mlx.core as mx
+from ._mlx_compat import mx
 from .gates import X as _X, Y as _Y, Z as _Z, I as _I
 
 

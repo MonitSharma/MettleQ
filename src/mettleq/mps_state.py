@@ -8,7 +8,7 @@ import time
 import numpy as np
 from scipy.linalg import qr as _scipy_qr
 
-import mlx.core as mx
+from ._mlx_compat import mx
 
 
 def _reduced_qr(matrix: np.ndarray):

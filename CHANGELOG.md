@@ -3,6 +3,19 @@
 All notable user-facing changes are recorded here. MettleQ follows semantic
 versioning once the first public release is tagged.
 
+## 0.3.0rc1 — Unreleased
+
+- Marked MLX as an Apple Silicon macOS dependency and made drawing/QASM
+  utilities usable on platforms without MLX installed.
+- Replaced exact runtime dependency pins in published extras with compatible
+  ranges; keep reproducible benchmark pins in dedicated requirement files.
+- Added PEP 561 typing metadata, PEP 639 license metadata, sdist manifests,
+  and installed-artifact validation hooks.
+- Removed the legacy `qupertino` PennyLane entry-point name in favor of the
+  package-owned `mettleq.compat` alias.
+- Hardened source-checkout-only benchmark and midpoint-MPO paths and stopped
+  library VQE calls from writing into the caller's current directory.
+
 ## Unreleased
 
 - Imported the Windows/WSL RTX 3070 benchmark evidence without merging stale

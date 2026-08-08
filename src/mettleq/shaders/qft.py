@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 
-import mlx.core as mx
+from .._mlx_compat import mx
 
 __all__ = ["qft_stage_all", "qft_stage_sub"]
 

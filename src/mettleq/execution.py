@@ -15,7 +15,7 @@ import os
 import platform
 from typing import Any, Dict, Iterable, List, Optional
 
-import mlx.core as mx
+from ._mlx_compat import mx
 
 
 STATE_DTYPE = "complex64"

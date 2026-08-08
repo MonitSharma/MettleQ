@@ -13,7 +13,7 @@ import math
 import os
 from typing import Callable, Optional
 
-import mlx.core as mx
+from .._mlx_compat import mx
 
 __all__ = ["rx_layer_all", "u2_layer_all", "u2_list_layer_all",
            "hadamard_layer_all", "s_phase_layer"]
