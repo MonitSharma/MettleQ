@@ -45,6 +45,10 @@ class MPSNumericalError(RuntimeError):
 
 _SVD_DRIVERS = {"auto", "gesdd", "gesvd", "numpy", "gpu_jacobi"}
 _ROUTING_STRATEGIES = {"lookahead", "restore"}
+# Direct row updates beat general contraction once the two bond dimensions
+# create a sufficiently wide batch. Keep this explicit so CPU benchmark runs
+# can tune it for different Apple CPU generations without changing semantics.
+_SINGLE_GATE_DIRECT_PRODUCT_THRESHOLD = 2048
 
 
 @lru_cache(maxsize=4)
@@ -657,8 +661,17 @@ class MPSState:
         if self.tensor_device == "cpu":
             A = np.asarray(self.A[q], dtype=np.complex64)
             Um = np.asarray(U, dtype=np.complex64)
-            B = np.tensordot(Um, A, axes=([1], [1]))  # (2, Dl, Dr)
-            self.A[q] = np.transpose(B, (1, 0, 2))     # (Dl, 2, Dr)
+            if (
+                A.shape[0] * A.shape[2]
+                >= _SINGLE_GATE_DIRECT_PRODUCT_THRESHOLD
+            ):
+                B = np.empty_like(A)
+                B[:, 0, :] = Um[0, 0] * A[:, 0, :] + Um[0, 1] * A[:, 1, :]
+                B[:, 1, :] = Um[1, 0] * A[:, 0, :] + Um[1, 1] * A[:, 1, :]
+                self.A[q] = B
+            else:
+                B = np.tensordot(Um, A, axes=([1], [1]))
+                self.A[q] = np.transpose(B, (1, 0, 2))
             return
         A = self.A[q]
         B = mx.tensordot(U, A, axes=([1], [1]))  # (2, Dl, Dr)
