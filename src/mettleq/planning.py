@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Optional, Sequence
 
-import mlx.core as mx
+from ._mlx_compat import mx
 
 from .execution import statevector_preflight
 

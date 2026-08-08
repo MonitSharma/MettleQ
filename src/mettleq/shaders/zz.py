@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 
-import mlx.core as mx
+from .._mlx_compat import mx
 
 __all__ = ["zz_chain_layer", "zz_weighted_layer"]
 

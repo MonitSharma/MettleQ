@@ -12,6 +12,11 @@ correctness evidence.
 
 Requirements: Apple Silicon, macOS, and Python 3.11 or newer.
 
+The MLX simulation kernels support macOS arm64 (Apple Silicon). Linux,
+Windows, and Intel Macs can install the package for MLX-independent drawing,
+QASM parsing, and documentation tooling, but simulation requires an Apple
+Silicon Mac.
+
 ```bash
 python -m pip install 'mettleq[sdk]'
 ```
@@ -65,7 +70,7 @@ print(bell_circuit())
 - The exact MettleQ statevector path targets the Apple GPU when circuit shape,
   output contract, memory, and calibrated crossover justify its overhead.
 - MettleQ MPS is currently a CPU-first bounded approximation with explicit
-  convergence and truncation evidence; GPU MPS remains experimental.
+  convergence and truncation evidence; MPS is CPU-native.
 - Midpoint-MPO is a separate opt-in Qiskit method with an isolated dependency
   environment and its own approximation contract.
 

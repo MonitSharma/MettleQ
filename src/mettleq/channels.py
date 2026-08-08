@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import List
-import mlx.core as mx
+from ._mlx_compat import mx
 
 
 def apply_kraus(rho: mx.array, K: List[mx.array]) -> mx.array:

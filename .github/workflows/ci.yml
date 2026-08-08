@@ -10,21 +10,27 @@ permissions:
 
 jobs:
   portable:
-    name: Portable build and package checks
+    name: Portable source and backend tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
           cache: pip
       - name: Compile Python sources
         run: python -m compileall -q src/mettleq src/mlxq
       - name: Build distributable wheel and verify contents
         run: |
-          python -m pip install --quiet build
-          python -m build --wheel
+          python -m pip install --quiet build twine
+          rm -rf dist
+          python -m build
+          python -m twine check dist/*
           python - <<'PY'
           import glob
           import zipfile
@@ -40,6 +46,20 @@ jobs:
           assert any(name.startswith("mettleq/integrations/") for name in names)
           assert any("mettleq/datasets/qasm_local/" in name for name in names)
           print("verified", wheels[0], len(names), "files")
+          PY
+      - name: Install the sdist in a clean virtual environment
+        run: |
+          python -m venv /tmp/mettleq-sdist-${{ matrix.python-version }}
+          /tmp/mettleq-sdist-${{ matrix.python-version }}/bin/python -m pip install --no-deps dist/mettleq-*.tar.gz
+          /tmp/mettleq-sdist-${{ matrix.python-version }}/bin/python - <<'PY'
+          import mettleq
+          from mettleq.draw import circuit_ascii
+          from mettleq.qasm import QASMParseError
+
+          assert mettleq.__version__
+          assert "q0" in circuit_ascii(1, [])
+          assert QASMParseError
+          print("sdist import verified", mettleq.__version__)
           PY
       - name: Require a clean checkout
         run: |

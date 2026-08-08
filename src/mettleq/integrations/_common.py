@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import Iterable, Optional, Sequence
 
-import mlx.core as mx
+from .._mlx_compat import mx
 import numpy as np
 
 from ..device import Device

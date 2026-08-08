@@ -21,3 +21,7 @@ data, machine captures, or unredacted logs.
 MettleQ executes user-supplied Python and quantum circuits locally. It is not a
 sandbox. Only run notebooks, QASM files, midpoint-MPO workers, and benchmark
 scripts from sources you trust.
+
+The `METTLEQ_MPO_PYTHON` setting intentionally permits an arbitrary interpreter
+path so callers can isolate the optional midpoint-MPO dependency stack. Treat
+that path as executable code and set it only to an interpreter you control.

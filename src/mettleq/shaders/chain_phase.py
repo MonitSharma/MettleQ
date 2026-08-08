@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Callable, Optional
 import math
 
-import mlx.core as mx
+from .._mlx_compat import mx
 
 from .single_qubit import u2_layer_all
 

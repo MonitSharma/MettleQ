@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Iterable, List, Tuple
 
-import mlx.core as mx
+from .._mlx_compat import mx
 
 __all__ = ["compose_inverse_affine", "xor_affine_gather"]
 

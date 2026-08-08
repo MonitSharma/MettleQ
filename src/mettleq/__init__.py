@@ -6,10 +6,10 @@ importable so notebooks can be used for visualization without MLX.
 """
 
 try:
-    from importlib.metadata import version as _package_version
+    from importlib.metadata import PackageNotFoundError, version as _package_version
 
     __version__ = _package_version("mettleq")
-except Exception:  # source tree without installed package metadata
+except PackageNotFoundError:  # source tree without installed package metadata
     __version__ = "0+unknown"
 
 from .pretty import info, success, warn, error, table

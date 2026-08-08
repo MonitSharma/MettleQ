@@ -14,7 +14,7 @@ Public:
 from __future__ import annotations
 
 import math
-import mlx.core as mx
+from ._mlx_compat import mx
 from .gates import X, Y
 from .tensor import kron
 
@@ -43,4 +43,3 @@ def mpo_zz(theta: float) -> mx.array:
     e = complex(math.cos(theta), math.sin(theta))
     em = complex(math.cos(-theta), math.sin(-theta))
     return mx.array([[em,0+0j,0+0j,0+0j],[0+0j,e,0+0j,0+0j],[0+0j,0+0j,e,0+0j],[0+0j,0+0j,0+0j,em]], mx.complex64)
-

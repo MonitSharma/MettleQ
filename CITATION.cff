@@ -4,12 +4,12 @@ message: >-
   commit, backend, hardware, precision, and result contract used.
 title: MettleQ
 type: software
-version: 0.2.0
-date-released: 2026-07-19
+version: 0.3.0rc1
 license: MIT
 authors:
   - family-names: Sharma
     given-names: Monit
+    email: MonitSharma@users.noreply.github.com
 repository-code: https://github.com/MonitSharma/MettleQ
 url: https://github.com/MonitSharma/MettleQ
 abstract: >-

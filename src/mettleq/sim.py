@@ -1,7 +1,7 @@
 import math
 from typing import Iterable, List, Optional
 
-import mlx.core as mx
+from ._mlx_compat import mx
 
 from .gates import H, X, Z, CNOT, CZ, CPHASE
 from .execution import require_statevector_preflight

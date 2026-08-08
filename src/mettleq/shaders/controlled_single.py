@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Callable, Optional, Sequence
 
-import mlx.core as mx
+from .._mlx_compat import mx
 
 __all__ = ["controlled_u_groups"]
 

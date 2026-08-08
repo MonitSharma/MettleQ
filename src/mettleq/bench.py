@@ -21,7 +21,8 @@ from .tensor import kron
 from .observables import expectation_value
 from .states import zero_state
 from .channels import amplitude_damping_kraus, apply_kraus
-import mlx.core as mx
+from .paths import qasm_local_dir
+from ._mlx_compat import mx
 
 
 def _env_int(name: str, default: int) -> int:
@@ -68,7 +69,11 @@ import subprocess
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / "pyproject.toml").is_file() and (parent / "src").is_dir():
+            return parent
+    return here.parent
 
 
 def _env_repro_int(primary: str, fallback: str, default: int) -> int:
@@ -124,13 +129,16 @@ def _force_state(dev) -> None:
 def _package_version(name: str) -> str:
     try:
         return importlib_metadata.version(name)
-    except Exception:
+    except importlib_metadata.PackageNotFoundError:
         return "unavailable"
 
 
 def _git_value(args: List[str]) -> str:
+    root = _repo_root()
+    if not (root / ".git").exists():
+        return "unavailable"
     try:
-        out = subprocess.check_output(["git", "-C", str(_repo_root()), *args], stderr=subprocess.DEVNULL)
+        out = subprocess.check_output(["git", "-C", str(root), *args], stderr=subprocess.DEVNULL)
         return out.decode("utf-8", "ignore").strip()
     except Exception:
         return "unavailable"
@@ -307,6 +315,11 @@ def _resolve_qasm_dir(qasm_dir: str) -> Optional[Path]:
     p = Path(qasm_dir)
     if p.is_dir():
         return p
+    if qasm_dir == "datasets/qasm/local":
+        try:
+            return qasm_local_dir()
+        except FileNotFoundError:
+            pass
     here = Path(__file__).resolve()
     # Try new and old repo layouts
     candidates = [
@@ -1828,7 +1841,12 @@ def _vqe_grad_parameter_shift(n: int, layers: int, params: List[float], h_ops=No
     return grad
 
 
-def simulate_vqe(n: int, layers: int = 3) -> Dict[str, Any]:
+def simulate_vqe(
+    n: int,
+    layers: int = 3,
+    *,
+    output_dir: str | Path | None = None,
+) -> Dict[str, Any]:
     """VQE with optional optimizer loop.
 
     If METTLEQ_VQE_STEPS > 0, runs Adam (parameter-shift gradients). Otherwise single pass.
@@ -1880,24 +1898,28 @@ def simulate_vqe(n: int, layers: int = 3) -> Dict[str, Any]:
     gates = len(_vqe_build_ops_from_params(n, layers, params))
     res = _bench_result("vqe", n, gates, t0, c0, m0)
     res["energy"] = e
-    # Write convergence CSV and optional plot
-    try:
-        out_csv = f"bench/vqe_convergence_n{n}.csv"
-        os.makedirs(os.path.dirname(out_csv), exist_ok=True)
-        with open(out_csv, 'w') as f:
-            f.write("iter,energy\n")
-            for it, ev in history:
-                f.write(f"{it},{ev}\n")
-        console.print(f"[purple]CSV data:[/purple] {out_csv}")
-        if os.environ.get('METTLEQ_SAVE_PLOTS', '0') == '1':
-            from .plotting import plot_convergence
-            xs = [it for it,_ in history]
-            ys = [ev for _,ev in history]
-            out_png = f"bench/vqe_convergence_n{n}.png"
-            plot_convergence(xs, ys, title=f"VQE Convergence (n={n})", out=out_png)
-            console.print(f"[purple]Plot:[/purple] {out_png}")
-    except Exception as _:
-        pass
+    # Library calls are side-effect free by default. CLI/benchmark callers can
+    # opt in with output_dir or METTLEQ_BENCH_OUT_DIR.
+    requested_output = output_dir or os.environ.get("METTLEQ_BENCH_OUT_DIR", "").strip()
+    if requested_output:
+        try:
+            output_path = Path(requested_output)
+            output_path.mkdir(parents=True, exist_ok=True)
+            out_csv = output_path / f"vqe_convergence_n{n}.csv"
+            with out_csv.open("w") as f:
+                f.write("iter,energy\n")
+                for it, ev in history:
+                    f.write(f"{it},{ev}\n")
+            console.print(f"[purple]CSV data:[/purple] {out_csv}")
+            if os.environ.get('METTLEQ_SAVE_PLOTS', '0') == '1':
+                from .plotting import plot_convergence
+                xs = [it for it, _ in history]
+                ys = [ev for _, ev in history]
+                out_png = output_path / f"vqe_convergence_n{n}.png"
+                plot_convergence(xs, ys, title=f"VQE Convergence (n={n})", out=str(out_png))
+                console.print(f"[purple]Plot:[/purple] {out_png}")
+        except OSError as exc:
+            warn(f"VQE convergence output skipped: {exc}")
     return res
 
 

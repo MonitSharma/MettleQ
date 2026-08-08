@@ -1,5 +1,5 @@
 import math
-import mlx.core as mx
+from ._mlx_compat import mx
 
 
 def I():

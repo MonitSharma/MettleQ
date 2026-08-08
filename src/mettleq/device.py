@@ -6,7 +6,7 @@ from .sim import StateVectorSimulator
 from .mps_state import MPSState, MPSOptions
 from .gates import I, H, X, Y, Z, S, SDG, T, TDG, SX, RX, RY, RZ, U1, U2, U3, SWAP, iSWAP, CNOT, CZ, CPHASE, CRX, CRY, CRZ, Toffoli, Fredkin, CH
 import math as _math
-import mlx.core as mx
+from ._mlx_compat import mx
 
 from .execution import (build_execution_plan, mark_graph_built,
                         mark_synchronized, metal_checkpoint_policy,
