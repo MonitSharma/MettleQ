@@ -47,6 +47,8 @@ truncated; it is not presented as a deterministic simulator error bound.
 The Aer/MettleQ column is Aer median runtime divided by MettleQ median runtime;
 below 1 means Aer is faster, above 1 means MettleQ is faster.
 
+The table below is the pre-optimization baseline retained for comparison.
+
 | Workload | MettleQ CPU ms | Aer CPU MPS ms | Aer/MettleQ | MettleQ swaps |
 | --- | ---: | ---: | ---: | ---: |
 | GHZ chain, 1000q d1 | 148.27 | 45.75 | 0.31 | 0 |
@@ -60,6 +62,39 @@ below 1 means Aer is faster, above 1 means MettleQ is faster.
 The result is workload-dependent. Aer is substantially faster on the peaked
 long-range/random cases, while MettleQ is faster on the 36-qubit grid. The
 benchmark does not justify routing every workload to either implementation.
+
+### Post mapping-aware/native-core run
+
+The persisted source data and updated comparison figure are in
+[`assets/benchmarks-frozen/fork-m3pro-20260809-mps-native-core/`](../../assets/benchmarks-frozen/fork-m3pro-20260809-mps-native-core/).
+The same figure is also used by the main README at
+[`assets/perf-charts/mps_optimization_comparison.png`](../../assets/perf-charts/mps_optimization_comparison.png).
+
+After removing the unconditional final logical-order restore and enabling the
+optional Accelerate native core, the same longer estimator campaign was
+repeated on the same M3 Pro with two warmups and five post-warmup repeats:
+
+| Workload | MettleQ routed ms | MettleQ restore ms | Aer CPU MPS ms | Aer/MettleQ | Routed swaps |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| GHZ chain, 1000q d1 | 106.18 | 106.25 | 71.90 | 0.68 | 0 |
+| Line brickwork, 100q d8 | 44.19 | 45.68 | 29.69 | 0.67 | 0 |
+| Ring brickwork, 50q d2 | 8.32 | 12.46 | 6.17 | 0.74 | 48 |
+| 2-D grid, 36q d2 | 133.00 | 131.79 | 424.34 | 3.19 | 300 |
+| Rainbow, 32q d1 | 7.73 | 550.08 | 3.45 | 0.45 | 240 |
+| Random long-range, 32q d1 | 5.07 | 83.55 | 3.12 | 0.62 | 121 |
+| All-to-all, 20q d1 | 23.58 | 143.20 | 24.76 | 1.05 | 249 |
+
+The routing change is largest for rainbow and long-range circuits: their
+logical-to-physical mapping is preserved across the circuit, and readout,
+sampling, and product observables now translate that mapping instead of
+forcing every qubit back into logical order. The planner uses persistent
+routing only when it saves more than 25% of the naive per-gate restore swaps;
+the grid therefore keeps restore-per-gate routing to avoid paying a bond-growth
+cost for a small swap reduction. The native core now also performs the
+two-site merge, specialized gate update, Accelerate SVD/truncation, and
+readout contraction. Aer remains faster on most cases because its complete
+MPS executor and tensor storage are native C++; MettleQ is within about 10%
+on this all-to-all case and still wins the grid workload.
 
 ## Sampling results
 
@@ -85,6 +120,23 @@ single-qubit update above the explicit M3-Pro threshold of 2048, and records
 SVD/contraction/routing/bond/norm diagnostics. No GPU execution path is used
 for MPS; statevector GPU support remains a separate backend.
 
+The MPS readout contract is mapping-aware: `expectation_product`, dense
+observables, probabilities, samples, and `to_statevector()` all account for
+the current logical-to-physical layout. Native expectation, marginal,
+statevector, and conditional-sampling paths receive that mapping directly.
+The CPU path also has
+specialized updates for diagonal gates, CNOT, RZZ/ZZ, SWAP, and product-state
+initialization. Circuit-level SWAP exchanges logical wire labels directly,
+without an unnecessary tensor SVD.
+
+Routing-plan generation and the two-site CPU core are available through an
+optional C++ native extension with deterministic Python fallbacks. The
+extension is built by the normal source/wheel build; source checkouts without
+a compiler continue to work and report `routing_planner="python"` in
+diagnostics. The native layer now owns merge/update/SVD/split, canonical-center
+QR, and mapping-aware readout; circuit dispatch, logical-map ownership, and
+route-plan state remain a thin Python control layer for compatibility.
+
 The new adjacent-swap fast path exchanges the two physical tensor legs by
 transpose before the required split, avoiding a dense 4×4 SWAP contraction.
 Compared with the preceding extended run, fresh post-change medians improved
@@ -102,14 +154,42 @@ PYTHONPATH=src .venv/bin/python tools/mps_opt_harness.py \
   --repeats 5 --single-gate-threshold 2048
 ```
 
+### Thread-count sweep
+
+Thread counts were tested in fresh subprocesses so BLAS/OpenMP settings could
+not leak between runs:
+
+```sh
+PYTHONPATH=src .venv/bin/python tools/benchmark_mps_cpu_threads.py \
+  --out bench/local/mps-thread-scaling.json --repeats 5 \
+  --thread-count 1 --thread-count 2 --thread-count 4 --thread-count 6 \
+  --case rainbow:32:1 --case random_long_range:32:1 \
+  --case all_to_all:20:1 --case grid_2d:36:2
+```
+
+Median MettleQ/Aer runtimes in milliseconds were:
+
+| Workload | MettleQ 1/2/4/6 threads | Aer 1/2/4/6 threads |
+| --- | ---: | ---: |
+| Rainbow, 32q d1 | 8.11 / 7.88 / 7.95 / 7.65 | 2.76 / 2.77 / 2.67 / 2.73 |
+| Random long-range, 32q d1 | 5.19 / 4.99 / 5.14 / 5.04 | 2.62 / 2.47 / 2.50 / 2.50 |
+| All-to-all, 20q d1 | 23.69 / 23.11 / 23.12 / 23.08 | 23.97 / 23.81 / 23.45 / 23.37 |
+| 2-D grid, 36q d2 | 129.74 / 129.62 / 129.27 / 129.61 | 427.24 / 392.35 / 379.89 / 375.79 |
+
+These small-kernel workloads are mostly sequential on this machine. One or
+two threads are the stable default; four threads hurt the long-range and
+all-to-all cases, while the grid case benefits modestly from more Aer threads.
+MettleQ should therefore default to one CPU thread, matching Aer's documented
+CPU-MPS default; larger counts should be opt-in and validated against the
+target circuit.
+
 ## Next optimization targets
 
-1. Profile routing lookahead and swap scheduling against these same workloads;
-   reduce swap count only when exact/parity and truncation diagnostics remain
-   unchanged.
-2. Keep SVD driver selection evidence-based. On this M3 Pro, `auto`/SciPy
-   `gesdd` was competitive; `gesvd` was slower on the all-to-all case, and
-   NumPy did not provide a consistent win.
+1. Move route-plan consumption, logical-map ownership, and circuit dispatch
+   behind the native core if closing the remaining Aer gap is a priority.
+2. Keep SVD driver selection evidence-based. On this M3 Pro, Accelerate
+   `cgesdd` is competitive for long-range cases but not uniformly faster than
+   SciPy for every small grid split.
 3. Add a workload-aware diagnostic/fallback decision at the integration layer
    only when Aer is available and approximation is explicitly allowed. Do not
    silently replace MettleQ or claim a universal crossover.

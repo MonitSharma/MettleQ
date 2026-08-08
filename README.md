@@ -1186,7 +1186,7 @@ an inherent matrix-product-state versus optimized-C++ limit at large bond
 growth, not a tuning gap that these changes can close.
 
 <div align="center">
-  <img src="assets/perf-charts/mps_optimization_comparison.png" alt="MettleQ CPU MPS before and after the NumPy-native tensor and scipy QR optimization, versus Qiskit Aer CPU MPS across seven entanglement families" width="920"/>
+  <img src="assets/perf-charts/mps_optimization_comparison.png" alt="Native Accelerate MettleQ CPU MPS routed and restore runtimes versus Qiskit Aer CPU MPS across seven workloads on an Apple M3 Pro" width="920"/>
   <br/><em>MettleQ CPU MPS before (frozen <code>cf4fa77</code>) versus after the optimization, against the unchanged Aer points. Lower is better; log scale.</em>
 </div>
 

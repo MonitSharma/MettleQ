@@ -1,0 +1,17 @@
+workload,threads,mettleq_ms,aer_ms
+Rainbow,1,8.110,2.757
+Rainbow,2,7.875,2.766
+Rainbow,4,7.952,2.674
+Rainbow,6,7.651,2.729
+Random long-range,1,5.185,2.621
+Random long-range,2,4.989,2.474
+Random long-range,4,5.137,2.505
+Random long-range,6,5.036,2.497
+All-to-all,1,23.692,23.971
+All-to-all,2,23.114,23.814
+All-to-all,4,23.117,23.448
+All-to-all,6,23.079,23.373
+2-D grid,1,129.744,427.243
+2-D grid,2,129.621,392.354
+2-D grid,4,129.271,379.890
+2-D grid,6,129.612,375.792

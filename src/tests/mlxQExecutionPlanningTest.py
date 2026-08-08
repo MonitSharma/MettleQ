@@ -104,37 +104,12 @@ def test_statevector_cpu_and_gpu_have_numerical_parity():
     )
 
 
-def test_mps_cpu_and_gpu_tensor_paths_have_numerical_parity():
-    if not planning._gpu_available():
-        pytest.skip("Apple Metal GPU is unavailable")
-    operations = [
-        {"name": "H", "wires": [0], "parameters": []},
-        {"name": "CNOT", "wires": [0, 1], "parameters": []},
-        {"name": "RZ", "wires": [1], "parameters": [-0.21]},
-    ]
-    cpu = _common.execute_operations(
-        3,
-        operations,
-        method="matrix_product_state",
-        execution_device="cpu",
-        mps_max_bond_dimension=32,
-    )
-    gpu = _common.execute_operations(
-        3,
-        operations,
-        method="matrix_product_state",
-        execution_device="gpu",
-        mps_max_bond_dimension=32,
-    )
-    assert np.allclose(
-        cpu.sim.to_statevector(),
-        gpu.sim.to_statevector(),
-        rtol=0.0,
-        atol=3e-6,
-    )
-    assert cpu.sim.truncation_diagnostics()["tensor_device"] == "cpu"
-    assert gpu.sim.truncation_diagnostics()["tensor_device"] == "gpu"
-    assert gpu.sim.truncation_diagnostics()["svd_device"] == "cpu"
+def test_gpu_request_for_mps_is_rejected():
+    with pytest.raises(ValueError, match="MPS is CPU-only"):
+        planning.select_execution(3, [], method="mps", device="gpu")
+
+    with pytest.raises(ValueError, match="MPS is CPU-only"):
+        Device(3, backend="mps", execution_device="gpu")
 
 
 def test_mps_sampling_and_marginals_do_not_materialize_dense_state(monkeypatch):
@@ -265,12 +240,13 @@ def test_routing_preflight_refuses_a_swap_increase_for_grid_order():
     )
     diagnostics = device.sim.truncation_diagnostics()
     assert diagnostics["routing_effective_strategy"] == "restore"
-    assert diagnostics["routing_planned_lookahead_swaps"] > (
+    assert diagnostics["routing_planned_lookahead_swaps"] < (
         diagnostics["routing_planned_restore_swaps"]
     )
     assert diagnostics["routing_swaps"] == (
         diagnostics["routing_naive_restore_swaps"]
     )
+    assert diagnostics["routing_final_restore_swaps"] == 0
 
 
 def test_routing_preflight_short_circuits_an_all_adjacent_schedule():
