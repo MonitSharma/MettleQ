@@ -71,6 +71,18 @@ jobs:
             exit 1
           fi
 
+  portable-required:
+    # Keep the exact protected-branch check name while the matrix above gives
+    # us coverage on each supported Python version.
+    name: Portable source and backend tests
+    if: always()
+    needs: portable
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all portable matrix jobs to pass
+        if: needs.portable.result != 'success'
+        run: exit 1
+
   apple-metal:
     name: Apple Silicon simulator and Metal tests
     if: github.event_name == 'workflow_dispatch'
