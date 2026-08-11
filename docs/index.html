@@ -62,7 +62,7 @@
     section { padding: 76px 0 0; }
     .section-head { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 18px; align-items: start; margin-bottom: 28px; border-top: 1px solid var(--line-strong); padding-top: 10px; }
     .section-number { padding-top: 0; }
-    h2 { font-size: 2.08rem; line-height: 1.08; margin: 0 0 14px; }
+    h2 { max-width: 760px; font-size: 2.08rem; line-height: 1.08; margin: 0 0 14px; }
     h3 { color: var(--ink); font: 500 1.28rem/1.16 var(--serif); margin: 0 0 8px; }
     .lead { max-width: 780px; color: var(--ink-2); margin: 0; }
     .rule { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
@@ -142,7 +142,7 @@
 
     <main id="main">
       <section id="install">
-        <div class="section-head"><div class="section-number">01</div><div><h2>Install once.<br>Measure honestly.</h2><p class="lead">The accelerated path targets macOS arm64. Other platforms can still use the package’s MLX-independent drawing, QASM, and documentation utilities.</p></div></div>
+        <div class="section-head"><div class="section-number">01</div><div><h2>Install once. Measure honestly.</h2><p class="lead">The accelerated path targets macOS arm64. Other platforms can still use the package’s MLX-independent drawing, QASM, and documentation utilities.</p></div></div>
         <div class="code-grid">
           <div class="code-block"><div class="code-title">Recommended SDK install</div><pre>python -m pip install "mettleq[sdk]"</pre></div>
           <div class="code-block"><div class="code-title">Development install</div><pre>git clone https://github.com/MonitSharma/MettleQ.git
@@ -153,7 +153,7 @@ python -m pip install -e ".[dev,sdk]"</pre></div>
       </section>
 
       <section id="usage">
-        <div class="section-head"><div class="section-number">02</div><div><h2>Use the front end<br>you already know.</h2><p class="lead">Both native SDK adapters preserve their result contracts and expose adaptive CPU/GPU selection.</p></div></div>
+        <div class="section-head"><div class="section-number">02</div><div><h2>Use the front end you already know.</h2><p class="lead">Both native SDK adapters preserve their result contracts and expose adaptive CPU/GPU selection.</p></div></div>
         <div class="code-grid">
           <div class="code-block"><div class="code-title">Qiskit BackendV2</div><pre>from qiskit import QuantumCircuit, transpile
 from mettleq.integrations.qiskit import AdaptiveQiskitBackend
@@ -184,7 +184,7 @@ print(bell())</pre></div>
       </section>
 
       <section id="contracts">
-        <div class="section-head"><div class="section-number">03</div><div><h2>Choose a contract,<br>not a slogan.</h2><p class="lead">Different workloads need different numerical representations. MettleQ makes the tradeoff visible in the execution report.</p></div></div>
+        <div class="section-head"><div class="section-number">03</div><div><h2>Choose a contract, not a slogan.</h2><p class="lead">Different workloads need different numerical representations. MettleQ makes the tradeoff visible in the execution report.</p></div></div>
         <div class="grid">
           <article class="cell"><div class="label">Exact</div><h3>Statevector</h3><p>Dense amplitudes, capability-probed Metal kernels, memory preflight, and phase-aligned parity validation.</p></article>
           <article class="cell"><div class="label">Bounded approximation</div><h3>Forward MPS</h3><p>CPU-native tensor network with bond caps, recoverable SVDs, persistent routing, truncation evidence, and convergence checks.</p></article>
@@ -195,7 +195,7 @@ print(bell())</pre></div>
       </section>
 
       <section id="results">
-        <div class="section-head"><div class="section-number">04</div><div><h2>Results on the<br>reference hardware.</h2><p class="lead">Apple M3 Pro · 12 CPU cores · 18 integrated GPU cores · 36 GB unified memory · macOS arm64 · MLX 0.32 · Qiskit Aer 0.17.2 · PennyLane Lightning 0.45.</p></div></div>
+        <div class="section-head"><div class="section-number">04</div><div><h2>Results on the reference hardware.</h2><p class="lead">Apple M3 Pro · 12 CPU cores · 18 integrated GPU cores · 36 GB unified memory · macOS arm64 · MLX 0.32 · Qiskit Aer 0.17.2 · PennyLane Lightning 0.45.</p></div></div>
         <div class="table-wrap"><table><thead><tr><th>Qubits</th><th>Aer CPU / MettleQ GPU</th><th>Lightning CPU / MettleQ GPU</th><th>Worst full-state error</th></tr></thead><tbody>
           <tr><td>16</td><td>0.255×</td><td><strong>1.445×</strong></td><td>3.75e−7</td></tr>
           <tr><td>18</td><td>0.627×</td><td><strong>3.710×</strong></td><td>3.98e−7</td></tr>
@@ -213,7 +213,7 @@ print(bell())</pre></div>
       </section>
 
       <section id="hardware">
-        <div class="section-head"><div class="section-number">05</div><div><h2>Apple versus<br>NVIDIA, honestly.</h2><p class="lead">The cross-hardware campaign matched workloads at 15, 20, 24, 26, and 28 qubits. CUDA-Q remains faster on several high-width bandwidth-dominated cases.</p></div></div>
+        <div class="section-head"><div class="section-number">05</div><div><h2>Apple versus NVIDIA, honestly.</h2><p class="lead">The cross-hardware campaign matched workloads at 15, 20, 24, 26, and 28 qubits. CUDA-Q remains faster on several high-width bandwidth-dominated cases.</p></div></div>
         <div class="table-wrap"><table><thead><tr><th>Workload at 28q</th><th>MettleQ Metal · M3 Pro</th><th>CUDA-Q · RTX 3070</th><th>Lightning GPU · RTX 3070</th><th>Aer CPU · WSL</th></tr></thead><tbody>
           <tr><td>QFT</td><td>877.90 ms</td><td>340.38 ms</td><td>6,635.45 ms</td><td>13,860.52 ms</td></tr>
           <tr><td>Ring QAOA · 6 layers</td><td>2,428.86 ms</td><td>463.80 ms</td><td>7,254.50 ms</td><td>17,438.65 ms</td></tr>
@@ -227,7 +227,7 @@ print(bell())</pre></div>
       </section>
 
       <section id="mps">
-        <div class="section-head"><div class="section-number">06</div><div><h2>MPS: the improvement<br>is real, the limits matter.</h2><p class="lead">The production MPS path in <code>main</code> is newer than the agent branch: it retains the native CPU core, persistent logical routing, native readout, and direct single-gate updates. The branch’s older rewrite would remove those paths, so only its safe regression tests were extracted.</p></div></div>
+        <div class="section-head"><div class="section-number">06</div><div><h2>MPS: the improvement is real, the limits matter.</h2><p class="lead">The production MPS path in <code>main</code> is newer than the agent branch: it retains the native CPU core, persistent logical routing, native readout, and direct single-gate updates. The branch’s older rewrite would remove those paths, so only its safe regression tests were extracted.</p></div></div>
         <div class="table-wrap"><table><thead><tr><th>Workload</th><th>MettleQ routed</th><th>MettleQ restore</th><th>MettleQ native tensors</th><th>Aer CPU MPS</th><th>Routed / Aer</th></tr></thead><tbody>
           <tr><td>GHZ · 1,000q d1</td><td>338.76 ms</td><td>338.28 ms</td><td>797.22 ms</td><td><strong>57.90 ms</strong></td><td>0.17×</td></tr>
           <tr><td>Line · 100q d8</td><td>153.25 ms</td><td>154.50 ms</td><td>514.20 ms</td><td><strong>29.00 ms</strong></td><td>0.19×</td></tr>
@@ -244,7 +244,7 @@ print(bell())</pre></div>
       </section>
 
       <section id="evidence">
-        <div class="section-head"><div class="section-number">07</div><div><h2>Run it. Test it.<br>Read the evidence.</h2><p class="lead">The repository is the canonical source for raw runs, manifests, tutorials, and release checks. The website is an index and explanation, not a replacement for the data.</p></div></div>
+        <div class="section-head"><div class="section-number">07</div><div><h2>Run it. Test it. Read the evidence.</h2><p class="lead">The repository is the canonical source for raw runs, manifests, tutorials, and release checks. The website is an index and explanation, not a replacement for the data.</p></div></div>
         <div class="code-block"><div class="code-title">Local verification</div><pre>python -m pip install -e ".[dev,tests]"
 pytest -q
 python -m build
