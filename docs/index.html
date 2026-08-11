@@ -3,92 +3,166 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="MettleQ documentation: local quantum simulation for Apple Silicon.">
-  <title>MettleQ · Apple Silicon quantum simulation</title>
+  <meta name="description" content="MettleQ documentation and reproducible Apple Silicon quantum simulation evidence.">
+  <title>MettleQ · Quantum simulation on Apple Silicon</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
   <style>
-    :root { --ink:#172033; --muted:#5d687c; --paper:#f7f8fb; --card:#fff; --line:#dfe4ee; --accent:#5a36d6; --accent2:#0c8a73; --max:1120px; }
-    * { box-sizing:border-box; }
-    html { scroll-behavior:smooth; }
-    body { margin:0; color:var(--ink); background:var(--paper); font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-    a { color:var(--accent); }
-    code, pre { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
-    code { background:#eef0f6; border-radius:5px; padding:.12em .35em; }
-    header { background:linear-gradient(135deg,#17122d 0%,#2b1d67 55%,#116b62 100%); color:#fff; }
-    nav, main, footer { max-width:var(--max); margin:auto; padding-left:24px; padding-right:24px; }
-    nav { display:flex; justify-content:space-between; align-items:center; padding-top:18px; padding-bottom:18px; }
-    nav strong { letter-spacing:.08em; }
-    nav a { color:#fff; text-decoration:none; margin-left:20px; opacity:.9; font-size:.94rem; }
-    .hero { max-width:var(--max); margin:auto; padding:70px 24px 82px; }
-    .eyebrow { color:#bfeee5; font-weight:700; letter-spacing:.12em; text-transform:uppercase; font-size:.78rem; }
-    h1 { max-width:780px; font-size:clamp(2.5rem,7vw,5.2rem); line-height:1.02; margin:14px 0 22px; letter-spacing:-.055em; }
-    .hero p { max-width:720px; color:#e5e7f1; font-size:1.16rem; }
-    .actions { display:flex; gap:12px; flex-wrap:wrap; margin-top:28px; }
-    .button { display:inline-block; padding:10px 16px; border-radius:8px; font-weight:700; text-decoration:none; }
-    .button.primary { color:#241453; background:#fff; }
-    .button.secondary { color:#fff; border:1px solid #aaa2dd; }
-    section { padding:62px 0 10px; }
-    h2 { font-size:2rem; line-height:1.15; margin:0 0 12px; letter-spacing:-.03em; }
-    h3 { margin-bottom:6px; }
-    .lead { color:var(--muted); max-width:760px; }
-    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; margin-top:24px; }
-    .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:22px; box-shadow:0 8px 24px rgba(30,35,60,.04); }
-    .card h3 { margin-top:0; }
-    pre { background:#161922; color:#e9edf7; border-radius:10px; padding:18px; overflow:auto; font-size:.88rem; line-height:1.55; }
-    .install { display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; margin-top:24px; }
-    table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); margin-top:22px; font-size:.92rem; }
-    th, td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:right; }
-    th:first-child, td:first-child { text-align:left; }
-    th { background:#eef0f7; }
-    .note { border-left:4px solid var(--accent2); padding:12px 16px; background:#e8f6f2; color:#19483f; margin-top:20px; }
-    .small { color:var(--muted); font-size:.9rem; }
-    footer { padding-top:70px; padding-bottom:36px; color:var(--muted); }
-    @media (max-width:720px) { nav a { margin-left:8px; font-size:.82rem; } nav a.hide-small { display:none; } .install { grid-template-columns:1fr; } th,td { padding:8px 6px; font-size:.8rem; } }
+    :root {
+      --accent: oklch(0.525 0.16 285);
+      --accent-ink: oklch(0.42 0.15 285);
+      --accent-soft: oklch(0.94 0.035 285);
+      --ink: oklch(0.205 0.012 280);
+      --ink-2: oklch(0.42 0.012 280);
+      --ink-3: oklch(0.58 0.010 280);
+      --line: oklch(0.885 0.006 280);
+      --line-strong: oklch(0.205 0.012 280);
+      --paper: oklch(0.985 0.004 95);
+      --paper-2: oklch(0.965 0.005 95);
+      --paper-3: oklch(0.945 0.006 95);
+      --maxw: 1120px;
+      --sans: "IBM Plex Sans", system-ui, sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+      --serif: Newsreader, Georgia, serif;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; color: var(--ink); background: var(--paper); font: 16px/1.65 var(--sans); }
+    a { color: var(--accent-ink); text-underline-offset: 3px; }
+    a:hover { color: var(--accent); }
+    code, pre, .mono { font-family: var(--mono); }
+    code { background: var(--paper-3); padding: 0.1em 0.3em; }
+    .skip { position: absolute; left: -999px; }
+    .skip:focus { left: 16px; top: 12px; z-index: 5; background: var(--ink); color: var(--paper); padding: 8px 12px; }
+    .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 clamp(20px, 5vw, 64px); }
+    .topbar { border-bottom: 1px solid var(--line-strong); background: color-mix(in oklch, var(--paper) 86%, transparent); position: sticky; top: 0; z-index: 4; backdrop-filter: blur(10px); }
+    .topbar-inner { min-height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    .brand { color: var(--ink); text-decoration: none; font: 600 0.9rem var(--mono); letter-spacing: 0.08em; }
+    .nav { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+    .nav a { color: var(--ink-2); text-decoration: none; font: 0.78rem var(--mono); }
+    .nav a:hover, .nav a.active { color: var(--ink); text-decoration: underline; text-decoration-thickness: 2px; }
+    .hero { padding: 94px 0 82px; border-bottom: 1px solid var(--line-strong); }
+    .kicker, .section-number, .eyebrow { color: var(--accent-ink); font: 600 0.76rem var(--mono); letter-spacing: 0.11em; text-transform: uppercase; }
+    h1, h2 { font-family: var(--serif); font-weight: 500; letter-spacing: -0.035em; }
+    h1 { max-width: 850px; font-size: clamp(3.2rem, 8vw, 6.8rem); line-height: 0.96; margin: 18px 0 28px; }
+    h1 em { color: var(--accent-ink); font-style: normal; }
+    .hero-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(210px, .5fr); gap: 48px; align-items: end; }
+    .hero-copy { max-width: 760px; font-size: 1.15rem; color: var(--ink-2); }
+    .hero-aside { border-left: 1px solid var(--line-strong); padding-left: 22px; color: var(--ink-2); }
+    .hero-aside strong { display: block; color: var(--ink); font: 600 2.4rem var(--serif); line-height: 1; }
+    .hero-aside span { display: block; margin-top: 6px; font: .74rem var(--mono); text-transform: uppercase; letter-spacing: .08em; }
+    .actions { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 30px; }
+    .button { display: inline-block; border: 1px solid var(--line-strong); border-radius: 4px; padding: 9px 14px; text-decoration: none; font: 600 .78rem var(--mono); }
+    .button.primary { background: var(--ink); color: var(--paper); }
+    .button.primary:hover { background: var(--accent-ink); color: var(--paper); }
+    .button.secondary { color: var(--ink); }
+    section { padding: 76px 0 0; }
+    .section-head { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 18px; align-items: start; margin-bottom: 28px; }
+    .section-number { padding-top: 10px; border-top: 1px solid var(--line-strong); }
+    h2 { font-size: clamp(2.2rem, 4vw, 3.5rem); line-height: 1; margin: 0 0 14px; }
+    h3 { font-size: 1.1rem; margin: 0 0 8px; }
+    .lead { max-width: 780px; color: var(--ink-2); margin: 0; }
+    .rule { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+    .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 0; border-top: 1px solid var(--line-strong); border-left: 1px solid var(--line-strong); }
+    .cell { grid-column: span 4; padding: 22px; border-right: 1px solid var(--line-strong); border-bottom: 1px solid var(--line-strong); min-height: 150px; }
+    .cell.wide { grid-column: span 8; }
+    .cell p { color: var(--ink-2); margin: 0; }
+    .cell .label { color: var(--accent-ink); font: .72rem var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .code-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .code-block { border: 1px solid var(--line-strong); background: var(--paper-2); }
+    .code-title { padding: 10px 14px; border-bottom: 1px solid var(--line-strong); color: var(--accent-ink); font: 600 .72rem var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    pre { margin: 0; padding: 18px; overflow: auto; color: var(--ink); font-size: .82rem; line-height: 1.65; }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line-strong); }
+    table { width: 100%; min-width: 680px; border-collapse: collapse; font-size: .88rem; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: right; vertical-align: top; }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--ink-2); background: var(--paper-2); font: 600 .72rem var(--mono); text-transform: uppercase; letter-spacing: .04em; }
+    tr:last-child td { border-bottom: 0; }
+    td strong { color: var(--accent-ink); }
+    .caption { color: var(--ink-3); font-size: .83rem; margin: 10px 0 0; }
+    .callout { margin: 24px 0 0; border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 14px 18px; color: var(--ink-2); }
+    .plot { margin: 28px 0 0; border-top: 1px solid var(--line-strong); padding-top: 18px; }
+    .plot img { display: block; width: 100%; max-height: 520px; object-fit: contain; object-position: left center; background: var(--paper-2); }
+    .plot figcaption { font: .74rem var(--mono); color: var(--ink-3); margin-top: 10px; }
+    .plot-row { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+    .plot-row .plot img { max-height: 360px; }
+    .links { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .link-card { border-top: 2px solid var(--ink); padding-top: 14px; }
+    .link-card h3 { font-family: var(--serif); font-size: 1.45rem; font-weight: 500; }
+    .link-card p { color: var(--ink-2); }
+    footer { margin-top: 86px; border-top: 1px solid var(--line-strong); padding: 30px 0 46px; color: var(--ink-3); font-size: .84rem; }
+    footer .mono { font-size: .75rem; }
+    @media (max-width: 760px) {
+      .hero-grid, .code-grid, .plot-row { grid-template-columns: 1fr; }
+      .hero { padding-top: 64px; }
+      .hero-aside { border-left: 0; border-top: 1px solid var(--line-strong); padding: 18px 0 0; }
+      .cell, .cell.wide { grid-column: span 12; min-height: 0; }
+      .links { grid-template-columns: 1fr; }
+      .nav { gap: 10px; }
+      .nav a:nth-child(n+4) { display: none; }
+      h1 { font-size: clamp(3rem, 16vw, 5rem); }
+    }
   </style>
 </head>
 <body>
-  <header>
-    <nav>
-      <strong>METTLEQ</strong>
-      <div><a href="#install">Install</a><a href="#usage">Use</a><a href="#benchmarks">Results</a><a class="hide-small" href="https://github.com/MonitSharma/MettleQ">GitHub</a></div>
-    </nav>
-    <div class="hero">
-      <div class="eyebrow">Python · Qiskit · PennyLane · MLX · Metal</div>
-      <h1>Inspectable quantum simulation for Apple Silicon.</h1>
-      <p>MettleQ provides exact statevector and bounded MPS simulation, native SDK adapters, memory preflight, explicit execution plans, and reproducible benchmark evidence.</p>
-      <div class="actions"><a class="button primary" href="#install">Get started</a><a class="button secondary" href="https://github.com/MonitSharma/MettleQ/blob/main/README.md">Read the full README</a></div>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="brand" href="#top">METTLEQ</a>
+      <nav class="nav" aria-label="Main navigation">
+        <a class="active" href="#install">Install</a>
+        <a href="#contracts">Contracts</a>
+        <a href="#results">Results</a>
+        <a href="#mps">MPS</a>
+        <a href="#evidence">Evidence</a>
+        <a href="https://github.com/MonitSharma/MettleQ">GitHub ↗</a>
+      </nav>
     </div>
   </header>
 
-  <main>
-    <section id="install">
-      <h2>Install</h2>
-      <p class="lead">The accelerated simulator targets Apple Silicon Macs. MLX-independent drawing, QASM parsing, and documentation utilities can also be installed on other platforms.</p>
-      <div class="install">
-        <div class="card"><h3>Recommended SDK install</h3><pre>python -m pip install "mettleq[sdk]"</pre><p class="small">Requires Python 3.11+. The SDK extra includes Qiskit Aer and PennyLane Lightning for calibrated CPU fallbacks.</p></div>
-        <div class="card"><h3>Source checkout</h3><pre>git clone https://github.com/MonitSharma/MettleQ.git
-cd MettleQ
-python -m pip install -e ".[dev,sdk]"</pre><p class="small">Use an editable install when developing kernels, adapters, tutorials, or tests.</p></div>
+  <div id="top" class="wrap">
+    <header class="hero">
+      <div class="kicker">Open-source quantum simulation · Python / MLX / Metal</div>
+      <div class="hero-grid">
+        <div>
+          <h1>Simulation you can <em>inspect.</em></h1>
+          <p class="hero-copy">MettleQ is a local quantum-circuit simulator for Apple Silicon with exact statevectors, bounded matrix-product states, Qiskit and PennyLane adapters, memory preflight, explicit execution plans, and frozen benchmark evidence.</p>
+          <div class="actions"><a class="button primary" href="#install">Start with MettleQ</a><a class="button secondary" href="https://github.com/MonitSharma/MettleQ/blob/main/README.md">Read the repository ↗</a></div>
+        </div>
+        <aside class="hero-aside"><strong>390</strong><span>local tests passing</span><hr class="rule"><strong>20q</strong><span>same-Mac Aer crossover on the reference workload</span></aside>
       </div>
-      <div class="note"><strong>Platform note:</strong> full MLX/Metal simulation requires macOS arm64. MettleQ does not combine CPU and GPU timings into a single claimed speedup.</div>
-    </section>
+    </header>
 
-    <section id="usage">
-      <h2>Use it from your SDK</h2>
-      <div class="grid">
-        <div class="card"><h3>Qiskit</h3><pre>from qiskit import QuantumCircuit, transpile
+    <main id="main">
+      <section id="install">
+        <div class="section-head"><div class="section-number">01</div><div><h2>Install once.<br>Measure honestly.</h2><p class="lead">The accelerated path targets macOS arm64. Other platforms can still use the package’s MLX-independent drawing, QASM, and documentation utilities.</p></div></div>
+        <div class="code-grid">
+          <div class="code-block"><div class="code-title">Recommended SDK install</div><pre>python -m pip install "mettleq[sdk]"</pre></div>
+          <div class="code-block"><div class="code-title">Development install</div><pre>git clone https://github.com/MonitSharma/MettleQ.git
+cd MettleQ
+python -m pip install -e ".[dev,sdk]"</pre></div>
+        </div>
+        <div class="callout"><strong>Platform contract.</strong> Full MLX/Metal simulation requires an Apple Silicon Mac. Adaptive execution chooses one measured numerical path; CPU and GPU timings are never added together into a synthetic speedup.</div>
+      </section>
+
+      <section id="usage">
+        <div class="section-head"><div class="section-number">02</div><div><h2>Use the front end<br>you already know.</h2><p class="lead">Both native SDK adapters preserve their result contracts and expose adaptive CPU/GPU selection.</p></div></div>
+        <div class="code-grid">
+          <div class="code-block"><div class="code-title">Qiskit BackendV2</div><pre>from qiskit import QuantumCircuit, transpile
 from mettleq.integrations.qiskit import AdaptiveQiskitBackend
 
 backend = AdaptiveQiskitBackend(precision="single")
-circuit = QuantumCircuit(2)
+circuit = QuantumCircuit(2, 2)
 circuit.h(0)
 circuit.cx(0, 1)
+circuit.measure([0, 1], [0, 1])
 result = backend.run(
-    transpile(circuit, backend),
-    shots=1000,
+    transpile(circuit, backend), shots=1000,
     seed_simulator=7,
 ).result()
 print(result.get_counts())</pre></div>
-        <div class="card"><h3>PennyLane</h3><pre>import pennylane as qml
+          <div class="code-block"><div class="code-title">PennyLane device</div><pre>import pennylane as qml
 
 dev = qml.device("mettleq.adaptive", wires=2,
                  precision="single")
@@ -100,59 +174,89 @@ def bell():
     return qml.expval(qml.Z(0) @ qml.Z(1))
 
 print(bell())</pre></div>
-      </div>
-      <div class="grid">
-        <div class="card"><h3>Exact statevector</h3><p>Capability-probed Metal kernels with memory preflight and numerical parity checks.</p></div>
-        <div class="card"><h3>Bounded MPS</h3><p>CPU-native tensor-network execution with bond caps, truncation evidence, routing diagnostics, and convergence reports.</p></div>
-        <div class="card"><h3>Midpoint-MPO</h3><p>Opt-in approximation path with an isolated worker environment and an explicit result contract.</p></div>
-      </div>
-    </section>
+        </div>
+      </section>
 
-    <section id="testing">
-      <h2>Test and release</h2>
-      <p class="lead">The repository keeps correctness, packaging, and tutorial checks separate so a release can be audited before it is uploaded.</p>
-      <pre>python -m pip install -e ".[dev,tests]"
-pytest -q
-python -m build
-python -m twine check dist/*</pre>
-      <p>For Apple Silicon validation, run <code>./test.sh</code>, the SDK quickstarts, and the executable tutorial parity suite. See the <a href="https://github.com/MonitSharma/MettleQ/blob/main/PUBLIC_RELEASE_CHECKLIST.md">public release checklist</a> before making a repository public.</p>
-    </section>
+      <section id="contracts">
+        <div class="section-head"><div class="section-number">03</div><div><h2>Choose a contract,<br>not a slogan.</h2><p class="lead">Different workloads need different numerical representations. MettleQ makes the tradeoff visible in the execution report.</p></div></div>
+        <div class="grid">
+          <article class="cell"><div class="label">Exact</div><h3>Statevector</h3><p>Dense amplitudes, capability-probed Metal kernels, memory preflight, and phase-aligned parity validation.</p></article>
+          <article class="cell"><div class="label">Bounded approximation</div><h3>Forward MPS</h3><p>CPU-native tensor network with bond caps, recoverable SVDs, persistent routing, truncation evidence, and convergence checks.</p></article>
+          <article class="cell"><div class="label">Opt-in research path</div><h3>Midpoint-MPO</h3><p>Separate approximation contract and isolated worker environment for peaked-circuit experiments.</p></article>
+          <article class="cell wide"><div class="label">Adaptive policy</div><h3>One measured path</h3><p>Small work and double precision can remain on Aer or Lightning CPU. Larger exact statevector workloads move to Metal only when the measured crossover, memory model, output contract, and hardware capability all agree.</p></article>
+          <article class="cell"><div class="label">Trust boundary</div><h3>Safety refusals</h3><p>A preflight refusal is reported as a result. A circuit that violates the conservative memory envelope is not launched.</p></article>
+        </div>
+      </section>
 
-    <section id="benchmarks">
-      <h2>Comparison results</h2>
-      <p class="lead">These are frozen, workload-specific measurements, not universal hardware claims. Ratios above 1× favor MettleQ. The primary same-Mac comparison used an Apple M3 Pro, 18-core integrated GPU, 36 GB unified memory, Python 3.13, MLX 0.32, Qiskit Aer 0.17.2, and PennyLane Lightning 0.45.</p>
-      <table>
-        <thead><tr><th>Qubits</th><th>Aer CPU / MettleQ GPU</th><th>Lightning CPU / MettleQ GPU</th><th>Max state error</th></tr></thead>
-        <tbody>
-          <tr><td>16</td><td>0.255×</td><td>1.445×</td><td>3.75e−7</td></tr>
+      <section id="results">
+        <div class="section-head"><div class="section-number">04</div><div><h2>Results on the<br>reference hardware.</h2><p class="lead">Apple M3 Pro · 12 CPU cores · 18 integrated GPU cores · 36 GB unified memory · macOS arm64 · MLX 0.32 · Qiskit Aer 0.17.2 · PennyLane Lightning 0.45.</p></div></div>
+        <div class="table-wrap"><table><thead><tr><th>Qubits</th><th>Aer CPU / MettleQ GPU</th><th>Lightning CPU / MettleQ GPU</th><th>Worst full-state error</th></tr></thead><tbody>
+          <tr><td>16</td><td>0.255×</td><td><strong>1.445×</strong></td><td>3.75e−7</td></tr>
+          <tr><td>18</td><td>0.627×</td><td><strong>3.710×</strong></td><td>3.98e−7</td></tr>
           <tr><td>20</td><td><strong>1.327×</strong></td><td><strong>11.097×</strong></td><td>4.02e−7</td></tr>
           <tr><td>24</td><td><strong>4.554×</strong></td><td><strong>18.713×</strong></td><td>1.99e−7</td></tr>
           <tr><td>28</td><td><strong>2.833×</strong></td><td><strong>21.177×</strong></td><td>1.22e−7</td></tr>
           <tr><td>29</td><td><strong>2.739×</strong></td><td><strong>16.005×</strong></td><td>1.33e−7</td></tr>
-        </tbody>
-      </table>
-      <p class="small">The same workload first crossed Aer at 20 qubits and Lightning at 16 qubits. Aer MPS is not treated as a dense-statevector competitor: materializing a complete state removes its compact-representation advantage.</p>
-      <table>
-        <thead><tr><th>Workload at 28q</th><th>MettleQ Metal · M3 Pro</th><th>CUDA-Q · RTX 3070</th><th>Lightning GPU · RTX 3070</th></tr></thead>
-        <tbody>
-          <tr><td>QFT</td><td>877.90 ms</td><td>340.38 ms</td><td>6,635.45 ms</td></tr>
-          <tr><td>Ring QAOA</td><td>2,428.86 ms</td><td>463.80 ms</td><td>7,254.50 ms</td></tr>
-          <tr><td>GHZ</td><td>341.94 ms</td><td>173.24 ms</td><td>1,141.82 ms</td></tr>
-          <tr><td>TFIM Trotter</td><td>7,695.88 ms</td><td>1,565.92 ms</td><td>27,163.63 ms</td></tr>
-        </tbody>
-      </table>
-      <div class="note"><strong>Interpretation:</strong> MettleQ wins the lower-width Apple crossover and beats Lightning GPU in the published matched campaign, while CUDA-Q remains faster at several 28-qubit bandwidth-dominated workloads. Recalibrate on your hardware before choosing a backend.</div>
-    </section>
+        </tbody></table></div>
+        <p class="caption">Ratios above 1× favor MettleQ. On this depth-three full-state workload, the crossover is 20 qubits against Aer and 16 qubits against Lightning.</p>
+        <figure class="plot"><img src="assets/sdk_cpu_gpu_crossover.png" alt="Line chart comparing MettleQ Apple GPU against Qiskit Aer and PennyLane Lightning across 16 to 29 qubits" loading="lazy"><figcaption>Same-Mac CPU/GPU crossover. Every accepted row passed the global phase-aligned accuracy gate.</figcaption></figure>
+        <div class="plot-row">
+          <figure class="plot"><img src="assets/radix16_idle_optimization.png" alt="Comparison plot of radix-16 Metal optimization runtimes" loading="lazy"><figcaption>Radix-16 statevector optimization on the same M3 Pro.</figcaption></figure>
+          <figure class="plot"><img src="assets/sdk_method_matrix.png" alt="SDK method matrix comparison plot" loading="lazy"><figcaption>SDK method matrix: exact statevector, MPS, and CPU reference paths.</figcaption></figure>
+        </div>
+      </section>
 
-    <section id="more">
-      <h2>Detailed documentation</h2>
-      <div class="grid">
-        <div class="card"><h3>Guides</h3><p><a href="https://github.com/MonitSharma/MettleQ/tree/main/tutorials">Paired tutorials</a><br><a href="https://github.com/MonitSharma/MettleQ/tree/main/examples">Quickstart examples</a><br><a href="https://github.com/MonitSharma/MettleQ/blob/main/docs/configuration.md">Configuration reference</a></p></div>
-        <div class="card"><h3>Evidence</h3><p><a href="https://github.com/MonitSharma/MettleQ/tree/main/assets/benchmarks-frozen">Frozen benchmark artifacts</a><br><a href="https://github.com/MonitSharma/MettleQ/blob/main/docs/CUDAQ_COMPETITIVENESS.md">CUDA-Q competitiveness notes</a><br><a href="https://github.com/MonitSharma/MettleQ/blob/main/output/pdf/MettleQ_technical_report.pdf">Technical report</a></p></div>
-        <div class="card"><h3>Community</h3><p><a href="https://github.com/MonitSharma/MettleQ/issues">Issues</a><br><a href="https://github.com/MonitSharma/MettleQ/blob/main/CONTRIBUTING.md">Contributing</a><br><a href="https://github.com/MonitSharma/MettleQ/blob/main/SECURITY.md">Security policy</a></p></div>
-      </div>
-    </section>
-  </main>
-  <footer><p><strong>MettleQ</strong> is an independently maintained MIT-licensed fork of Qupertino. Benchmark data is versioned with its protocol and hardware notes.</p><p><a href="https://github.com/MonitSharma/MettleQ">Source repository</a> · <a href="https://pypi.org/project/mettleq/">PyPI</a></p></footer>
+      <section id="hardware">
+        <div class="section-head"><div class="section-number">05</div><div><h2>Apple versus<br>NVIDIA, honestly.</h2><p class="lead">The cross-hardware campaign matched workloads at 15, 20, 24, 26, and 28 qubits. CUDA-Q remains faster on several high-width bandwidth-dominated cases.</p></div></div>
+        <div class="table-wrap"><table><thead><tr><th>Workload at 28q</th><th>MettleQ Metal · M3 Pro</th><th>CUDA-Q · RTX 3070</th><th>Lightning GPU · RTX 3070</th><th>Aer CPU · WSL</th></tr></thead><tbody>
+          <tr><td>QFT</td><td>877.90 ms</td><td>340.38 ms</td><td>6,635.45 ms</td><td>13,860.52 ms</td></tr>
+          <tr><td>Ring QAOA · 6 layers</td><td>2,428.86 ms</td><td>463.80 ms</td><td>7,254.50 ms</td><td>17,438.65 ms</td></tr>
+          <tr><td>GHZ</td><td>341.94 ms</td><td>173.24 ms</td><td>1,141.82 ms</td><td>3,332.40 ms</td></tr>
+          <tr><td>Grover proxy</td><td>982.80 ms</td><td>165.94 ms</td><td>4,350.20 ms</td><td>3,001.91 ms</td></tr>
+          <tr><td>Phase estimation</td><td>2,391.85 ms</td><td>363.80 ms</td><td>6,881.60 ms</td><td>16,894.65 ms</td></tr>
+          <tr><td>TFIM · 20 steps</td><td>7,695.88 ms</td><td>1,565.92 ms</td><td>27,163.63 ms</td><td>54,528.06 ms</td></tr>
+        </tbody></table></div>
+        <figure class="plot"><img src="assets/mettleq_vs_cudaq_matched_widths.png" alt="Matched-width scaling plot comparing Apple MettleQ Metal with CUDA-Q on an RTX 3070" loading="lazy"><figcaption>Matched-width cross-hardware scaling. Lower runtime is better; the two machines have different memory systems and software stacks.</figcaption></figure>
+        <div class="callout"><strong>What this means.</strong> MettleQ wins the Apple crossover and beats Lightning GPU across the published matched widths, but CUDA-Q’s specialized NVIDIA backend is faster at several 28-qubit endpoints. The result is a hardware-specific map, not a universal ranking.</div>
+      </section>
+
+      <section id="mps">
+        <div class="section-head"><div class="section-number">06</div><div><h2>MPS: the improvement<br>is real, the limits matter.</h2><p class="lead">The production MPS path in <code>main</code> is newer than the agent branch: it retains the native CPU core, persistent logical routing, native readout, and direct single-gate updates. The branch’s older rewrite would remove those paths, so only its safe regression tests were extracted.</p></div></div>
+        <div class="table-wrap"><table><thead><tr><th>Workload</th><th>MettleQ routed</th><th>MettleQ restore</th><th>MettleQ native tensors</th><th>Aer CPU MPS</th><th>Routed / Aer</th></tr></thead><tbody>
+          <tr><td>GHZ · 1,000q d1</td><td>338.76 ms</td><td>338.28 ms</td><td>797.22 ms</td><td><strong>57.90 ms</strong></td><td>0.17×</td></tr>
+          <tr><td>Line · 100q d8</td><td>153.25 ms</td><td>154.50 ms</td><td>514.20 ms</td><td><strong>29.00 ms</strong></td><td>0.19×</td></tr>
+          <tr><td>Grid · 36q d2</td><td><strong>249.91 ms</strong></td><td>248.75 ms</td><td>522.18 ms</td><td>422.57 ms</td><td><strong>1.69×</strong></td></tr>
+          <tr><td>Rainbow · 32q d1</td><td>710.44 ms</td><td>888.97 ms</td><td>1,255.08 ms</td><td><strong>3.65 ms</strong></td><td>0.005×</td></tr>
+          <tr><td>Random long range · 32q d1</td><td>264.76 ms</td><td>376.30 ms</td><td>544.00 ms</td><td><strong>3.40 ms</strong></td><td>0.013×</td></tr>
+          <tr><td>All-to-all · 20q d1</td><td>851.13 ms</td><td>4,700.62 ms</td><td>1,422.03 ms</td><td><strong>25.17 ms</strong></td><td>0.030×</td></tr>
+        </tbody></table></div>
+        <p class="caption">MPS results are contract-sensitive. Aer is still substantially faster on several CPU-MPS families; the MettleQ win on the 36q grid is a useful measured result, not a claim of blanket superiority.</p>
+        <div class="plot-row">
+          <figure class="plot"><img src="assets/mps_dmax_convergence.png" alt="MPS bond dimension convergence plot" loading="lazy"><figcaption>Convergence evidence across bond dimensions.</figcaption></figure>
+          <figure class="plot"><img src="assets/memory_policy.png" alt="Statevector memory policy plot" loading="lazy"><figcaption>Memory-policy evidence and conservative preflight behavior.</figcaption></figure>
+        </div>
+      </section>
+
+      <section id="evidence">
+        <div class="section-head"><div class="section-number">07</div><div><h2>Run it. Test it.<br>Read the evidence.</h2><p class="lead">The repository is the canonical source for raw runs, manifests, tutorials, and release checks. The website is an index and explanation, not a replacement for the data.</p></div></div>
+        <div class="code-block"><div class="code-title">Local verification</div><pre>python -m pip install -e ".[dev,tests]"
+pytest -q
+python -m build
+python -m twine check dist/*
+
+# Apple Silicon simulator + SDK + tutorial suite
+./test.sh
+python tools/run_tutorial_notebooks.py --no-write</pre></div>
+        <div class="links" style="margin-top: 28px">
+          <article class="link-card"><div class="eyebrow">Read</div><h3>Technical report</h3><p><a href="https://github.com/MonitSharma/MettleQ/blob/main/output/pdf/MettleQ_technical_report.pdf">Architecture, validation, limits, and roadmap ↗</a></p></article>
+          <article class="link-card"><div class="eyebrow">Explore</div><h3>Frozen evidence</h3><p><a href="https://github.com/MonitSharma/MettleQ/tree/development/assets/benchmarks-frozen">Raw benchmark artifacts and manifests ↗</a></p></article>
+          <article class="link-card"><div class="eyebrow">Learn</div><h3>Tutorials</h3><p><a href="https://github.com/MonitSharma/MettleQ/tree/development/tutorials">Paired Qiskit and PennyLane notebooks ↗</a></p></article>
+        </div>
+        <div class="callout"><strong>Release checklist.</strong> Before publishing a stable package, test-upload to TestPyPI, scan reachable Git history for secrets and private artifacts, enable branch protection and secret scanning, then tag a clean release commit.</div>
+      </section>
+    </main>
+
+    <footer><p><strong>MettleQ</strong> is an independently maintained MIT-licensed fork of Qupertino.</p><p class="mono"><a href="https://github.com/MonitSharma/MettleQ">Source</a> · <a href="https://pypi.org/project/mettleq/">PyPI</a> · <a href="https://github.com/MonitSharma/MettleQ/blob/development/SECURITY.md">Security</a> · Updated from the development evidence branch.</p></footer>
+  </div>
 </body>
 </html>

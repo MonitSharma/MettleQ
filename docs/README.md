@@ -3,11 +3,13 @@
 This branch contains the static GitHub Pages site for MettleQ. It is deliberately
 dependency-free: GitHub Pages can serve `docs/index.html` without a JavaScript
 toolchain, while the repository remains the canonical source for notebooks,
-technical details, raw benchmark evidence, and API code.
+technical details, raw benchmark evidence, and API code. It is based on the
+`development` evidence branch so the selected frozen plots are versioned with
+the tables that describe them.
 
 ## Deploying this branch
 
-1. Push `codex/github-pages-docs` to GitHub.
+1. Push `codex/github-pages-docs-development` to GitHub.
 2. In **Settings → Pages**, choose **GitHub Actions** as the source.
 3. The included `pages.yml` workflow uploads the `docs/` directory.
 4. The site will normally be available at

@@ -2,7 +2,7 @@ name: Deploy documentation site
 
 on:
   push:
-    branches: [codex/github-pages-docs]
+    branches: [codex/github-pages-docs-development]
   workflow_dispatch:
 
 permissions:
