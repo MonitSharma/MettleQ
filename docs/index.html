@@ -28,7 +28,7 @@
     }
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
-    body { margin: 0; color: var(--ink-2); background: var(--paper); font: 16px/1.6 var(--sans); }
+    body { margin: 0; color: var(--ink); background: var(--paper); font: 16px/1.6 var(--sans); }
     a { color: var(--accent-ink); text-underline-offset: 3px; }
     a:hover { color: var(--accent); }
     code, pre, .mono { font-family: var(--mono); }
@@ -37,29 +37,31 @@
     .skip:focus { left: 16px; top: 12px; z-index: 5; background: var(--ink); color: var(--paper); padding: 8px 12px; }
     .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 clamp(20px, 5vw, 64px); }
     .topbar { border-bottom: 1px solid var(--line-strong); background: color-mix(in oklch, var(--paper) 86%, transparent); position: sticky; top: 0; z-index: 4; backdrop-filter: blur(10px); }
-    .topbar-inner { min-height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-    .brand { color: var(--ink); text-decoration: none; font: 600 0.9rem var(--mono); letter-spacing: 0.08em; }
+    .topbar-inner { min-height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    .brand { color: var(--ink); text-decoration: none; font: 500 1.1rem var(--serif); letter-spacing: 0; }
+    .brand::before { content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 12px 3px 0; border-radius: 50%; background: var(--accent); }
     .nav { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
     .nav a { color: var(--ink-2); text-decoration: none; font: 0.78rem var(--mono); }
     .nav a:hover, .nav a.active { color: var(--ink); text-decoration: underline; text-decoration-thickness: 2px; }
-    .hero { padding: 94px 0 82px; border-bottom: 1px solid var(--line-strong); }
+    .hero { padding: 76px 0 70px; border-bottom: 1px solid var(--line-strong); }
     .kicker, .section-number, .eyebrow { color: var(--accent-ink); font: 600 0.76rem var(--mono); letter-spacing: 0.11em; text-transform: uppercase; }
     h1, h2 { color: var(--ink); font-family: var(--serif); font-weight: 400; letter-spacing: -0.025em; }
-    h1 { max-width: 850px; font-size: clamp(3.2rem, 8vw, 5.4rem); line-height: 0.98; margin: 18px 0 28px; }
+    h1 { max-width: 920px; font-size: clamp(3.2rem, 8vw, 5.4rem); line-height: 0.98; margin: 18px 0 28px; }
     h1 em { color: var(--accent-ink); font-style: normal; }
-    .hero-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(210px, .5fr); gap: 48px; align-items: end; }
+    .hero-grid { display: block; }
     .hero-copy { max-width: 760px; color: var(--ink-2); font-size: 1.28rem; line-height: 1.55; }
-    .hero-aside { border-left: 1px solid var(--line-strong); padding-left: 22px; color: var(--ink-2); }
-    .hero-aside strong { display: block; color: var(--ink); font: 600 2.4rem var(--serif); line-height: 1; }
-    .hero-aside span { display: block; margin-top: 6px; font: .74rem var(--mono); text-transform: uppercase; letter-spacing: .08em; }
+    .hero-aside { display: grid; grid-template-columns: repeat(2, minmax(0, 220px)); gap: 28px; max-width: 560px; margin-top: 34px; border-top: 1px solid var(--line-strong); padding: 20px 0 0; color: var(--ink-2); }
+    .hero-stat strong { display: block; color: var(--ink); font: 600 2.4rem var(--serif); line-height: 1; }
+    .hero-aside span { display: block; margin-top: 7px; font: .74rem var(--mono); text-transform: uppercase; letter-spacing: .08em; }
+    .hero-aside .rule { display: none; }
     .actions { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 30px; }
     .button { display: inline-block; border: 1px solid var(--line-strong); border-radius: 4px; padding: 9px 14px; text-decoration: none; font: 600 .78rem var(--mono); }
     .button.primary { background: var(--ink); color: var(--paper); }
     .button.primary:hover { background: var(--accent-ink); color: var(--paper); }
     .button.secondary { color: var(--ink); }
     section { padding: 76px 0 0; }
-    .section-head { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 18px; align-items: start; margin-bottom: 28px; }
-    .section-number { padding-top: 10px; border-top: 1px solid var(--line-strong); }
+    .section-head { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 18px; align-items: start; margin-bottom: 28px; border-top: 1px solid var(--line-strong); padding-top: 10px; }
+    .section-number { padding-top: 0; }
     h2 { font-size: 2.08rem; line-height: 1.08; margin: 0 0 14px; }
     h3 { color: var(--ink); font: 500 1.28rem/1.16 var(--serif); margin: 0 0 8px; }
     .lead { max-width: 780px; color: var(--ink-2); margin: 0; }
@@ -69,7 +71,9 @@
     .cell.wide { grid-column: span 8; }
     .cell p { color: var(--ink-2); margin: 0; }
     .cell .label { color: var(--accent-ink); font: .72rem var(--mono); letter-spacing: .08em; text-transform: uppercase; }
-    .code-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .code-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid var(--line-strong); background: var(--paper-2); }
+    .code-grid .code-block { border: 0; border-right: 1px solid var(--line-strong); }
+    .code-grid .code-block:last-child { border-right: 0; }
     .code-block { border: 1px solid var(--line-strong); background: var(--paper-2); }
     .code-title { padding: 10px 14px; border-bottom: 1px solid var(--line-strong); color: var(--accent-ink); font: 600 .72rem var(--mono); letter-spacing: .08em; text-transform: uppercase; }
     pre { margin: 0; padding: 18px; overflow: auto; color: var(--ink-2); font-size: .82rem; line-height: 1.65; }
@@ -94,13 +98,15 @@
     footer { margin-top: 86px; border-top: 1px solid var(--line-strong); padding: 30px 0 46px; color: var(--ink-3); font-size: .84rem; }
     footer .mono { font-size: .75rem; }
     @media (max-width: 760px) {
-      .hero-grid, .code-grid, .plot-row { grid-template-columns: 1fr; }
+      .code-grid, .plot-row { grid-template-columns: 1fr; }
       .hero { padding-top: 64px; }
-      .hero-aside { border-left: 0; border-top: 1px solid var(--line-strong); padding: 18px 0 0; }
+      .hero-aside { grid-template-columns: 1fr; margin-top: 28px; padding: 18px 0 0; }
+      .code-grid .code-block { border-right: 0; border-bottom: 1px solid var(--line-strong); }
+      .code-grid .code-block:last-child { border-bottom: 0; }
       .cell, .cell.wide { grid-column: span 12; min-height: 0; }
       .links { grid-template-columns: 1fr; }
       .nav { gap: 10px; }
-      .nav a:nth-child(n+4) { display: none; }
+      .nav { max-width: 62vw; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 3px; }
       h1 { font-size: clamp(3rem, 16vw, 5rem); }
     }
   </style>
@@ -109,7 +115,7 @@
   <a class="skip" href="#main">Skip to content</a>
   <header class="topbar">
     <div class="wrap topbar-inner">
-      <a class="brand" href="#top">METTLEQ</a>
+      <a class="brand" href="#top">MettleQ</a>
       <nav class="nav" aria-label="Main navigation">
         <a class="active" href="#install">Install</a>
         <a href="#contracts">Contracts</a>
@@ -130,7 +136,7 @@
           <p class="hero-copy">MettleQ is a local quantum-circuit simulator for Apple Silicon with exact statevectors, bounded matrix-product states, Qiskit and PennyLane adapters, memory preflight, explicit execution plans, and frozen benchmark evidence.</p>
           <div class="actions"><a class="button primary" href="#install">Start with MettleQ</a><a class="button secondary" href="https://github.com/MonitSharma/MettleQ/blob/main/README.md">Read the repository ↗</a></div>
         </div>
-        <aside class="hero-aside"><strong>390</strong><span>local tests passing</span><hr class="rule"><strong>20q</strong><span>same-Mac Aer crossover on the reference workload</span></aside>
+        <aside class="hero-aside"><div class="hero-stat"><strong>390</strong><span>local tests passing</span></div><div class="hero-stat"><strong>20q</strong><span>same-Mac Aer crossover on the reference workload</span></div></aside>
       </div>
     </header>
 
