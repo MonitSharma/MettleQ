@@ -51,6 +51,7 @@ _QUIMB_SVD_TELEMETRY = {
     "native_service_calls": 0,
     "native_service_successes": 0,
     "native_service_failures": 0,
+    "nonfinite_input_failures": 0,
     "native_failure_details": [],
     "isolated_scipy_gesvd_calls": 0,
     "isolated_scipy_gesvd_successes": 0,
@@ -376,6 +377,19 @@ def _install_quimb_safe_svd() -> None:
         _record_svd_matrix_size(int(array.size))
         attempts = []
 
+        if not np.all(np.isfinite(array)):
+            _QUIMB_SVD_TELEMETRY["nonfinite_input_failures"] += 1
+            failure = {
+                "call": _QUIMB_SVD_TELEMETRY["calls"],
+                "shape": [int(size) for size in array.shape],
+                "dtype": str(array.dtype),
+                "max_abs": float(np.nanmax(np.abs(array))) if array.size else 0.0,
+                "error": "LinAlgError: SVD input contains NaN or infinity",
+                "driver": "input_validation",
+            }
+            _QUIMB_SVD_TELEMETRY["native_failure_details"].append(failure)
+            raise MidpointMPOError("midpoint-MPO SVD input contains NaN or infinity")
+
         def require_finite(left, singular, right_h, driver):
             if not (
                 np.all(np.isfinite(left))
@@ -477,12 +491,15 @@ def _install_quimb_safe_svd() -> None:
         if scale == 0.0:
             scale = 1.0
         _QUIMB_SVD_TELEMETRY["rescaled_calls"] += 1
-        scaled = np.asarray(array / scale, dtype=np.complex128)
+        fallback_dtype = (
+            np.complex64 if array.dtype == np.dtype(np.complex64) else np.complex128
+        )
+        scaled = np.asarray(array / scale, dtype=fallback_dtype)
 
         try:
             left, singular, right_h = require_finite(
                 *np.linalg.svd(scaled, full_matrices=False),
-                "numpy_complex128",
+                f"numpy_{np.dtype(fallback_dtype).name}",
             )
         except Exception as error:
             attempts.append(f"numpy_complex128: {error}")
@@ -541,6 +558,8 @@ class MidpointMPOOptions:
     reuse_full_swap_probe: bool = True
     parallel_rewire: bool = False
     parallel_absorb_probes: bool = False
+    compression_method: str = "svd"
+    dtype: str = "complex128"
 
     def __post_init__(self) -> None:
         if self.max_bond < 1:
@@ -559,6 +578,12 @@ class MidpointMPOOptions:
             raise ValueError(
                 "swap_gate_representation must be 'current', 'cx', or 'block'"
             )
+        if self.compression_method not in {"svd", "isvd", "svds", "rsvd"}:
+            raise ValueError(
+                "compression_method must be one of 'svd', 'isvd', 'svds', or 'rsvd'"
+            )
+        if self.dtype not in {"complex128", "complex64"}:
+            raise ValueError("dtype must be 'complex128' or 'complex64'")
 
 
 @dataclass
@@ -606,11 +631,12 @@ class MidpointMPOResult:
         return summary
 
 
-def _require_tensor_network() -> tuple[Any, Any, Any, Any]:
+def _require_tensor_network() -> tuple[Any, Any, Any, Any, Any]:
     try:
         import qiskit
         import quimb
         import qiskit_quimb  # noqa: F401 - validates the bridge at the boundary
+        from ._vendor.peaked_mpo.mpo import compression_options
         from ._vendor.peaked_mpo.pipeline import (
             mpo_compress_unswap,
             mpo_to_mps,
@@ -621,7 +647,17 @@ def _require_tensor_network() -> tuple[Any, Any, Any, Any]:
             "The midpoint-MPO method needs MettleQ's optional tensor-network "
             "dependencies. Install with `pip install 'mettleq[tensor-network]'`."
         ) from error
-    return qiskit, quimb, mpo_compress_unswap, mpo_to_mps
+    return qiskit, quimb, compression_options, mpo_compress_unswap, mpo_to_mps
+
+
+def _compress_with_options(
+    compress: Any, circuit: Any, method: str, dtype: str, **kwargs: Any
+):
+    """Invoke the vendored pipeline with an explicit quimb split method."""
+    from ._vendor.peaked_mpo.mpo import compression_options
+
+    with compression_options(method=method, dtype=dtype):
+        return compress(circuit, **kwargs)
 
 
 def _numeric_values(rows: Iterable[Mapping[str, Any]], key: str) -> list[float]:
@@ -722,7 +758,7 @@ class MidpointMPOSimulator:
     ) -> MidpointMPOResult:
         if shots < 1:
             raise ValueError("shots must be positive")
-        qiskit, quimb, compress, materialize = _require_tensor_network()
+        qiskit, quimb, _compression_options, compress, materialize = _require_tensor_network()
         source_operations = len(circuit.data)
         compiled = self.consolidate_circuit(circuit)
         compiled_operations = len(compiled.data)
@@ -737,8 +773,11 @@ class MidpointMPOSimulator:
         options = self.options
         _reset_quimb_safe_svd_telemetry()
         compression_started = time.perf_counter()
-        mpo, layers_left, layers_right, returned_rows = compress(
+        mpo, layers_left, layers_right, returned_rows = _compress_with_options(
+            compress,
             compiled,
+            options.compression_method,
+            options.dtype,
             max_bond=options.max_bond,
             cutoff=options.cutoff,
             unswap_threshold=options.unswap_threshold,
@@ -863,8 +902,16 @@ class IsolatedMidpointMPOSimulator:
         self.options = options or MidpointMPOOptions()
         configured_python = worker_python or os.environ.get("METTLEQ_MPO_PYTHON")
         if configured_python is None:
-            candidate = Path(__file__).resolve().parents[2] / ".venv-mpo/bin/python"
-            configured_python = candidate if candidate.exists() else None
+            # The repository's pinned worker is a development convenience, not
+            # a package resource. Never infer a sibling interpreter from an
+            # installed wheel's site-packages path.
+            here = Path(__file__).resolve()
+            for source_root in here.parents:
+                if (source_root / "pyproject.toml").is_file() and (source_root / ".venv-mpo").is_dir():
+                    candidate = source_root / ".venv-mpo/bin/python"
+                    if candidate.exists():
+                        configured_python = candidate
+                    break
         if configured_python is None:
             raise MidpointMPODependencyError(
                 "No isolated midpoint-MPO interpreter was configured. Create "
@@ -958,6 +1005,10 @@ class IsolatedMidpointMPOSimulator:
             str(options.post_sabre_trials),
             "--swap-gate-representation",
             options.swap_gate_representation,
+            "--compression-method",
+            options.compression_method,
+            "--dtype",
+            options.dtype,
         ]
         if expected_bitstring is not None:
             command.extend(["--expected-bitstring", expected_bitstring])
@@ -1257,6 +1308,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--no-reuse-full-swap-probe", action="store_true")
     parser.add_argument("--parallel-rewire", action="store_true")
     parser.add_argument("--parallel-absorb-probes", action="store_true")
+    parser.add_argument(
+        "--compression-method",
+        choices=("svd", "isvd", "svds", "rsvd"),
+        default="svd",
+    )
+    parser.add_argument("--dtype", choices=("complex128", "complex64"), default="complex128")
     args = parser.parse_args(argv)
     try:
         from qiskit import qasm2
@@ -1283,6 +1340,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         reuse_full_swap_probe=not args.no_reuse_full_swap_probe,
         parallel_rewire=args.parallel_rewire,
         parallel_absorb_probes=args.parallel_absorb_probes,
+        compression_method=args.compression_method,
+        dtype=args.dtype,
     )
 
     def progress(row: dict[str, Any]) -> None:

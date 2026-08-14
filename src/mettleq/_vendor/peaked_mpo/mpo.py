@@ -1,9 +1,30 @@
+from contextlib import contextmanager
 from functools import lru_cache
 
 from quimb.tensor import MatrixProductOperator, Circuit
 
 from qiskit_quimb import quimb_circuit
 from qiskit import QuantumCircuit
+
+
+# Process-local adapter used by MettleQ to expose quimb's split methods while
+# preserving the published pipeline's default when no option is supplied.
+_DEFAULT_COMPRESS_OPTS = {}
+
+
+def _configured_dtype():
+    return _DEFAULT_COMPRESS_OPTS.get("dtype")
+
+
+@contextmanager
+def compression_options(**options):
+    previous = dict(_DEFAULT_COMPRESS_OPTS)
+    _DEFAULT_COMPRESS_OPTS.update(options)
+    try:
+        yield
+    finally:
+        _DEFAULT_COMPRESS_OPTS.clear()
+        _DEFAULT_COMPRESS_OPTS.update(previous)
 
 # ------------------------------------------------------------------
 #  Constructors
@@ -30,6 +51,9 @@ def mpo_from_circuit(circ: Circuit):
     )
 
     mpo.ensure_bonds_exist()
+    dtype = _configured_dtype()
+    if dtype is not None:
+        mpo = mpo.astype(dtype)
     return mpo
 
 
@@ -44,6 +68,12 @@ def apply_mpo(mpo1: MatrixProductOperator, mpo2: MatrixProductOperator,
                 contract=True,
                 compress=True,
                 **compress_opts):
+    effective_compress_opts = dict(_DEFAULT_COMPRESS_OPTS)
+    effective_compress_opts.update(compress_opts)
+    dtype = effective_compress_opts.pop("dtype", None)
+    if dtype is not None:
+        mpo1 = mpo1.astype(dtype)
+        mpo2 = mpo2.astype(dtype)
     if side == "right":
         return mpo1.apply(
             mpo2,
@@ -52,7 +82,7 @@ def apply_mpo(mpo1: MatrixProductOperator, mpo2: MatrixProductOperator,
             cutoff=cutoff,
             create_bond=True,
             contract=contract,
-            **compress_opts,
+            **effective_compress_opts,
         )
     elif side == "left":
         return mpo2.apply(
@@ -62,7 +92,7 @@ def apply_mpo(mpo1: MatrixProductOperator, mpo2: MatrixProductOperator,
             cutoff=cutoff,
             create_bond=True,
             contract=contract,
-            **compress_opts,
+            **effective_compress_opts,
         )
     else:
         raise ValueError("side must be 'left' or 'right'.")
@@ -79,7 +109,7 @@ def apply_circuit(mpo, circ, side, max_bond=None, cutoff=0.0, contract=True, com
 
 
 @lru_cache(maxsize=4096)
-def _cached_swap_mpo(num_qubits, swaps, representation):
+def _cached_swap_mpo(num_qubits, swaps, representation, dtype):
     qc_swaps = QuantumCircuit(num_qubits)
     for q0, q1 in swaps:
         qc_swaps.swap(q0, q1)
@@ -94,7 +124,9 @@ def _cached_swap_mpo(num_qubits, swaps, representation):
 def _swap_mpo(num_qubits, swaps, to_backend=None, representation="cx"):
     swaps = tuple(tuple(pair) for pair in swaps)
     if to_backend is None:
-        return _cached_swap_mpo(num_qubits, swaps, representation)
+        return _cached_swap_mpo(
+            num_qubits, swaps, representation, _configured_dtype()
+        )
 
     qc_swaps = QuantumCircuit(num_qubits)
     for q0, q1 in swaps:
@@ -158,4 +190,3 @@ def apply_swaps(
         ) 
 
     return mpo_out
-

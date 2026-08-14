@@ -59,6 +59,24 @@ def test_midpoint_mpo_options_reject_invalid_trust_controls():
         MidpointMPOOptions(cutoff=1.0)
 
 
+def test_midpoint_mpo_exposes_explicit_quimb_compression_methods():
+    for method in ("svd", "isvd", "svds", "rsvd"):
+        assert MidpointMPOOptions(compression_method=method).compression_method == method
+    with pytest.raises(ValueError, match="compression_method"):
+        MidpointMPOOptions(compression_method="zipup")
+
+
+def test_safe_svd_rejects_nonfinite_input_before_native_driver():
+    pytest.importorskip("quimb")
+    _install_quimb_safe_svd()
+    _reset_quimb_safe_svd_telemetry()
+    from quimb.tensor import decomp
+
+    with pytest.raises(MidpointMPOError, match="NaN or infinity"):
+        decomp.svd_truncated_numba(np.array([[1.0, np.nan]], dtype=np.complex128))
+    assert _QUIMB_SVD_TELEMETRY["nonfinite_input_failures"] == 1
+
+
 def test_midpoint_mpo_convergence_requires_peak_recovery_and_stability():
     report = build_convergence_report(
         [
@@ -144,6 +162,27 @@ def test_midpoint_mpo_exact_qiskit_smoke():
     assert result.matches_expected_bitstring is True
     assert result.diagnostics["termination_reason"] == "completed"
     assert result.diagnostics["vendor_reference_commit"]
+
+
+def test_midpoint_mpo_complex64_reduced_smoke():
+    pytest.importorskip("quimb")
+    pytest.importorskip("qiskit_quimb")
+    qiskit = pytest.importorskip("qiskit")
+    circuit = qiskit.QuantumCircuit(3)
+    circuit.x(0)
+    circuit.x(2)
+    simulator = MidpointMPOSimulator(
+        MidpointMPOOptions(
+            max_bond=8,
+            cutoff=0.0,
+            sabre_trials=2,
+            post_sabre_trials=2,
+            dtype="complex64",
+        )
+    )
+    result = simulator.run(circuit, shots=16, expected_bitstring="101")
+    assert result.matches_expected_bitstring is True
+    assert result.diagnostics["options"]["dtype"] == "complex64"
 
 
 def test_isolated_midpoint_mpo_roundtrips_qiskit2_result_contract(
