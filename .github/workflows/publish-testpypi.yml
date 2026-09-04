@@ -8,22 +8,69 @@ permissions:
   id-token: write
 
 jobs:
-  build-and-publish:
-    name: Build and publish TestPyPI artifacts
-    runs-on: ubuntu-latest
-    environment: testpypi
+  build:
+    name: Build TestPyPI artifacts (${{ matrix.os }})
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: "3.12"
+            artifact: linux-dist
+          - os: macos-14
+            python: "3.13"
+            artifact: macos-arm64-dist
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
       - name: Install release tooling
         run: python -m pip install --upgrade build twine
       - name: Build artifacts
-        run: python -m build
+        run: |
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            python -m build --wheel
+          else
+            python -m build
+          fi
+      - name: Validate metadata
+        run: python -m twine check dist/*
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/*
+
+  publish:
+    name: Publish TestPyPI artifacts
+    needs: build
+    runs-on: ubuntu-latest
+    environment: testpypi
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Collect artifacts
+        run: |
+          mkdir dist
+          find artifacts -type f -exec cp {} dist/ \;
+          python - <<'PY'
+          from pathlib import Path
+          files = sorted(Path("dist").iterdir())
+          if not files:
+              raise SystemExit("No TestPyPI artifacts were downloaded")
+          print("\n".join(str(path) for path in files))
+          PY
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install release tooling
+        run: python -m pip install --upgrade twine
       - name: Validate metadata
         run: python -m twine check dist/*
       - name: Publish with TestPyPI trusted publishing
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
+          packages-dir: dist/
           repository-url: https://test.pypi.org/legacy/
