@@ -47,6 +47,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+mpo = [
+  "qiskit>=2.0,<3",
+  "qiskit-quimb>=0.0.10,<1",
+  "quimb>=1.11.2,<2",
+]
 tensor-network = [
   "cotengra>=0.7.5,<1",
   "numba>=0.65,<0.67",

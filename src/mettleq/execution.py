@@ -59,10 +59,25 @@ def _device_info() -> Dict[str, Any]:
 
 
 def _metal_available() -> bool:
+    """Return whether Metal can actually execute a tiny MLX computation.
+
+    ``mx.metal.is_available()`` can report true in headless, virtualized, or
+    otherwise partially initialized macOS processes.  A real allocation and
+    evaluation prevents the planner from selecting Metal when the first user
+    operation would fail instead.
+    """
     try:
         metal = getattr(mx, "metal", None)
         fn = getattr(metal, "is_available", None) if metal is not None else None
-        return bool(fn()) if callable(fn) else False
+        if not callable(fn) or not bool(fn()):
+            return False
+        gpu = getattr(mx, "gpu", None)
+        if gpu is None:
+            return False
+        with mx.stream(gpu):
+            probe = mx.array([0.0], dtype=mx.float32)
+            mx.eval(probe)
+        return True
     except Exception:
         return False
 

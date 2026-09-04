@@ -19,11 +19,14 @@ and a registered PennyLane device so you can drop it into an existing workflow.
 
 ## Install
 
-Requirements: Apple Silicon, macOS, Python 3.11+.
+Requirements: Apple Silicon, macOS 14 or newer, Python 3.11+.
 
 ```bash
 # from PyPI (once published)
 python -m pip install 'mettleq[sdk]'
+
+# optional midpoint-MPO command
+python -m pip install 'mettleq[mpo]'
 
 # or from source
 python -m pip install 'mettleq[sdk] @ git+https://github.com/MonitSharma/MettleQ.git'

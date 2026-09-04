@@ -10,7 +10,7 @@ correctness evidence.
 
 ## Install
 
-Requirements: Apple Silicon, macOS, and Python 3.11 or newer.
+Requirements: Apple Silicon, macOS 14 or newer, and Python 3.11 or newer.
 
 The MLX simulation kernels support macOS arm64 (Apple Silicon). Linux,
 Windows, and Intel Macs can install the package for MLX-independent drawing,
@@ -23,6 +23,15 @@ python -m pip install 'mettleq[sdk]'
 
 The `sdk` extra installs Qiskit Aer and PennyLane Lightning so adaptive mode can
 use strong CPU fallbacks below the calibrated Apple-GPU crossover.
+
+For the optional midpoint-MPO command, install its dependencies explicitly:
+
+```bash
+python -m pip install 'mettleq[mpo]'
+```
+
+The command runs in the current environment. The isolated worker API also
+accepts `METTLEQ_MPO_PYTHON` when a separately pinned worker is required.
 
 Until the first PyPI release is published, install from the public repository:
 

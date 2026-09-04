@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import List, Dict, Any, Optional
 
 import os as _os
@@ -11,27 +12,36 @@ from ._mlx_compat import mx
 from .execution import (build_execution_plan, mark_graph_built,
                         mark_synchronized, metal_checkpoint_policy,
                         metal_memory_snapshot, metal_runtime_enabled,
+                        _metal_available,
                         record_custom_dispatch,
                         record_evaluation_checkpoint,
                         state_memory_estimate)
 
-# Constant (parameterless) gate matrices built once at import; read-only thereafter
-_CONST_GATES = {
-    "I": I(), "H": H(), "X": X(), "Y": Y(), "Z": Z(), "S": S(), "SDG": SDG(),
-    "T": T(), "TDG": TDG(), "SX": SX(),
-    "CNOT": CNOT(), "CH": CH(), "CZ": CZ(), "SWAP": SWAP(), "ISWAP": iSWAP(),
-    "TOFFOLI": Toffoli(), "FREDKIN": Fredkin(),
-}
+@lru_cache(maxsize=32)
+def _const_gate(name: str):
+    """Create a parameterless gate only when execution actually needs it."""
+    factories = {
+        "I": I, "H": H, "X": X, "Y": Y, "Z": Z, "S": S, "SDG": SDG,
+        "T": T, "TDG": TDG, "SX": SX, "CNOT": CNOT, "CH": CH, "CZ": CZ,
+        "SWAP": SWAP, "ISWAP": iSWAP, "TOFFOLI": Toffoli, "FREDKIN": Fredkin,
+    }
+    factory = factories.get(name)
+    return factory() if factory is not None else None
 
-# Diagonals (1-D) for phase-type gates; applied via broadcast multiply on SV backend
-_CONST_DIAGS = {
-    "Z": mx.array([1+0j, -1+0j], mx.complex64),
-    "S": mx.array([1+0j, 1j], mx.complex64),
-    "SDG": mx.array([1+0j, -1j], mx.complex64),
-    "T": mx.array([1+0j, complex(_math.cos(_math.pi/4), _math.sin(_math.pi/4))], mx.complex64),
-    "TDG": mx.array([1+0j, complex(_math.cos(_math.pi/4), -_math.sin(_math.pi/4))], mx.complex64),
-    "CZ": mx.array([1+0j, 1+0j, 1+0j, -1+0j], mx.complex64),
-}
+
+@lru_cache(maxsize=8)
+def _const_diag(name: str):
+    """Create a phase diagonal only when the simulator applies it."""
+    values = {
+        "Z": [1+0j, -1+0j],
+        "S": [1+0j, 1j],
+        "SDG": [1+0j, -1j],
+        "T": [1+0j, complex(_math.cos(_math.pi/4), _math.sin(_math.pi/4))],
+        "TDG": [1+0j, complex(_math.cos(_math.pi/4), -_math.sin(_math.pi/4))],
+        "CZ": [1+0j, 1+0j, 1+0j, -1+0j],
+    }
+    raw = values.get(name)
+    return mx.array(raw, mx.complex64) if raw is not None else None
 
 
 def _phase_diag(phi: float) -> mx.array:
@@ -84,6 +94,12 @@ class Device:
             self._mx_device = mx.cpu
         elif execution_device is None:
             self._mx_device = mx.default_device()
+            if "gpu" in str(self._mx_device).lower() and not _metal_available():
+                raise RuntimeError(
+                    "MLX selected a GPU device, but Metal could not execute a "
+                    "probe computation; use a real Apple Silicon session or "
+                    "set execution_device='cpu' if CPU execution is available"
+                )
         else:
             normalized_device = str(execution_device).strip().lower()
             if normalized_device not in ("cpu", "gpu"):
@@ -94,27 +110,33 @@ class Device:
                 )
             self._mx_device = mx.cpu if normalized_device == "cpu" else mx.gpu
         self.execution_device = "cpu" if self._mx_device == mx.cpu else "gpu"
-        with mx.stream(self._mx_device):
-            if backend == 'mps':
-                self.backend = 'mps'
-                # Read MPS options from env if not provided
-                if mps_opts is None:
-                    try:
-                        dmax = int(_os.environ.get('METTLEQ_MPS_DMAX', '64'))
-                    except Exception:
-                        dmax = 64
-                    try:
-                        eps = float(_os.environ.get('METTLEQ_MPS_EPS', '1e-10'))
-                    except Exception:
-                        eps = 1e-10
-                    mps_opts = MPSOptions(dmax=dmax, eps=eps)
-                self.sim = MPSState(self.wires, mps_opts)
-            else:
-                self.backend = 'sv'
-                self.sim = StateVectorSimulator(
-                    self.wires,
-                    allow_unsafe_statevector=allow_unsafe_statevector,
-                )
+        try:
+            with mx.stream(self._mx_device):
+                if backend == 'mps':
+                    self.backend = 'mps'
+                    # Read MPS options from env if not provided
+                    if mps_opts is None:
+                        try:
+                            dmax = int(_os.environ.get('METTLEQ_MPS_DMAX', '64'))
+                        except Exception:
+                            dmax = 64
+                        try:
+                            eps = float(_os.environ.get('METTLEQ_MPS_EPS', '1e-10'))
+                        except Exception:
+                            eps = 1e-10
+                        mps_opts = MPSOptions(dmax=dmax, eps=eps)
+                    self.sim = MPSState(self.wires, mps_opts)
+                else:
+                    self.backend = 'sv'
+                    self.sim = StateVectorSimulator(
+                        self.wires,
+                        allow_unsafe_statevector=allow_unsafe_statevector,
+                    )
+        except (IndexError, RuntimeError) as error:
+            raise RuntimeError(
+                "MLX could not initialize the requested execution device; "
+                "verify Metal availability and the macOS/MLX installation"
+            ) from error
         self.statevector_preflight = getattr(self.sim, "preflight", None)
         if metal_checkpoint_budget_bytes is not None:
             metal_checkpoint_policy(metal_checkpoint_budget_bytes)
@@ -1082,7 +1104,7 @@ class Device:
             name = "TDG"
         elif name == "CX":
             name = "CNOT"
-        gate = _CONST_GATES.get(name)
+        gate = _const_gate(name)
         if gate is not None:
             return gate
         if name == "RX":
@@ -1108,9 +1130,9 @@ class Device:
         if name in ("ZZPHASE", "XXPHASE", "YYPHASE"):
             return _pauli_pair_phase(name, params[0])
         if name in ("CCX",):
-            return _CONST_GATES["TOFFOLI"]
+            return _const_gate("TOFFOLI")
         if name in ("CSWAP",):
-            return _CONST_GATES["FREDKIN"]
+            return _const_gate("FREDKIN")
         raise ValueError(f"Unsupported op for dense ablation path: {name}")
 
     def _apply(
@@ -1138,7 +1160,7 @@ class Device:
             elif name in ("TDAG", "T†"):
                 name = "TDG"
             if diag_ok:
-                d = _CONST_DIAGS.get(name)
+                d = _const_diag(name)
                 if d is None and name == "RZ":
                     d = _rz_diag(params[0])
                 elif d is None and name == "U1":
@@ -1146,7 +1168,7 @@ class Device:
                 if d is not None:
                     self.sim.apply_diagonal(d, [q])
                     return
-            gate = _CONST_GATES.get(name)
+            gate = _const_gate(name)
             if gate is None:
                 if name == "RX":
                     gate = RX(params[0])
@@ -1177,7 +1199,7 @@ class Device:
             if diag_ok:
                 d = None
                 if name == "CZ":
-                    d = _CONST_DIAGS["CZ"]
+                    d = _const_diag("CZ")
                 elif name in ("CP", "CPHASE"):
                     ph = complex(_math.cos(params[0]), _math.sin(params[0]))
                     d = mx.array([1+0j, 1+0j, 1+0j, ph], mx.complex64)
@@ -1193,10 +1215,10 @@ class Device:
             # Structured two-qubit fast paths (SV backend)
             if hasattr(self.sim, "apply_controlled_single"):
                 if name == "CNOT":
-                    self.sim.apply_controlled_single(_CONST_GATES["X"], c, t)
+                    self.sim.apply_controlled_single(_const_gate("X"), c, t)
                     return
                 if name == "CH":
-                    self.sim.apply_controlled_single(_CONST_GATES["H"], c, t)
+                    self.sim.apply_controlled_single(_const_gate("H"), c, t)
                     return
                 if name == "CRX":
                     self.sim.apply_controlled_single(RX(params[0]), c, t)
@@ -1226,7 +1248,7 @@ class Device:
             if name == "YYPHASE" and hasattr(self.sim, "apply_yy_phase"):
                 self.sim.apply_yy_phase(params[0], c, t)
                 return
-            gate = _CONST_GATES.get(name)
+            gate = _const_gate(name)
             if gate is None:
                 if name in ("CP", "CPHASE"):
                     gate = CPHASE(params[0])
@@ -1251,15 +1273,17 @@ class Device:
         if len(wires) == 3:
             if name in ("CCX", "TOFFOLI"):
                 if hasattr(self.sim, "apply_multi_controlled_single"):
-                    self.sim.apply_multi_controlled_single(_CONST_GATES["X"], wires[:2], wires[2])
+                    self.sim.apply_multi_controlled_single(
+                        _const_gate("X"), wires[:2], wires[2]
+                    )
                     return
-                self.sim.apply_dense_gate(_CONST_GATES["TOFFOLI"], wires)
+                self.sim.apply_dense_gate(_const_gate("TOFFOLI"), wires)
                 return
             if name in ("CSWAP", "FREDKIN"):
                 if hasattr(self.sim, "apply_controlled_swap"):
                     self.sim.apply_controlled_swap(wires[0], wires[1], wires[2])
                     return
-                self.sim.apply_dense_gate(_CONST_GATES["FREDKIN"], wires)
+                self.sim.apply_dense_gate(_const_gate("FREDKIN"), wires)
                 return
             raise ValueError(f"Unsupported three-qubit op: {name}")
 

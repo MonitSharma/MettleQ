@@ -44,10 +44,13 @@ def _reduced_qr(matrix: np.ndarray):
                      check_finite=False)
 
 
-_SWAP_GATE = mx.array(
-    [[1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]],
-    mx.complex64,
-)
+@lru_cache(maxsize=1)
+def _swap_gate():
+    """Build the logical SWAP matrix only when an MPS operation needs it."""
+    return mx.array(
+        [[1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]],
+        mx.complex64,
+    )
 
 
 @dataclass
@@ -756,7 +759,8 @@ class MPSState:
         # preserves the gate's semantic first/second operand order.
         ordered_gate = U4
         if c > t:
-            ordered_gate = mx.matmul(_SWAP_GATE, mx.matmul(U4, _SWAP_GATE))
+            swap_gate = _swap_gate()
+            ordered_gate = mx.matmul(swap_gate, mx.matmul(U4, swap_gate))
         self._apply_two_adjacent(ordered_gate, j-1)
         # Swap back to restore ordering
         while k > i:
@@ -1025,7 +1029,7 @@ class MPSState:
         ordered_gate = U4
         if self.site_to_logical[left_site] != first:
             ordered_gate = mx.matmul(
-                _SWAP_GATE, mx.matmul(U4, _SWAP_GATE)
+                _swap_gate(), mx.matmul(U4, _swap_gate())
             )
         self._apply_two_adjacent(ordered_gate, left_site)
 
