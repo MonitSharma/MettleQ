@@ -3,6 +3,11 @@
 All notable user-facing changes are recorded here. MettleQ follows semantic
 versioning once the first public release is tagged.
 
+## 0.3.0rc2 — Unreleased
+
+- Make MLX imports genuinely lazy so headless macOS sessions report an
+  actionable error instead of triggering duplicate nanobind registration.
+
 ## 0.3.0rc1 — Unreleased
 
 - Marked MLX as an Apple Silicon macOS dependency and made drawing/QASM
