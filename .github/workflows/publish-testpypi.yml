@@ -32,7 +32,7 @@ jobs:
           if [[ "$RUNNER_OS" == "macOS" ]]; then
             python -m build --wheel
           else
-            python -m build
+            python -m build --sdist
           fi
       - name: Validate metadata
         run: python -m twine check dist/*
