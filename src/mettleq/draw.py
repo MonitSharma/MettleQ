@@ -136,6 +136,15 @@ def circuit_mpl(
     - Returns (fig, ax) or None if matplotlib isn't available.
     """
     try:
+        import matplotlib  # type: ignore
+        # File rendering must also work from SSH, CI, notebooks without a
+        # display, and other headless environments.  Importing pyplot first
+        # can select macOS' GUI backend, which aborts the interpreter when no
+        # application event loop is available.
+        if save is not None and ax is None:
+            backend = str(matplotlib.get_backend()).lower()
+            if backend in {"macosx", "tkagg", "qt5agg", "qtagg", "wxagg"}:
+                matplotlib.use("Agg", force=True)
         import matplotlib.pyplot as plt  # type: ignore
         from matplotlib.patches import FancyBboxPatch  # type: ignore
         from matplotlib import font_manager as _fm  # type: ignore
@@ -212,7 +221,7 @@ def circuit_mpl(
                 up = name.upper()
                 if up in {"CNOT","CX"} and len(wires)==2:
                     ax.plot(x, wires[0], 'o', color='#111', zorder=2)
-                    ax.plot(x, wires[1], marker='$\oplus$', color='#111', zorder=2)
+                    ax.plot(x, wires[1], marker=r'$\oplus$', color='#111', zorder=2)
                 elif up == "CZ" and len(wires)==2:
                     ax.plot(x, wires[0], 'o', color='#111', zorder=2)
                     if rounded:
@@ -232,7 +241,7 @@ def circuit_mpl(
                     ax.plot(x, wires[1], marker='$\times$', color='#111', zorder=2)
                 elif up in {"CCX","TOFFOLI"} and len(wires)==3:
                     ax.plot(x, wires[0], 'o', color='#111', zorder=2); ax.plot(x, wires[1], 'o', color='#111', zorder=2)
-                    ax.plot(x, wires[2], marker='$\oplus$', color='#111', zorder=2)
+                    ax.plot(x, wires[2], marker=r'$\oplus$', color='#111', zorder=2)
                 else:
                     for r in wires:
                         if rounded:
