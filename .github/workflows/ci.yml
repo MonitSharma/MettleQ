@@ -141,10 +141,22 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - name: Install package from source distribution
+        shell: bash
         run: |
           python -m pip install --upgrade build
           python -m build --sdist
-          python -m pip install --no-cache-dir dist/mettleq-*.tar.gz
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          import sys
+
+          sdists = sorted(Path("dist").glob("mettleq-*.tar.gz"))
+          if len(sdists) != 1:
+              raise SystemExit(f"Expected exactly one sdist, found: {sdists}")
+          subprocess.check_call(
+              [sys.executable, "-m", "pip", "install", "--no-cache-dir", str(sdists[0])]
+          )
+          PY
       - name: Verify portable installation
         run: |
           python -c "import mettleq; print(mettleq.__version__)"
