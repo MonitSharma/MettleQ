@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mettleq"
-version = "0.3.0rc3"
+version = "0.3.0"
 description = "Trustworthy Apple Silicon quantum simulation with MLX and Metal"
 readme = {file = "PYPI_README.md", content-type = "text/markdown"}
 license = "MIT"

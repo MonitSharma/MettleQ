@@ -3,10 +3,12 @@
 All notable user-facing changes are recorded here. MettleQ follows semantic
 versioning once the first public release is tagged.
 
-## 0.3.0rc3 — Unreleased
+## 0.3.0 — 2026-09-04
 
 - Make saved Matplotlib circuit diagrams safe in headless environments by selecting the non-GUI backend before importing `pyplot`.
 - Fix Matplotlib gate-marker escape warnings.
+
+## 0.3.0rc3
 
 ## 0.3.0rc2
 
