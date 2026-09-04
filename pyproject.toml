@@ -54,7 +54,7 @@ mpo = [
 ]
 tensor-network = [
   "cotengra>=0.7.5,<1",
-  "numba>=0.65,<0.67",
+  "numba>=0.65,<0.68",
   "qiskit>=2.0,<3",
   "qiskit-quimb>=0.0.10,<1",
   "quimb>=1.11.2,<2",
