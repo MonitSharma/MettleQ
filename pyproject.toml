@@ -111,7 +111,7 @@ dev = [
   "build>=1.2,<2",
   "mypy>=1.13,<2",
   "ruff>=0.8,<1",
-  "twine>=5.1,<7",
+  "twine>=5.1,<8",
 ]
 
 [project.scripts]
