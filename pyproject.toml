@@ -103,7 +103,7 @@ tutorials = [
   "qiskit>=2.0,<3",
   "qiskit-aer>=0.17,<0.19",
   "matplotlib>=3.7.0",
-  "nbclient>=0.10,<0.11",
+  "nbclient>=0.10,<0.12",
   "nbformat>=5.10,<6",
   "ipykernel>=6.29,<8",
 ]
