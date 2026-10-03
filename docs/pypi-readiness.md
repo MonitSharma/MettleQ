@@ -1,12 +1,14 @@
 # PyPI readiness audit — 3 October 2026
 
-MettleQ 0.3.0 is prepared for release as an alpha Apple Silicon quantum
-simulation backend. Local release archives are in `dist/pypi-ready-final/` (ignored
-by Git). Publishing and GitHub account configuration have not been performed.
+MettleQ **0.3.1** is prepared for submission as an alpha Apple Silicon quantum
+simulation backend. Release archives are collected in `dist/pypi-ready-0.3.1/`
+(ignored by Git). Publishing is postponed while the maintainer's PyPI login is
+unavailable.
 
-The follow-up release uses **0.3.1** because the repository already has a
-`v0.3.0` tag. The simulator implementation is unchanged from the locally
-validated candidate below; GitHub release validation checks the new artifacts.
+The release uses 0.3.1 because the repository already has a `v0.3.0` tag. The
+simulator implementation is unchanged from the locally validated 0.3.0 candidate
+below; GitHub release validation checks the new artifacts. The 0.3.1 source suite
+also passed with 364 tests and the same two development-only skips.
 
 ## Verified locally
 
@@ -65,16 +67,17 @@ legacy device-level shots API.
 
 ## Remaining external setup and limits
 
-Register pending Trusted Publishers for `mettleq` on PyPI/TestPyPI, set the
-matching GitHub environments, and supply a Metal-capable runner. Follow
+Configure Trusted Publishers for `mettleq` on PyPI/TestPyPI and provide an
+available Metal-capable runner for each release. Matching GitHub environments
+and the runner selection variable are configured. Follow
 [the release guide](releasing.md). The public PyPI JSON endpoint returned 404
 for `mettleq` during this audit; name reservation/ownership still requires the
 index account. No tag was pushed and no package was uploaded.
 
-GitHub Actions itself has not been executed from this checkout. The local
-workflow lint and equivalent macOS build/install/test steps passed. Linux and
-Windows installs, and runtime behavior on macOS 14, still require the configured
-CI/target hosts; wheel tags alone do not prove testing on those OS versions.
+GitHub Actions Linux, Windows, and macOS installation checks passed on Python
+3.11–3.13. Release validation uses disposable runners on the developer's Apple
+Silicon Mac for actual Metal tests. Runtime behavior on macOS 14 itself remains
+unverified; wheel tags alone do not prove testing on that OS version.
 MLX 0.32.0 publishes macOS 14 wheels as well as newer OS variants.
 
 Full `mypy src/mettleq` reports 166 existing annotation errors across legacy
