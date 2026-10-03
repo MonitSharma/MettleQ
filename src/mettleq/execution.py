@@ -537,7 +537,7 @@ def metal_runtime_status(
         },
         "mlx": {
             "version": static["mlx_version"],
-            "declared_requirement": "mlx>=0.6.0",
+            "declared_requirement": "mlx>=0.32,<1",
             "compatibility_policy": (
                 "capability-probed; mx.fast.metal_kernel is required and no "
                 "untested upper version bound is assumed"

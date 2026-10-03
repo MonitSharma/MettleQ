@@ -29,6 +29,7 @@ htmlcov/
 
 # Virtual environments
 .venv/
+.venv-*/
 venv/
 **/venv/
 .runtime-venv/
@@ -89,3 +90,7 @@ QUANTICS_2026_14_CR.pdf
 .venv-wsl/
 powershell.bat
 .vscode/
+
+# Static analysis caches
+.mypy_cache/
+.ruff_cache/

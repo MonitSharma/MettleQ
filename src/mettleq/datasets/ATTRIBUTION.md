@@ -13,6 +13,6 @@ Circuits*](https://arxiv.org/abs/2604.21908), arXiv:2604.21908 (2026), with
 reference code at
 [`d-kremer/peaked-circuit-simulation`](https://github.com/d-kremer/peaked-circuit-simulation).
 
-MettleQ does not incorporate the solver implementation. It includes the input
-circuit so its ordinary statevector/MPS backends can be profiled honestly and
-so a future midpoint-MPO backend can use the exact published instance.
+MettleQ includes the input circuit and an adapted solver implementation under
+`mettleq._vendor.peaked_mpo`. The solver's Apache-2.0 license and source notice
+are included alongside the vendored code.

@@ -19,7 +19,7 @@ and a registered PennyLane device so you can drop it into an existing workflow.
 
 ## Install
 
-Requirements: Apple Silicon, macOS 14 or newer, Python 3.11+.
+Requirements: Apple Silicon, macOS 14 or newer, Python 3.11+. Native wheels are provided for Python 3.11–3.13.
 
 ```bash
 # from PyPI (once published)
@@ -38,7 +38,7 @@ editable from a clone:
 ```bash
 git clone https://github.com/MonitSharma/MettleQ.git
 cd MettleQ
-python -m pip install -e '.[sdk,tests]'
+python -m pip install -e '.[sdk,tests,plot,mpo,dev]'
 ```
 
 ## Quickstart
@@ -94,9 +94,11 @@ CPU and GPU are independent alternatives — MettleQ never sums their timings.
 ## Development
 
 ```bash
-python -m pip install -e '.[sdk,tests]'
+python -m pip install -e '.[sdk,tests,plot,mpo,dev]'
 python -m pytest src/tests -q
 ```
+
+For artifact checks and publishing setup, see [the release guide](docs/releasing.md).
 
 ## Research, benchmarks, and full history
 

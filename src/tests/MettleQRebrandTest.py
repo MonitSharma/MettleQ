@@ -4,8 +4,8 @@ from importlib import metadata
 def test_canonical_distribution_and_import_name_are_mettleq():
     import mettleq
 
-    assert metadata.version("mettleq") == "0.3.0"
-    assert mettleq.__version__ == "0.3.0"
+    assert mettleq.__version__ == metadata.version("mettleq")
+    assert mettleq.__version__ != "0+unknown"
 
 
 def test_legacy_mlxq_namespace_resolves_during_migration():

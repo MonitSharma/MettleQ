@@ -3,7 +3,22 @@
 All notable user-facing changes are recorded here. MettleQ follows semantic
 versioning once the first public release is tagged.
 
-## 0.3.0 — 2026-09-04
+## 0.3.1 — Unreleased
+
+- Prepare native Apple Silicon wheels for Python 3.11–3.13 and validate them
+  from clean installations with the complete simulator/SDK test suite.
+- Gate PyPI and TestPyPI publication on shared source-archive, wheel, native
+  extension, and Apple Metal checks; reject mismatched release tags.
+- Build with NumPy 2 headers for NumPy 1/2 ABI compatibility, use standard
+  optional-extension handling, and support explicit compiler-free builds.
+- Set the validated MLX minimum to 0.32 and correct distribution licensing
+  to include bundled Apache-2.0 components.
+- Include test/example/release tooling in the sdist, enforce pytest config,
+  and make the legacy test launcher return pytest's failure status.
+- Add a release guide and portable installation regression checks; repair
+  contributor commands and research-document links.
+
+### Earlier 0.3.0 preparation (2026-09-04)
 
 - Make saved Matplotlib circuit diagrams safe in headless environments by selecting the non-GUI backend before importing `pyplot`.
 - Fix Matplotlib gate-marker escape warnings.
