@@ -47,6 +47,8 @@ jobs:
         python: ["3.11", "3.12", "3.13"]
     env:
       MACOSX_DEPLOYMENT_TARGET: "14.0"
+      ARCHFLAGS: "-arch arm64"
+      _PYTHON_HOST_PLATFORM: "macosx-14.0-arm64"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -64,7 +66,7 @@ jobs:
           tar -xzf source-dist/*.tar.gz -C source --strip-components=1
           python -m build --wheel source --outdir dist
           python -m twine check --strict dist/*
-          python tools/check_distribution.py dist --require-native
+          python tools/check_distribution.py dist --apple-silicon
       - name: Check installed native wheel without initializing Metal
         run: |
           python -m venv "$RUNNER_TEMP/wheel-install"

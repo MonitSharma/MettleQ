@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 from email.parser import BytesParser
 from pathlib import Path
+import struct
 import tarfile
 import zipfile
 
@@ -41,6 +42,8 @@ def main() -> None:
     parser.add_argument("directory", type=Path)
     parser.add_argument("--version")
     parser.add_argument("--require-native", action="store_true")
+    parser.add_argument("--apple-silicon", action="store_true",
+                        help="Require macOS 14 arm64 tags and an arm64 native binary")
     args = parser.parse_args()
     files = sorted(args.directory.iterdir())
     archives = [p for p in files if p.name.endswith((".whl", ".tar.gz"))]
@@ -62,8 +65,20 @@ def main() -> None:
                 assert len(licenses) == 3, licenses
                 native = [n for n in names if n.startswith("mettleq/_mps_native.")
                           and n.endswith((".so", ".pyd"))]
-                if args.require_native:
+                if args.require_native or args.apple_silicon:
                     assert native, f"Native extension missing in {path}"
+                if args.apple_silicon:
+                    assert path.name.endswith("-macosx_14_0_arm64.whl"), path.name
+                    wheel_metadata = BytesParser().parsebytes(archive.read(prefix + "WHEEL"))
+                    tags = wheel_metadata.get_all("Tag", [])
+                    assert tags and all(tag.endswith("-macosx_14_0_arm64")
+                                        for tag in tags), tags
+                    for name in native:
+                        # Mach-O 64-bit magic and CPU_TYPE_ARM64. Reject fat or
+                        # Intel binaries even if a filename claims arm64.
+                        header = archive.read(name)[:8]
+                        assert len(header) == 8, name
+                        assert struct.unpack("<II", header) == (0xFEEDFACF, 0x0100000C), name
                 assert not any(n.split("/")[0] in {"tests", "examples", "tools"}
                                for n in names)
                 assert not any("__pycache__" in n or n.endswith(".pyc") for n in names)

@@ -103,6 +103,10 @@ Metal runner selection variable now includes the dedicated `mettleq-metal`
 label. Temporary runners unregister after their jobs; no runner service was
 installed on the developer's Mac.
 
+Release builds explicitly select arm64 even when the hosted Python interpreter
+supports both Intel and Apple Silicon. The archive check verifies the macOS
+14 arm64 wheel tags and the native Mach-O architecture before accepting them.
+
 Publishing is postponed at the maintainer's request while PyPI account login
 is unavailable. The existing TestPyPI project has version 0.3.0rc3; the previous
 PyPI attempt failed because its Trusted Publisher was not configured. Leave

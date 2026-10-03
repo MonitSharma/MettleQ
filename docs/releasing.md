@@ -18,9 +18,12 @@ python -m pip install -e '.[sdk,tests,plot,mpo,dev]'
 python -m pip check
 python -m ruff check src/mettleq src/mlxq tools setup.py --select E9,F63,F7,F82
 python -m pytest src/tests
+export MACOSX_DEPLOYMENT_TARGET=14.0
+export ARCHFLAGS="-arch arm64"
+export _PYTHON_HOST_PLATFORM=macosx-14.0-arm64
 python -m build --outdir dist/release
 python -m twine check --strict dist/release/*
-python tools/check_distribution.py dist/release --version 0.3.1 --require-native
+python tools/check_distribution.py dist/release --version 0.3.1 --apple-silicon
 ```
 
 Use a fresh, empty output directory for each candidate. `python -m build`
