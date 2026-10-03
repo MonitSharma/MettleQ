@@ -84,10 +84,14 @@ print(bell_circuit())
   environment and its own approximation contract.
 
 See the [complete README](https://github.com/MonitSharma/MettleQ#readme),
-[tutorial notebooks](https://github.com/MonitSharma/MettleQ/tree/main/tutorials),
+[tutorial notebooks](https://github.com/MonitSharma/MettleQ/tree/development/tutorials),
 [examples](https://github.com/MonitSharma/MettleQ/tree/main/examples), and
-[technical report](https://github.com/MonitSharma/MettleQ/blob/main/output/pdf/MettleQ_technical_report.pdf).
+[technical report](https://github.com/MonitSharma/MettleQ/blob/development/output/pdf/MettleQ_technical_report.pdf).
 
 MettleQ is an independently maintained MIT-licensed fork of
 [BoltzmannEntropy/Qupertino](https://github.com/BoltzmannEntropy/Qupertino).
 Original authorship and project lineage are retained in the repository.
+
+MettleQ code is MIT licensed; bundled third-party solver code and benchmark
+inputs are Apache-2.0 licensed. All applicable licenses and notices ship in
+the distribution.

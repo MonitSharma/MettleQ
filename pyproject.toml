@@ -1,13 +1,13 @@
 [build-system]
-requires = ["setuptools>=77", "numpy>=1.24"]
+requires = ["setuptools>=77", "numpy>=2.0,<3"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "mettleq"
-version = "0.3.0"
+version = "0.3.1"
 description = "Trustworthy Apple Silicon quantum simulation with MLX and Metal"
 readme = {file = "PYPI_README.md", content-type = "text/markdown"}
-license = "MIT"
+license = "MIT AND Apache-2.0"
 license-files = [
   "LICENSE",
   "src/mettleq/datasets/LICENSE-APACHE-2.0.txt",
@@ -40,9 +40,9 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-  "mlx>=0.6.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "mlx>=0.32,<1; sys_platform == 'darwin' and platform_machine == 'arm64'",
   "rich>=13.0.0",
-  "numpy>=1.24.0",
+  "numpy>=1.24.0,<3",
   "scipy>=1.10.0",
 ]
 
@@ -137,15 +137,14 @@ include = ["mettleq*", "mlxq*"]
 
 [tool.setuptools.package-data]
 "mettleq.integrations" = ["pennylane_capabilities.toml"]
-"mettleq" = ["py.typed", "datasets/*.qasm", "datasets/*.md", "datasets/*.txt", "datasets/qasm_local/*.qasm"]
+"mettleq" = ["py.typed", "*.cpp", "datasets/*.qasm", "datasets/*.md", "datasets/*.txt", "datasets/qasm_local/*.qasm"]
 "mettleq._vendor.peaked_mpo" = ["*.md", "*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]
 pythonpath = ["src"]
-addopts = "-q -ra"
 python_files = ["*Test.py", "test_*.py"]
-strict_markers = true
+addopts = "-q -ra --strict-config --strict-markers"
 
 [tool.ruff]
 line-length = 100

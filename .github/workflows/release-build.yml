@@ -1,0 +1,119 @@
+name: Validate release artifacts
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  sdist:
+    name: Build source distribution
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Require tag to match package version
+        run: |
+          python - <<'PY'
+          import os, tomllib
+          version = tomllib.load(open("pyproject.toml", "rb"))["project"]["version"]
+          ref = os.environ["GITHUB_REF"]
+          if ref.startswith("refs/tags/") and ref != f"refs/tags/v{version}":
+              raise SystemExit(f"Tag {ref} does not match package version {version}")
+          PY
+      - run: python -m pip install build twine ruff
+      - run: python -m ruff check src/mettleq src/mlxq tools setup.py --select E9,F63,F7,F82
+      - run: python -m build --sdist
+      - run: python -m twine check --strict dist/*
+      - run: python tools/check_distribution.py dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  wheels:
+    name: Build Apple Silicon wheel (Python ${{ matrix.python }})
+    needs: sdist
+    runs-on: macos-15
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "14.0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-sdist
+          path: source-dist
+      - name: Build wheel from the validated source archive
+        run: |
+          test "$(uname -m)" = "arm64"
+          python -m pip install build twine
+          mkdir source
+          tar -xzf source-dist/*.tar.gz -C source --strip-components=1
+          python -m build --wheel source --outdir dist
+          python -m twine check --strict dist/*
+          python tools/check_distribution.py dist --require-native
+      - name: Check installed native wheel without initializing Metal
+        run: |
+          python -m venv "$RUNNER_TEMP/wheel-install"
+          "$RUNNER_TEMP/wheel-install/bin/python" -m pip install dist/*.whl
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/wheel-install/bin/python" "$GITHUB_WORKSPACE/tools/smoke_installed.py" --require-native
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-wheel-${{ matrix.python }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  metal:
+    name: Test installed wheel on Apple Metal (Python ${{ matrix.python }})
+    needs: wheels
+    # Only reached via trusted release tags or manually dispatched publishing.
+    runs-on: ${{ fromJSON(vars.METTLEQ_METAL_RUNNER_JSON || '["self-hosted", "macOS", "ARM64"]') }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-wheel-${{ matrix.python }}
+          path: dist
+      - name: Install release wheel and all test dependencies
+        run: |
+          python -m venv "$RUNNER_TEMP/mettleq-tests-${{ matrix.python }}"
+          "$RUNNER_TEMP/mettleq-tests-${{ matrix.python }}/bin/python" - <<'PY'
+          from pathlib import Path
+          import subprocess, sys
+          wheel, = Path("dist").glob("*.whl")
+          subprocess.check_call([sys.executable, "-m", "pip", "install", f"{wheel}[sdk,tests,plot,mpo]"])
+          PY
+      - name: Test the installed wheel outside the source checkout
+        run: |
+          runner_python="$RUNNER_TEMP/mettleq-tests-${{ matrix.python }}/bin/python"
+          "$runner_python" -m pip check
+          mkdir -p "$RUNNER_TEMP/installed-tests-${{ matrix.python }}/src"
+          cp -R src/tests src/examples "$RUNNER_TEMP/installed-tests-${{ matrix.python }}/src/"
+          cp pyproject.toml "$RUNNER_TEMP/installed-tests-${{ matrix.python }}/"
+          cd "$RUNNER_TEMP/installed-tests-${{ matrix.python }}"
+          "$runner_python" "$GITHUB_WORKSPACE/tools/smoke_installed.py" --metal --require-native
+          "$runner_python" -m pytest src/tests -o addopts='-ra --strict-config --strict-markers'
+          "$runner_python" "$GITHUB_WORKSPACE/examples/qiskit_quickstart.py"
+          "$runner_python" "$GITHUB_WORKSPACE/examples/pennylane_quickstart.py"

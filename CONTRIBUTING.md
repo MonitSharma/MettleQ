@@ -11,8 +11,8 @@ cd MettleQ
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -e '.[sdk,tests,plot]'
-./test.sh
+python -m pip install -e '.[sdk,tests,plot,mpo,dev]'
+python -m pytest src/tests
 ```
 
 Python 3.11 or newer and an Apple Silicon Mac are required for simulator work.
@@ -35,9 +35,10 @@ Portable documentation and backend tests also run on GitHub-hosted Linux.
 ## Before proposing a change
 
 ```bash
-python tools/build_tutorial_notebooks.py --check
-python tools/audit_public_release.py
-python -m pip wheel . --no-deps --wheel-dir /tmp/mettleq-wheel
+python -m ruff check src/mettleq src/mlxq tools setup.py --select E9,F63,F7,F82
+python -m build --outdir dist/release
+python -m twine check --strict dist/release/*
+python tools/check_distribution.py dist/release
 git diff --check
 ```
 
@@ -47,3 +48,7 @@ accuracy failures; they are evidence, not missing rows to hide.
 
 MettleQ is independently maintained and does not send changes to the original
 Qupertino repository unless that upstream project explicitly requests them.
+
+See [the release guide](docs/releasing.md) for installed-artifact validation and
+PyPI Trusted Publisher setup. Research notebook and benchmark campaigns live on
+the `development` branch.

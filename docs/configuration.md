@@ -17,5 +17,5 @@ output rather than hidden in shell profiles.
 | `METTLEQ_SAVE_PLOTS` | Save optional VQE convergence plots | `0` |
 
 `METTLEQ_MPO_PYTHON` executes a separate Python interpreter and must point to
-an interpreter the caller trusts. The bundled midpoint-MPO requirement file is
-for reproducibility, not a general-purpose runtime dependency set.
+an interpreter the caller trusts. Install `mettleq[mpo]` in that worker environment. Historical pinned benchmark
+requirements live on the `development` branch.

@@ -1,5 +1,8 @@
 from __future__ import annotations
-from typing import List, Dict, Any, Optional, Tuple
+from typing import TYPE_CHECKING, List, Dict, Any, Optional, Tuple
+
+if TYPE_CHECKING:
+    from matplotlib.axes import Axes
 
 # Visual constants for matplotlib drawer
 _BOX_W = 0.5   # relative to one column width
@@ -125,7 +128,7 @@ def circuit_mpl(
     ops: List[Dict[str, Any]],
     title: Optional[str] = None,
     save: Optional[str] = None,
-    ax: Optional["plt.Axes"] = None,
+    ax: Optional["Axes"] = None,
     rounded: bool = True,
     theme: Optional[str] = None,
     badge: bool = False,
