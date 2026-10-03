@@ -91,3 +91,19 @@ campaign are outside this packaging release.
 - [NumPy guidance for downstream authors](https://numpy.org/doc/stable/dev/depending_on_numpy.html)
 - [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/using-a-publisher/)
 - [GitHub GPU-capable macOS runners](https://docs.github.com/en/actions/reference/runners/larger-runners)
+
+## GitHub submission preparation
+
+The release branch targets 0.3.1 and is tracked in
+[PR #21](https://github.com/MonitSharma/MettleQ/pull/21). Hosted Linux, Windows,
+and macOS installation checks passed. The Metal validation job uses uv-managed
+Python because setup-python's hardcoded hosted-runner cache path requires
+privileges on a self-hosted Mac. GitHub environments already exist, and the
+Metal runner selection variable now includes the dedicated `mettleq-metal`
+label. Temporary runners unregister after their jobs; no runner service was
+installed on the developer's Mac.
+
+Publishing is postponed at the maintainer's request while PyPI account login
+is unavailable. The existing TestPyPI project has version 0.3.0rc3; the previous
+PyPI attempt failed because its Trusted Publisher was not configured. Leave
+`v0.3.0` intact and use `v0.3.1` only when publication is authorized again.

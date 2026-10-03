@@ -89,16 +89,21 @@ jobs:
         python: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      # setup-python hardcodes /Users/runner/hostedtoolcache on macOS.
+      # uv supplies standalone interpreters on self-hosted Macs without root.
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          python-version: ${{ matrix.python }}
+          enable-cache: false
       - uses: actions/download-artifact@v4
         with:
           name: release-wheel-${{ matrix.python }}
           path: dist
       - name: Install release wheel and all test dependencies
+        env:
+          UV_CACHE_DIR: ${{ runner.temp }}/uv-cache
+          UV_PYTHON_INSTALL_DIR: ${{ runner.temp }}/python
         run: |
-          python -m venv "$RUNNER_TEMP/mettleq-tests-${{ matrix.python }}"
+          uv venv --seed --python "${{ matrix.python }}" "$RUNNER_TEMP/mettleq-tests-${{ matrix.python }}"
           "$RUNNER_TEMP/mettleq-tests-${{ matrix.python }}/bin/python" - <<'PY'
           from pathlib import Path
           import subprocess, sys

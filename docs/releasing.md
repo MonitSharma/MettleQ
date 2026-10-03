@@ -57,7 +57,12 @@ Apple GPU. Alternatively set the repository variable
 `METTLEQ_METAL_RUNNER_JSON` to a JSON runner-label list, for example
 `["macos-15-xlarge"]` for a paid GPU-capable GitHub runner. Regular hosted macOS
 VMs are used for wheel builds, not as evidence of Metal correctness. Keep
-self-hosted jobs restricted to trusted manual runs and release tags.
+self-hosted jobs restricted to trusted manual runs and release tags. The Metal
+job uses standalone Python via uv, so a self-hosted Mac does not need root
+access to GitHub's hosted-runner Python directory. This repository currently
+selects the additional `mettleq-metal` label through that variable. A temporary
+runner can be registered for validation and removed afterward; an available
+Metal runner is required whenever the publishing workflow runs.
 
 Create GitHub environments `testpypi` and `pypi`, with reviewer protection as
 appropriate. Configure a Trusted Publisher on each index:
